@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { fetchMyNeeds, type BloodPayload, type KitPayload, type MoneyPayload, type Need } from "../lib/api";
+import {
+  fetchMyNeeds,
+  type BloodPayload,
+  type GoodsPayload,
+  type KitPayload,
+  type MealSlotPayload,
+  type MoneyPayload,
+  type Need,
+} from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
@@ -14,6 +22,14 @@ function isBloodPayload(payload: Need["payload"]): payload is BloodPayload {
   return !!payload && typeof (payload as BloodPayload).units_needed === "number";
 }
 
+function isMealSlotPayload(payload: Need["payload"]): payload is MealSlotPayload {
+  return !!payload && typeof (payload as MealSlotPayload).slots_total === "number";
+}
+
+function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayload {
+  return !!payload && typeof (payload as GoodsPayload).item === "string";
+}
+
 function progressLabel(need: Need): string | null {
   if (need.type === "MONEY" && isMoneyPayload(need.payload)) {
     return `₹${need.payload.raised_amount.toLocaleString("en-IN")} / ₹${need.payload.target_amount.toLocaleString("en-IN")}`;
@@ -24,6 +40,12 @@ function progressLabel(need: Need): string | null {
   if (need.type === "BLOOD" && isBloodPayload(need.payload)) {
     return `${need.payload.units_fulfilled} / ${need.payload.units_needed} units`;
   }
+  if (need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload)) {
+    return `${need.payload.slots_confirmed} / ${need.payload.slots_total} slots`;
+  }
+  if (need.type === "GOODS" && isGoodsPayload(need.payload)) {
+    return need.payload.claimed ? "Claimed" : "Not yet claimed";
+  }
   return null;
 }
 
@@ -32,11 +54,15 @@ export function MyNeedsPage({
   onCreateMoney,
   onCreateKit,
   onCreateBlood,
+  onCreateMealSlot,
+  onCreateGoods,
 }: {
   onSelectNeed: (id: string) => void;
   onCreateMoney: () => void;
   onCreateKit: () => void;
   onCreateBlood: () => void;
+  onCreateMealSlot: () => void;
+  onCreateGoods: () => void;
 }) {
   const { token } = useAuth();
   const [needs, setNeeds] = useState<Need[] | null>(null);
@@ -62,6 +88,12 @@ export function MyNeedsPage({
           </button>
           <button type="button" className="btn" onClick={onCreateBlood}>
             + Blood need
+          </button>
+          <button type="button" className="btn" onClick={onCreateMealSlot}>
+            + Meal-slot need
+          </button>
+          <button type="button" className="btn" onClick={onCreateGoods}>
+            + Goods need
           </button>
         </div>
       </div>

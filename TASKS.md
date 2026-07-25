@@ -62,9 +62,20 @@
   against a live device in this pass
 
 ## Milestone 5 — Meal-slot booking  *(write PRD §10 first)*
-- [ ] Institution defines slots (date, meal type, capacity, cost)
-- [ ] Donor books a slot → admin approves → slot locks (no double-booking)
-- [ ] Test booking + lock
+- [x] Institution defines slots (date, meal type, cost) — a `MEAL_SLOT` need takes a bounded list
+  of dates at creation (capped 60), one `MealSlot` child row per date, all starting `OPEN`
+  (`backend/prisma/schema.prisma`, `src/lib/mealSlotNeed.ts`); `capacity` deliberately not
+  modeled — v1 is one booking per date, not multiple slots per date
+- [x] Donor books a slot → beneficiary/admin confirms → slot locks (no double-booking) — booking
+  is a dedicated `POST /api/needs/:id/meal-slots/:slotId/book` (not a branch of the generic
+  contributions endpoint) using a **conditional UPDATE** (`WHERE status='OPEN'`) inside the same
+  transaction as the Contribution, not check-then-act (D-022); confirm flips `BOOKED →
+  CONFIRMED` and advances `slots_confirmed`; **reject reopens the date** (`BOOKED → OPEN`,
+  `contributionId` cleared) — the one place this type's confirm/reject differs from Money/Kit
+- [x] Test booking + lock — curl-tested end-to-end including firing two donors' booking requests
+  **concurrently** at the same slot: exactly one succeeded, the other got a clean 409; confirmed
+  the winner, then tested reject-reopens-slot on a second date and successfully rebooked it
+  immediately after
 
 ## Milestone 6 — Goods / unused items  *(write PRD §11 first)*
 - [ ] Post an item; claim; handoff confirmation
@@ -78,16 +89,18 @@
 - [ ] Volunteering: scribe requests + career mentoring
 
 ## Cross-cutting (revisit throughout)
-- [ ] Institution web panel (PRD §16) — *partial:* post/track MONEY, KIT **and** BLOOD needs +
-  confirm contributions + photo upload, on par with mobile
+- [ ] Institution web panel (PRD §16) — *partial:* post/track MONEY, KIT, BLOOD **and**
+  MEAL_SLOT needs + confirm contributions + photo upload, on par with mobile
   (`web-panel/src/pages/MyNeedsPage.tsx`/`CreateMoneyNeedPage.tsx`/`CreateKitNeedPage.tsx`/
-  `CreateBloodNeedPage.tsx`); BLOOD needs auto-link to the posting institution and can be
-  self-verified fast-track from `NeedDetailPage.tsx` (D-008); KYC onboarding (D-007) not started
+  `CreateBloodNeedPage.tsx`/`CreateMealSlotNeedPage.tsx`); BLOOD and MEAL_SLOT needs auto-link to
+  the posting institution and can be self-verified fast-track from `NeedDetailPage.tsx` (D-008);
+  `NeedDetailPage.tsx` shows the per-date calendar (open/booked/confirmed) for MEAL_SLOT; KYC
+  onboarding (D-007) not started
 - [ ] Admin console (PRD §15) — *partial:* Needs tab wired (verification queue + status browser +
   contribution override + urgency control, `admin/src/pages/NeedsPage.tsx`/`NeedDetailPage.tsx`,
-  all blood-aware); **Admin**-only Post a need tab (money + kit + blood + photos, on behalf of a
-  poster without their own account, `admin/src/pages/PostNeedPage.tsx`); settings/analytics
-  screens not started
+  blood- and meal-slot-aware); **Admin**-only Post a need tab (money + kit + blood + meal-slot +
+  photos, on behalf of a poster without their own account, `admin/src/pages/PostNeedPage.tsx`);
+  settings/analytics screens not started
 - [ ] Notifications system (PRD §17)
 - [ ] Security & privacy pass (PRD §20)
 - [ ] Analytics & metrics (PRD §21)

@@ -74,6 +74,34 @@ export interface BloodPayload {
   units_fulfilled: number;
 }
 
+// PRD §10.1 — only meaningful when type === "MEAL_SLOT". Per-date state lives in `mealSlots`
+// on the Need (§10.2), not here.
+export interface MealSlotPayload {
+  meal_type: string;
+  cost_per_slot: number;
+  slots_total: number;
+  slots_confirmed: number;
+  mode: "MONEY" | "DELIVER";
+  upi_id?: string;
+}
+
+export type MealSlotStatus = "OPEN" | "BOOKED" | "CONFIRMED";
+
+// PRD §10.2 — one bookable calendar date under a MEAL_SLOT need.
+export interface MealSlot {
+  id: string;
+  date: string;
+  status: MealSlotStatus;
+}
+
+// PRD §11.2 — only meaningful when type === "GOODS". No progress bar — `claimed` is a boolean,
+// there's no partial state (§11.3).
+export interface GoodsPayload {
+  item: string;
+  condition: string;
+  claimed: boolean;
+}
+
 export interface Need {
   id: string;
   type: NeedType;
@@ -89,24 +117,29 @@ export interface Need {
   linkedInstitutionId: string | null;
   institutionVerified: boolean;
   adminVerified: boolean;
-  payload: MoneyPayload | KitPayload | BloodPayload | Record<string, unknown> | null;
+  payload: MoneyPayload | KitPayload | BloodPayload | MealSlotPayload | GoodsPayload | Record<string, unknown> | null;
+  // Only ever non-empty for MEAL_SLOT needs (§10.2).
+  mealSlots: MealSlot[];
   postedBy: { id: string; name: string | null; role: Role };
   createdAt: string;
 }
 
-export type ContributionKind = "MONEY" | "KIT" | "BLOOD";
+export type ContributionKind = "MONEY" | "KIT" | "BLOOD" | "MEAL_SLOT" | "GOODS";
 export type ContributionStatus = "PENDING_CONFIRMATION" | "CONFIRMED" | "REJECTED";
 
 export interface Contribution {
   id: string;
   needId: string;
   kind: ContributionKind;
-  // BLOOD only — units pledged, usually 1 (§8.5). Null for MONEY/KIT.
+  // BLOOD only — units pledged, usually 1 (§8.5). Null for MONEY/KIT/MEAL_SLOT.
   units: number | null;
-  // MONEY: amount always set. KIT mode=MONEY: amount set, kits set. KIT mode=DELIVER: amount
-  // null, kits set, utr null (§9.2 — no payment for a physical delivery pledge).
+  // MONEY: amount always set. KIT/MEAL_SLOT mode=MONEY: amount set (+kits for KIT). KIT/
+  // MEAL_SLOT mode=DELIVER: amount null, utr null (§9.2/§10.4 — no payment for a physical
+  // delivery / in-person pledge).
   amount: number | null;
   kits: number | null;
+  // MEAL_SLOT only — the calendar date this contribution booked (§10.4).
+  mealSlotDate: string | null;
   status: ContributionStatus;
   utr: string | null;
   donor: { id: string; name: string | null; phone: string };
@@ -286,6 +319,64 @@ export async function postBloodNeed(
   });
 }
 
+// PRD §10.1-10.2 — creates a DRAFT MEAL_SLOT need with one MealSlot row per date, then
+// immediately submits it (mirrors postMoneyNeed/postKitNeed). `dates` are plain "YYYY-MM-DD"
+// strings — the backend dedupes by calendar day and creates the MealSlot rows atomically.
+export async function postMealSlotNeed(
+  token: string,
+  data: {
+    title: string;
+    description: string;
+    mealType: string;
+    costPerSlot: number;
+    mode: "MONEY" | "DELIVER";
+    upiId?: string;
+    dates: string[];
+    linkedInstitutionId?: string;
+    photos?: string[];
+  }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      type: "MEAL_SLOT",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      linkedInstitutionId: data.linkedInstitutionId,
+      payload: {
+        meal_type: data.mealType,
+        cost_per_slot: data.costPerSlot,
+        mode: data.mode,
+        dates: data.dates,
+        ...(data.mode === "MONEY" ? { upi_id: data.upiId } : {}),
+      },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// PRD §10.3/§10.4 / D-022 — book one specific date. `utr` required for mode=MONEY, must be
+// omitted for mode=DELIVER, same shape as KIT donations; the backend enforces this too. A 409
+// here means someone else booked this exact date first (the whole point of the locking) — the
+// caller should refetch the need and let the donor pick another date.
+export function bookMealSlot(
+  token: string,
+  needId: string,
+  slotId: string,
+  data: { utr?: string; proofUrl?: string }
+) {
+  return request<{ contribution: Contribution }>(`/api/needs/${needId}/meal-slots/${slotId}/book`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+}
+
 // Object storage (CLAUDE.md §6 / D-011): the backend only signs a short-lived upload URL — the
 // client uploads the file bytes straight to the bucket, never through the backend.
 export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr") {
@@ -349,6 +440,37 @@ export function respondToBloodNeed(token: string, needId: string, units: number 
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ units }),
+  });
+}
+
+// PRD §11.1 — creates a DRAFT GOODS need, then immediately submits it (mirrors postBloodNeed).
+export async function postGoodsNeed(
+  token: string,
+  data: { title: string; description: string; item: string; condition: string; photos?: string[] }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      type: "GOODS",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      payload: { item: data.item, condition: data.condition },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// PRD §11.3 — "claim it": a pledge, never a payment, same consent principle as blood's respond.
+export function claimGoods(token: string, needId: string, proofUrl?: string) {
+  return request<{ contribution: Contribution }>(`/api/needs/${needId}/contributions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ proofUrl }),
   });
 }
 

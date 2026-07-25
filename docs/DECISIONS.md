@@ -200,6 +200,36 @@
   dashboard for the stored URLs to actually resolve — this is a manual one-time step outside the
   codebase (Storage → bucket → Edit bucket → Public bucket).
 
+### D-022 · Meal-slot locking: conditional UPDATE, not check-then-act; reject reopens the date
+- **Decision:** A `MEAL_SLOT` need gets a child `MealSlot` row per calendar date (institution
+  defines the bounded date list at creation, capped at 60 dates; fixed after submission — same
+  reasoning as Kit's `mode`, D-004). Booking a date is a single conditional `UPDATE "MealSlot" SET
+  status='BOOKED', contribution_id=:cid WHERE id=:slotId AND status='OPEN'` inside the same
+  transaction that creates the `Contribution` — never a read-then-write from the application.
+  Postgres serializes concurrent `UPDATE`s to the same row, so exactly one of two racing requests
+  affects a row; the app checks the affected-row count and fails the loser with "pick another
+  date." Progress (`slots_confirmed`) only increments on **confirm** (same audit principle as
+  `raised_amount`/`kits_funded`), but the **lock** happens at **booking**, since that's when the
+  race actually occurs. On **reject**, the slot goes back to `OPEN` (not stuck `BOOKED`) — the one
+  place this type's confirm/reject differs from Money/Kit, because a rejected contribution there
+  just doesn't count, but here rejection must also free the date back up or one bad payment claim
+  permanently blocks it.
+- **Why:** No two donors can ever be told they've booked the same date — that's the entire
+  point of this being one of the two custom modules (CLAUDE.md §3). A `SELECT` then `UPDATE`
+  app-side is a textbook race under concurrent requests; the DB's own row-update semantics are a
+  correct lock without needing an explicit `SELECT ... FOR UPDATE`, `SERIALIZABLE` isolation, or a
+  distributed lock. This is the same "conditional update, check the affected-row count, never
+  check-then-act" pattern already used for UTR uniqueness (D-019).
+- **Alternatives:** App-level check-then-act (rejected — race-prone under concurrency); a
+  distributed lock / Redis mutex (rejected — unnecessary complexity, Postgres already gives this
+  for free at the row level); `SERIALIZABLE` transaction isolation for the whole booking flow
+  (rejected — the conditional `UPDATE`'s WHERE clause is sufficient and cheaper).
+- **Impact:** New `MealSlot` Prisma model with a `(need_id, date)` unique constraint;
+  `Need.payload` for MEAL_SLOT carries `slots_total`/`slots_confirmed` (server-computed only,
+  never accepted from the client, same tamper-guard as every other progress field); booking and
+  confirm/reject routes must wrap their state changes in a DB transaction with the conditional
+  `UPDATE`, not a plain `findUnique` + `update`.
+
 ---
 
 ### Open decisions (gap register — resolve before / during build)

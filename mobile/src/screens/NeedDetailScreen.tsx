@@ -14,6 +14,8 @@ import {
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import {
+  bookMealSlot,
+  claimGoods,
   confirmContribution,
   donate,
   donateKit,
@@ -25,7 +27,9 @@ import {
   uploadToSignedUrl,
   type BloodPayload,
   type Contribution,
+  type GoodsPayload,
   type KitPayload,
+  type MealSlotPayload,
   type MoneyPayload,
   type Need,
 } from "../lib/api";
@@ -46,13 +50,30 @@ function isBloodPayload(payload: Need["payload"]): payload is BloodPayload {
   return !!payload && typeof (payload as BloodPayload).units_needed === "number";
 }
 
+function isMealSlotPayload(payload: Need["payload"]): payload is MealSlotPayload {
+  return !!payload && typeof (payload as MealSlotPayload).slots_total === "number";
+}
+
+function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayload {
+  return !!payload && typeof (payload as GoodsPayload).item === "string";
+}
+
 function formatBloodGroup(g: string) {
   return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
 function formatContributionAmount(c: Contribution): string {
   if (c.kind === "BLOOD") return `${c.units} unit${c.units === 1 ? "" : "s"}`;
   if (c.kind === "KIT") return `${c.kits} kits`;
+  if (c.kind === "MEAL_SLOT") {
+    const date = c.mealSlotDate ? formatDate(c.mealSlotDate) : "";
+    return c.amount != null ? `₹${c.amount.toLocaleString("en-IN")} · ${date}` : date;
+  }
+  if (c.kind === "GOODS") return "Claim";
   return `₹${c.amount?.toLocaleString("en-IN")}`;
 }
 
@@ -77,6 +98,13 @@ export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: (
 
   const [isResponding, setIsResponding] = useState(false);
   const [hasResponded, setHasResponded] = useState(false);
+
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [mealSlotUtr, setMealSlotUtr] = useState("");
+  const [isBookingSlot, setIsBookingSlot] = useState(false);
+
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [hasClaimed, setHasClaimed] = useState(false);
 
   const isOwner = need && user && need.postedBy.id === user.id;
 
@@ -239,6 +267,22 @@ export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: (
     }
   }
 
+  // PRD §11.3 — "claim it." A pledge, not a payment, same consent principle as blood's respond.
+  async function handleClaim() {
+    if (!token) return;
+    setIsClaiming(true);
+    try {
+      await claimGoods(token, needId);
+      setHasClaimed(true);
+      Alert.alert("Thanks!", "The beneficiary can now see your claim to coordinate handover.");
+      load();
+    } catch (err) {
+      Alert.alert("Error", err instanceof Error ? err.message : "Failed to claim this item");
+    } finally {
+      setIsClaiming(false);
+    }
+  }
+
   // PRD §8.5.1 — "I can donate." A pledge, not a payment; responding is itself the donor's
   // consent to share their response with the beneficiary/institution.
   async function handleRespond() {
@@ -253,6 +297,35 @@ export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: (
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to respond");
     } finally {
       setIsResponding(false);
+    }
+  }
+
+  // PRD §10.3-10.4 / D-022 — booking a specific date. A 409 here means someone else booked it
+  // first (the locking working as intended, not a bug) — refetch so the donor sees it's gone
+  // and can pick another.
+  async function handleBookSlot(mealSlot: MealSlotPayload) {
+    if (!token || !selectedSlotId) return;
+    if (mealSlot.mode === "MONEY" && !mealSlotUtr.trim()) {
+      setError("Enter the UTR from your payment");
+      return;
+    }
+    setError(null);
+    setIsBookingSlot(true);
+    try {
+      await bookMealSlot(token, needId, selectedSlotId, {
+        utr: mealSlot.mode === "MONEY" ? mealSlotUtr.trim() : undefined,
+      });
+      setSelectedSlotId(null);
+      setMealSlotUtr("");
+      Alert.alert("Thanks!", "Your booking is pending the institution's confirmation.");
+      load();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to book this date";
+      Alert.alert("Couldn't book that date", message);
+      setSelectedSlotId(null);
+      load(); // refresh the calendar — the date may have just been taken
+    } finally {
+      setIsBookingSlot(false);
     }
   }
 
@@ -294,6 +367,11 @@ export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: (
   const canDonateKit = kit && FUNDABLE.includes(need.status) && !isOwner;
   const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
   const canRespondToBlood = blood && FUNDABLE.includes(need.status) && !isOwner && !hasResponded;
+  const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
+  const canBookMealSlot = mealSlot && FUNDABLE.includes(need.status) && !isOwner;
+  const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
+  // §11.3 — no PARTIALLY_FULFILLED for GOODS (one-shot claim), so only LIVE is claimable.
+  const canClaimGoods = goods && need.status === "LIVE" && !isOwner && !hasClaimed;
   const pendingContributions = contributions?.filter((c) => c.status === "PENDING_CONFIRMATION") ?? [];
 
   return (
@@ -339,6 +417,23 @@ export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: (
             target={blood.units_needed}
             label={`${blood.units_fulfilled} of ${blood.units_needed} units`}
           />
+        </View>
+      )}
+      {mealSlot && (
+        <View style={styles.section}>
+          <Text style={styles.mealType}>{mealSlot.meal_type}</Text>
+          <ProgressBar
+            raised={mealSlot.slots_confirmed}
+            target={mealSlot.slots_total}
+            label={`${mealSlot.slots_confirmed} of ${mealSlot.slots_total} slots confirmed`}
+          />
+        </View>
+      )}
+      {goods && (
+        <View style={styles.section}>
+          <Text style={styles.mealType}>{goods.item}</Text>
+          <Text style={styles.hint}>Acceptable condition: {goods.condition}</Text>
+          <Text style={styles.hint}>{goods.claimed ? "Claimed" : "Not yet claimed"}</Text>
         </View>
       )}
 
@@ -497,6 +592,115 @@ export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: (
         </View>
       )}
 
+      {canBookMealSlot && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Book a date</Text>
+          <Text style={styles.hint}>
+            {mealSlot.mode === "MONEY"
+              ? `Pick an open date, pay ₹${mealSlot.cost_per_slot} via UPI (${mealSlot.upi_id}), then submit the UTR.`
+              : "Pick an open date you can personally cook/serve on."}
+          </Text>
+          <View style={styles.dateChipRow}>
+            {need.mealSlots.map((slot) => {
+              const isOpen = slot.status === "OPEN";
+              const isSelected = selectedSlotId === slot.id;
+              return (
+                <TouchableOpacity
+                  key={slot.id}
+                  disabled={!isOpen}
+                  style={[
+                    styles.dateChip,
+                    !isOpen && styles.dateChipTaken,
+                    isSelected && styles.dateChipSelected,
+                  ]}
+                  onPress={() => setSelectedSlotId(isSelected ? null : slot.id)}
+                >
+                  <Text
+                    style={[
+                      styles.dateChipText,
+                      !isOpen && styles.dateChipTextTaken,
+                      isSelected && styles.dateChipTextSelected,
+                    ]}
+                  >
+                    {formatDate(slot.date)}
+                    {!isOpen ? " (taken)" : ""}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {selectedSlotId && (
+            <>
+              {mealSlot.mode === "MONEY" && (
+                <>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={async () => {
+                      const link = buildUpiDeepLink({
+                        upiId: mealSlot.upi_id!,
+                        payeeName: need.postedBy.name ?? "Institution",
+                        amount: mealSlot.cost_per_slot,
+                        note: need.title,
+                      });
+                      const canOpen = await Linking.canOpenURL(link);
+                      if (canOpen) Linking.openURL(link);
+                      else Alert.alert("No UPI app found", "Pay manually to: " + mealSlot.upi_id);
+                    }}
+                  >
+                    <Text style={styles.secondaryButtonText}>Pay via UPI ({mealSlot.upi_id})</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="UTR / reference number"
+                    placeholderTextColor={theme.color.textSecondary}
+                    value={mealSlotUtr}
+                    onChangeText={setMealSlotUtr}
+                  />
+                </>
+              )}
+              {error && <Text style={styles.errorText}>{error}</Text>}
+              <TouchableOpacity
+                style={[styles.button, isBookingSlot && styles.buttonDisabled]}
+                onPress={() => handleBookSlot(mealSlot)}
+                disabled={isBookingSlot}
+              >
+                {isBookingSlot ? (
+                  <ActivityIndicator color={theme.color.onPrimary} />
+                ) : (
+                  <Text style={styles.buttonText}>Book {formatDate(need.mealSlots.find((s) => s.id === selectedSlotId)!.date)}</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
+      {canClaimGoods && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Claim this item</Text>
+          <Text style={styles.hint}>
+            Only claim if you actually have this item to give — claiming shares your contact
+            details with the beneficiary so they can coordinate handover with you directly.
+          </Text>
+          <TouchableOpacity
+            style={[styles.button, isClaiming && styles.buttonDisabled]}
+            onPress={handleClaim}
+            disabled={isClaiming}
+          >
+            {isClaiming ? <ActivityIndicator color={theme.color.onPrimary} /> : <Text style={styles.buttonText}>I have this</Text>}
+          </TouchableOpacity>
+        </View>
+      )}
+      {goods && hasClaimed && (
+        <View style={styles.section}>
+          <Text style={styles.hint}>
+            Thanks — the beneficiary has your claim and can now see your contact details to
+            coordinate handover.
+          </Text>
+        </View>
+      )}
+
       {isOwner && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contributions awaiting your confirmation</Text>
@@ -552,6 +756,20 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.md },
   bloodGroup: { fontSize: 16, fontWeight: "700", color: theme.color.danger, marginBottom: theme.spacing.sm },
+  mealType: { fontSize: 16, fontWeight: "700", color: theme.color.primary, marginBottom: theme.spacing.sm, textTransform: "capitalize" },
+  dateChipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+  dateChip: {
+    borderWidth: 1,
+    borderColor: theme.color.primary,
+    borderRadius: 999,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 6,
+  },
+  dateChipTaken: { borderColor: theme.color.border },
+  dateChipSelected: { backgroundColor: theme.color.primary },
+  dateChipText: { color: theme.color.primary, fontSize: 13, fontWeight: "600" },
+  dateChipTextTaken: { color: theme.color.textSecondary },
+  dateChipTextSelected: { color: theme.color.onPrimary },
   proofPreviewRow: {
     flexDirection: "row",
     alignItems: "center",

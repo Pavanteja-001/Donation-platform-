@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Image } from "expo-image";
-import type { BloodPayload, KitPayload, MoneyPayload, Need, Urgency } from "../lib/api";
+import type { BloodPayload, GoodsPayload, KitPayload, MealSlotPayload, MoneyPayload, Need, Urgency } from "../lib/api";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "./ProgressBar";
 
@@ -23,6 +23,14 @@ function isBloodPayload(payload: Need["payload"]): payload is BloodPayload {
   return !!payload && typeof (payload as BloodPayload).units_needed === "number";
 }
 
+function isMealSlotPayload(payload: Need["payload"]): payload is MealSlotPayload {
+  return !!payload && typeof (payload as MealSlotPayload).slots_total === "number";
+}
+
+function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayload {
+  return !!payload && typeof (payload as GoodsPayload).item === "string";
+}
+
 function formatBloodGroup(g: string) {
   return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
 }
@@ -33,6 +41,8 @@ export function NeedCard({ need, onPress }: { need: Need; onPress?: () => void }
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
   const kit = need.type === "KIT" && isKitPayload(need.payload) ? need.payload : null;
   const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
+  const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
+  const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} disabled={!onPress} activeOpacity={0.7}>
@@ -71,6 +81,22 @@ export function NeedCard({ need, onPress }: { need: Need; onPress?: () => void }
             target={blood.units_needed}
             label={`${blood.units_fulfilled} of ${blood.units_needed} units`}
           />
+        </View>
+      )}
+      {mealSlot && (
+        <View style={styles.progress}>
+          <Text style={styles.mealType}>{mealSlot.meal_type}</Text>
+          <ProgressBar
+            raised={mealSlot.slots_confirmed}
+            target={mealSlot.slots_total}
+            label={`${mealSlot.slots_confirmed} of ${mealSlot.slots_total} slots confirmed`}
+          />
+        </View>
+      )}
+      {goods && (
+        <View style={styles.progress}>
+          <Text style={styles.mealType}>{goods.item}</Text>
+          <Text style={styles.meta}>Condition: {goods.condition}</Text>
         </View>
       )}
       {location ? <Text style={styles.meta}>{location}</Text> : null}
@@ -112,5 +138,6 @@ const styles = StyleSheet.create({
   description: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.xs },
   progress: { marginBottom: theme.spacing.xs },
   bloodGroup: { fontSize: 13, fontWeight: "700", color: theme.color.danger, marginBottom: 2 },
+  mealType: { fontSize: 13, fontWeight: "700", color: theme.color.primary, marginBottom: 2, textTransform: "capitalize" },
   meta: { fontSize: 12, color: theme.color.textSecondary },
 });

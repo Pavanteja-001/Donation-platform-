@@ -5,6 +5,77 @@
 
 ---
 
+### Session 18 — Milestone 5: Meal-slot booking (backend + all three frontends)
+User said "continue" after Session 17 wrapped Blood. Per TASKS.md/CLAUDE.md workflow, next up was
+Milestone 5 — the *other* genuinely custom module (CLAUDE.md §3): a `MEAL_SLOT` need must
+guarantee no two donors ever book the same calendar date.
+
+**PRD:** Wrote §10 (payload fields, the new `MealSlot` child entity, the locking mechanism,
+confirmation/fulfilment incl. the reject-reopens-the-date rule, progress display) and a new
+decision, **D-022**, documenting the locking approach and why it's safe without an explicit
+`SELECT ... FOR UPDATE` or distributed lock.
+
+**Backend:**
+- Schema: `MealSlot` model (`needId`, `date`, `status: OPEN|BOOKED|CONFIRMED`, `contributionId`)
+  with a `(needId, date)` unique constraint; `ContributionKind.MEAL_SLOT`; `Contribution.
+  mealSlotDate` — added as a **second** migration mid-session after realizing the first design
+  (relying solely on `MealSlot.contributionId`) would silently lose a rejected contribution's
+  date once that slot got rebooked by someone else and the pointer got overwritten; storing the
+  date redundantly on the Contribution itself avoided that.
+- `mealSlotNeed.ts` — payload schema/parser, plus `dedupeDates()` (collapses same-calendar-day
+  duplicates before they'd otherwise hit the DB unique constraint).
+- Need creation for MEAL_SLOT is a dedicated code path (`createMealSlotNeed`), not the generic
+  `normalizePayload` + single `create` every other type uses — it needs a transaction that
+  creates the Need **and** one `MealSlot` row per date atomically. Same special-cased transaction
+  on `PATCH` while still DRAFT (wholesale-replaces the date list — safe because nothing can be
+  `BOOKED` pre-LIVE).
+- **The locking itself (D-022):** `POST /api/needs/:id/meal-slots/:slotId/book` creates the
+  Contribution and runs `UPDATE "MealSlot" SET status='BOOKED' WHERE id=:slotId AND
+  status='OPEN'` in the same transaction; if the update affects 0 rows (someone else's request
+  won the race), the handler throws and the whole transaction — Contribution included — rolls
+  back, returning a clean 409. No `SELECT ... FOR UPDATE`, no app-level lock, no `SERIALIZABLE`
+  isolation — Postgres's own row-update semantics are the lock.
+- Confirm advances `slots_confirmed` (only on confirm, same audit principle as every other
+  progress field) and flips the `MealSlot` to `CONFIRMED`. **Reject reopens the date** (`BOOKED
+  → OPEN`, `contributionId` cleared) — the one place this type's confirm/reject differs from
+  Money/Kit/Blood, because a rejected contribution there just doesn't count, but here rejection
+  must also free the calendar date or one bad payment claim would permanently block it.
+- **Verified the locking is actually correct, not just designed correctly:** fired two donor
+  accounts' booking requests at the exact same slot **concurrently** (backgrounded curl + `wait`)
+  — exactly one succeeded, the other got the 409. Then confirmed the winner (need went
+  `PARTIALLY_FULFILLED`, `slots_confirmed: 1`), booked a second date, **rejected** it, confirmed
+  the slot reopened to `OPEN`, and immediately rebooked it with a different donor to prove the
+  reopened date was genuinely available again — not just marked open but actually bookable.
+
+**Mobile:** `CreateMealSlotNeedScreen` (plain `YYYY-MM-DD` text entry + chip list for dates — no
+date-picker dependency added, consistent with this app's "don't add a dependency until it's
+needed" pattern already applied to routing); `NeedDetailScreen` gained a date-chip calendar
+(open/taken/selected) with UPI-or-pledge booking depending on mode, and handles the 409
+gracefully by refetching so the donor sees the date is gone and can pick another instead of
+staring at a raw error. `NeedCard` shows aggregate slot progress.
+
+**Web-panel & Admin:** `CreateMealSlotNeedPage` on both (web-panel auto-links the posting
+institution for fast-track self-verify, same as Blood; Admin's version omits that, same as its
+Blood page, since an admin posting on someone's behalf isn't the one who'd self-verify).
+`NeedDetailPage` on both shows aggregate progress plus every date's live status as badges — donors
+only book from mobile, so these two just needed visibility + the existing confirm/reject flow to
+become kind-aware for MEAL_SLOT amounts (date + ₹ or just date for a DELIVER-mode pledge).
+
+**Verified:** `tsc -b`/`vite build` clean on web-panel and admin; `tsc --noEmit` clean + `expo
+export` clean on mobile; backend `tsc` clean throughout, dev server auto-reloaded through every
+change without crashing. One transient Railway `PrismaClientInitializationError` showed up in the
+dev log during testing — caught cleanly by Session 17's `express-async-errors` fix (logged as
+`[unhandled]`, server kept running), not a regression. `.env` confirmed untracked.
+
+**Not done:** `capacity` (multiple bookings per date) — v1 is one booking per date, matching what
+was actually decided in D-022/PRD §10.2; a recurring-schedule generator for dates (institution
+enters each date individually, capped at 60) — deferred, not asked for. TASKS.md Milestone 5
+checkboxes updated to match.
+
+**Next:** Milestone 6 — Goods / unused-items flow (PRD §11 first), per TASKS.md.
+
+---
+
 ### Session 17 — Milestone 4: Blood module (backend + all three frontends)
 User asked for full kickoff of Milestone 4 per TASKS.md: PRD §8 first, then backend, then wire
 all three frontends. Also folded in a mid-session ask ("admin can also post require kits...

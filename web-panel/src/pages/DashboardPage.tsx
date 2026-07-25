@@ -4,6 +4,8 @@ import { MyNeedsPage } from "./MyNeedsPage";
 import { CreateMoneyNeedPage } from "./CreateMoneyNeedPage";
 import { CreateKitNeedPage } from "./CreateKitNeedPage";
 import { CreateBloodNeedPage } from "./CreateBloodNeedPage";
+import { CreateMealSlotNeedPage } from "./CreateMealSlotNeedPage";
+import { CreateGoodsNeedPage } from "./CreateGoodsNeedPage";
 import { NeedDetailPage } from "./NeedDetailPage";
 
 type Screen =
@@ -11,6 +13,8 @@ type Screen =
   | { name: "create-money" }
   | { name: "create-kit" }
   | { name: "create-blood" }
+  | { name: "create-meal-slot" }
+  | { name: "create-goods" }
   | { name: "detail"; needId: string };
 
 export function DashboardPage() {
@@ -37,6 +41,8 @@ export function DashboardPage() {
             onCreateMoney={() => setScreen({ name: "create-money" })}
             onCreateKit={() => setScreen({ name: "create-kit" })}
             onCreateBlood={() => setScreen({ name: "create-blood" })}
+            onCreateMealSlot={() => setScreen({ name: "create-meal-slot" })}
+            onCreateGoods={() => setScreen({ name: "create-goods" })}
           />
         )}
         {screen.name === "create-money" && (
@@ -47,6 +53,12 @@ export function DashboardPage() {
         )}
         {screen.name === "create-blood" && (
           <CreateBloodNeedPage onBack={() => setScreen({ name: "list" })} onDone={() => setScreen({ name: "list" })} />
+        )}
+        {screen.name === "create-meal-slot" && (
+          <CreateMealSlotNeedPage onBack={() => setScreen({ name: "list" })} onDone={() => setScreen({ name: "list" })} />
+        )}
+        {screen.name === "create-goods" && (
+          <CreateGoodsNeedPage onBack={() => setScreen({ name: "list" })} onDone={() => setScreen({ name: "list" })} />
         )}
         {screen.name === "detail" && (
           <NeedDetailPage needId={screen.needId} onBack={() => setScreen({ name: "list" })} />

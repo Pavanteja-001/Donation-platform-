@@ -45,24 +45,24 @@ enum Gender {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  phone     String   @unique
-  name      String?
-  role      Role     @default(USER)
+  id    String  @id @default(cuid())
+  phone String  @unique
+  name  String?
+  role  Role    @default(USER)
 
   // Permanent ("go-to") location captured at registration — basis for notifications (D-010).
   // No real-time GPS / live tracking.
-  city      String?
-  area      String?
+  city String?
+  area String?
 
   // Blood donor profile (PRD §8.1) — all optional/opt-in; a USER only fills these in if they
   // want to appear as a blood donor. Sensitive health data (CLAUDE.md §7): never exposed to
   // anyone but the donor themselves except via the respond flow (§8.5), which is itself consent.
-  bloodGroup       BloodGroup?
-  dateOfBirth      DateTime?
-  gender           Gender?
-  lastDonationDate DateTime?
-  availableToDonate Boolean   @default(true)
+  bloodGroup        BloodGroup?
+  dateOfBirth       DateTime?
+  gender            Gender?
+  lastDonationDate  DateTime?
+  availableToDonate Boolean     @default(true)
 
   // Set once the app registers for push (D-016) — used for the eligible-donor match (§8.4).
   expoPushToken String?
@@ -164,6 +164,9 @@ model Need {
   payload Json?
 
   contributions Contribution[]
+  // MEAL_SLOT only (§10.2) — the bookable calendar dates under this need. Empty for every other
+  // type.
+  mealSlots     MealSlot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -172,12 +175,14 @@ model Need {
   @@index([postedById])
 }
 
-// PRD §6.5 / §7.2-7.3 / §9.2 / §8.5 — a donor acting on a Need. `kind` exists so every type's
-// contributions (GOODS/… later) reuse this table instead of inventing a parallel one.
+// PRD §6.5 / §7.2-7.3 / §9.2 / §8.5 / §10.4 — a donor acting on a Need. `kind` exists so every
+// type's contributions (GOODS/… later) reuse this table instead of inventing a parallel one.
 enum ContributionKind {
   MONEY
   KIT
   BLOOD
+  MEAL_SLOT
+  GOODS
 }
 
 enum ContributionStatus {
@@ -198,21 +203,31 @@ model Contribution {
   kind   ContributionKind   @default(MONEY)
   status ContributionStatus @default(PENDING_CONFIRMATION)
 
-  // MONEY: the ₹ amount (required). KIT mode=MONEY: server-computed as kits × cost_per_kit,
-  // same audit-worthy principle as Money (CLAUDE.md §7). KIT mode=DELIVER: null — no money
-  // moves through the platform for a physical delivery pledge (§9.2).
+  // MONEY: the ₹ amount (required). KIT mode=MONEY / MEAL_SLOT mode=MONEY: server-computed as
+  // kits × cost_per_kit / cost_per_slot, same audit-worthy principle as Money (CLAUDE.md §7).
+  // KIT/MEAL_SLOT mode=DELIVER: null — no money moves through the platform for a physical
+  // delivery / in-person pledge (§9.2/§10.4).
   amount Int?
-  // KIT only — how many kits this contribution covers (§9.2). Null for MONEY/BLOOD.
+  // KIT only — how many kits this contribution covers (§9.2). Null for MONEY/BLOOD/MEAL_SLOT.
   kits   Int?
-  // BLOOD only — units pledged, usually 1 (§8.5). Null for MONEY/KIT.
+  // BLOOD only — units pledged, usually 1 (§8.5). Null for MONEY/KIT/MEAL_SLOT.
   units  Int?
 
-  // Proof of payment (§7.2/§9.2). Required for MONEY and KIT mode=MONEY contributions; null for
-  // KIT mode=DELIVER and BLOOD (neither ever involves payment). UTR uniqueness is a hard DB
-  // constraint (D-019) — nullable + @unique lets Postgres allow multiple NULLs while still
-  // enforcing uniqueness among the UTRs that do exist.
+  // Proof of payment (§7.2/§9.2). Required for MONEY and KIT/MEAL_SLOT mode=MONEY
+  // contributions; null for mode=DELIVER and BLOOD (neither ever involves payment). UTR
+  // uniqueness is a hard DB constraint (D-019) — nullable + @unique lets Postgres allow multiple
+  // NULLs while still enforcing uniqueness among the UTRs that do exist.
   utr      String? @unique
   proofUrl String?
+
+  // MEAL_SLOT only (§10.2-10.3) — the one calendar date this contribution booked. The lock
+  // itself lives on MealSlot.status via the conditional UPDATE (D-022); this is just the
+  // reverse side of that one-to-one relation.
+  mealSlot     MealSlot?
+  // MEAL_SLOT only — redundant with mealSlot.date, kept directly on the Contribution so a
+  // REJECTED contribution's date survives even after its MealSlot is reopened and its
+  // `contributionId` pointer gets overwritten by whoever books that date next (D-022).
+  mealSlotDate DateTime?
 
   // Beneficiary (default) or Admin (override) — D-002, D-018. Never Staff — confirming/
   // overriding a donation is explicitly Admin-only.
@@ -224,4 +239,37 @@ model Contribution {
 
   @@index([needId])
   @@index([donorId])
+}
+
+// PRD §10.2-10.3 / D-022 — one row per bookable calendar date under a MEAL_SLOT need. The
+// locking guarantee (no two donors book the same date) lives entirely in the conditional
+// UPDATE the booking route runs against `status` — see src/routes/needs.ts — not in application
+// code, and not in this schema beyond the unique constraint below.
+enum MealSlotStatus {
+  OPEN
+  BOOKED
+  CONFIRMED
+}
+
+model MealSlot {
+  id String @id @default(cuid())
+
+  needId String
+  need   Need   @relation(fields: [needId], references: [id])
+
+  date   DateTime
+  status MealSlotStatus @default(OPEN)
+
+  // Set once BOOKED (§10.3); cleared back to null when a rejected booking reopens the slot
+  // (§10.4) so it can be booked again.
+  contributionId String?       @unique
+  contribution   Contribution? @relation(fields: [contributionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Structurally impossible to have two rows for the same date on the same need — belt and
+  // suspenders alongside the conditional-UPDATE locking pattern (D-022).
+  @@unique([needId, date])
+  @@index([needId, status])
 }

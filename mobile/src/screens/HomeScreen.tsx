@@ -10,9 +10,11 @@ import { NeedDetailScreen } from "./NeedDetailScreen";
 import { CreateMoneyNeedScreen } from "./CreateMoneyNeedScreen";
 import { CreateKitNeedScreen } from "./CreateKitNeedScreen";
 import { CreateBloodNeedScreen } from "./CreateBloodNeedScreen";
+import { CreateMealSlotNeedScreen } from "./CreateMealSlotNeedScreen";
+import { CreateGoodsNeedScreen } from "./CreateGoodsNeedScreen";
 import { BloodProfileScreen } from "./BloodProfileScreen";
 
-// No routing library yet (kept minimal for Milestones 0-4) — a simple local view switch is
+// No routing library yet (kept minimal for Milestones 0-6) — a simple local view switch is
 // enough for feed / my-needs / detail / create / blood-profile. Revisit once the app has enough
 // screens to need real nav.
 type Screen =
@@ -22,6 +24,8 @@ type Screen =
   | { name: "create-money" }
   | { name: "create-kit" }
   | { name: "create-blood" }
+  | { name: "create-meal-slot" }
+  | { name: "create-goods" }
   | { name: "blood-profile" };
 
 export function HomeScreen() {
@@ -61,6 +65,12 @@ export function HomeScreen() {
   }
   if (screen.name === "create-blood") {
     return <CreateBloodNeedScreen onBack={() => setScreen({ name: "feed" })} onDone={backToMine} />;
+  }
+  if (screen.name === "create-meal-slot") {
+    return <CreateMealSlotNeedScreen onBack={() => setScreen({ name: "feed" })} onDone={backToMine} />;
+  }
+  if (screen.name === "create-goods") {
+    return <CreateGoodsNeedScreen onBack={() => setScreen({ name: "feed" })} onDone={backToMine} />;
   }
   if (screen.name === "blood-profile") {
     return <BloodProfileScreen onBack={() => setScreen({ name: "feed" })} />;
@@ -103,6 +113,12 @@ export function HomeScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.postButton} onPress={() => setScreen({ name: "create-blood" })}>
           <Text style={styles.postButtonText}>+ Blood</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.postButton} onPress={() => setScreen({ name: "create-meal-slot" })}>
+          <Text style={styles.postButtonText}>+ Meal slot</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.postButton} onPress={() => setScreen({ name: "create-goods" })}>
+          <Text style={styles.postButtonText}>+ Goods</Text>
         </TouchableOpacity>
       </View>
 

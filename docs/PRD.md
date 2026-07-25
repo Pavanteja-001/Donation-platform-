@@ -1,6 +1,6 @@
 # Product Requirements Document — DonationPlatform
 
-**Status:** Living document · **Version:** 0.9 · **Region:** India (Andhra Pradesh first)
+**Status:** Living document · **Version:** 0.11 · **Region:** India (Andhra Pradesh first)
 
 > Living document. Sections 1–9 and Appendix A (design system) are drafted. Sections 10+ are
 > mapped in the ToC and written just before their build milestone. Update the version and
@@ -21,8 +21,8 @@
 | 7 | Money Need flow | ✅ drafted |
 | 8 | Blood module (eligibility + geo-matching) | ✅ drafted |
 | 9 | Kit flow (grocery / education) | ✅ drafted |
-| 10 | Meal-slot booking (orphanages) | ⬜ to write |
-| 11 | Goods / unused-items flow | ⬜ to write |
+| 10 | Meal-slot booking (orphanages) | ✅ drafted |
+| 11 | Goods / unused-items flow | ✅ drafted |
 | 12 | Community Q&A forum | ⬜ to write |
 | 13 | Volunteering (scribes, career mentoring) | ⬜ to write |
 | 14 | Trust tiers & digital certificates | ⬜ to write |
@@ -451,6 +451,136 @@ instead of a ₹ amount. `DELIVER`-mode kits still count toward the same `kits_f
 
 ---
 
+## 10. Meal-slot booking (orphanages)
+
+The second of the two genuinely custom modules (CLAUDE.md §3, alongside Blood, §8). A `MEAL_SLOT`
+Need still rides the shared engine and lifecycle (§6) for verification, feed visibility, and
+overall status — but it needs one thing Money/Kit never had to guarantee: **two donors can never
+book the same calendar date**. That guarantee requires a real, DB-enforced lock, not just a
+bigger number to increment — so a new child entity, `MealSlot`, is introduced under the Need.
+
+### 10.1 Payload fields (extends §6.4)
+
+| Field | Notes |
+|---|---|
+| `meal_type` | free text — e.g. "breakfast", "lunch", "dinner", "snacks"; set by the institution |
+| `cost_per_slot` | required at submission; positive integer (₹) |
+| `mode` | required at submission — `MONEY` \| `DELIVER` (same duality as Kits, D-004); fixed for the need's lifetime, same reasoning as §9.1 |
+| `upi_id` | required when `mode: MONEY`; irrelevant when `mode: DELIVER` |
+| `slots_total` | **server-computed** — count of the need's `MealSlot` rows |
+| `slots_confirmed` | **server-computed only**, same tamper-guard principle as `raised_amount`/`kits_funded` — counts only **confirmed** slots, never accepted from the client |
+
+### 10.2 The `MealSlot` child entity — the genuinely new part
+
+| Field | Notes |
+|---|---|
+| `id` | |
+| `need_id` | which MEAL_SLOT need this date belongs to |
+| `date` | a single calendar date |
+| `status` | `OPEN` → `BOOKED` → `CONFIRMED`, or `BOOKED` → `OPEN` (reopened on reject, see 10.4) |
+| `contribution_id` | set once `BOOKED`; the `Contribution` that claimed this date |
+
+The institution defines the full list of dates **at need creation** (a bounded list — capped at
+60 dates / ~2 months, so scope stays sane; no recurring-schedule generator in v1), one `MealSlot`
+row per date, all starting `OPEN`. The date list is **fixed after submission**, same reasoning as
+Kit's `mode` (§9.1) — the locking guarantee in 10.3 depends on the set of bookable dates not
+shifting under donors mid-flow. `(need_id, date)` is a **DB-level unique constraint** — belt and
+suspenders with 10.3, and it also just makes "duplicate date" structurally impossible.
+
+### 10.3 Locking — no double-booking (D-022)
+
+Booking a date is **not** a read-then-write from the application (check `status == OPEN`, then
+set `BOOKED` — a classic race under concurrent requests). It's a single **conditional UPDATE**,
+inside the same DB transaction that creates the `Contribution`:
+
+```sql
+UPDATE "MealSlot" SET status = 'BOOKED', contribution_id = :cid
+WHERE id = :slotId AND status = 'OPEN'
+```
+
+Postgres serializes concurrent `UPDATE`s to the same row regardless of transaction isolation
+level, so when two donors race for the same date, exactly one `UPDATE` affects a row — the other
+affects zero, and that request fails with "this date was just booked, pick another" (the app
+checks the affected-row count, not the initial read). No explicit `SELECT ... FOR UPDATE`, no
+app-level locking, no distributed lock needed — the database's own row-update semantics **are**
+the lock. This is deliberately the same "conditional UPDATE, check the row count, never
+check-then-act" pattern the rest of the platform already leans on for tamper-guards (e.g.
+UTR uniqueness, D-019).
+
+### 10.4 Confirmation & fulfilment
+
+The `MealSlot`'s lock (`OPEN → BOOKED`) happens at **booking** time, independent of payment —
+that's when the race actually happens and the date needs to stop being offered to anyone else.
+Progress (`slots_confirmed`) only increments on **confirm**, same audit-worthy principle as every
+other type (CLAUDE.md §7 — only confirmed contributions move the needle):
+
+- **Confirm** (beneficiary/institution, admin can override — D-002/D-018): `MealSlot.status →
+  CONFIRMED`, `slots_confirmed += 1`, clamped at `slots_total`. Need moves `LIVE →
+  PARTIALLY_FULFILLED → FULFILLED` once every slot is confirmed — same `assertTransition`-driven
+  lifecycle as every other type (§6.2).
+- **Reject**: `MealSlot.status → OPEN` again (not `CONFIRMED`, not stuck `BOOKED`) — meal-slot-
+  specific, and the one place this type's confirm/reject differs from Money/Kit. A rejected
+  contribution there just doesn't count; here, rejection must also **free the calendar date**
+  back up, or one bad payment claim would permanently block that date from ever being fed.
+
+Both modes produce a `Contribution` with `kind: MEAL_SLOT` and the booked `date`. Only
+`MONEY`-mode contributions carry an `amount` (= `cost_per_slot`) and a `utr` (D-019 uniqueness
+applies); `DELIVER`-mode ones have neither — a donor pledges to personally cook/serve that date.
+
+### 10.5 Progress display
+
+Two views, not one: an aggregate **"X of Y meal slots confirmed"** (same pattern as Kit's
+progress bar, §9.4) *and* a **calendar/date list** showing each date's actual status (open /
+booked / confirmed) — donors need to pick a specific date, so the per-date breakdown is part of
+the UI itself, not just an aggregate the way Money/Kit's single number is.
+
+---
+
+## 11. Goods / unused-items flow
+
+Unlike Blood (§8) and Meal-slot (§10), GOODS needs **no custom module** — it rides the shared
+engine (§6) exactly like Money/Kit, with a fulfilment target of **1** and no partial state.
+
+### 11.1 What a GOODS need represents
+
+A beneficiary posts a need for a specific physical item (e.g. "a manual wheelchair", "school bag
+and notebooks for a 10-year-old") — the same beneficiary-posts / donor-fulfills direction as
+every other type. A donor who has a matching item **claims** it (a pledge, not a payment — same
+pattern as Blood's "I can donate" and Kit's `DELIVER` mode); physical handover happens outside
+the app; the beneficiary confirms receipt.
+
+### 11.2 Payload fields (extends §6.4)
+
+| Field | Notes |
+|---|---|
+| `item` | required at submission — what's needed (e.g. "Manual wheelchair, adult size") |
+| `condition` | required at submission — acceptable condition (e.g. "New or gently used", "Any working condition") |
+| `claimed` | **server-computed only**, same tamper-guard principle as `raised_amount`/`kits_funded`/`slots_confirmed` — starts `false`, flips `true` only when a claim is **confirmed** |
+
+Need-level `photos[]` (§6.1, shared field) covers reference photos of what's needed; a claiming
+donor's optional handover photo reuses `Contribution.proofUrl`, same as Kit's `DELIVER` mode —
+no new photo field needed for either.
+
+### 11.3 Claim & fulfilment
+
+A claim is a `Contribution` with `kind: GOODS` — no `amount`/`kits`/`units`/`utr` at all (a pledge,
+never a payment, same principle as Blood §8.5). Multiple donors **can** submit competing pending
+claims for the same item (no locking — unlike Meal-slot §10.3, this isn't a race worth building a
+custom lock for for v1: it's a single low-frequency manual action, not a fast-moving calendar of
+many dates). The beneficiary picks one claim to **confirm**; `claimed → true` and the need jumps
+straight `LIVE → FULFILLED` (no `PARTIALLY_FULFILLED` — there's no partial state for "1 item, 1
+claim"), same shared `assertTransition`-driven lifecycle as every other type (§6.2). Any other
+still-pending claims aren't auto-rejected — the beneficiary is expected to reject them once
+satisfied, the same manual-cleanup expectation Money/Kit already carry when a need is over-funded
+by simultaneous pending contributions.
+
+### 11.4 Progress display
+
+No progress bar — a GOODS need's status badge alone communicates it (`LIVE` = still needed,
+`FULFILLED` = claimed and received). A `claimed` boolean has nothing meaningful to bar-chart.
+
+---
+
 ## Appendix A — Design System (one shared theme, all surfaces)
 
 **Principle (D-014):** the donor mobile app, institution/hospital web panel, and admin console all use
@@ -489,6 +619,16 @@ Loading (skeletons) · Empty · Error · Success.
 
 ## Changelog
 
+- v0.11 — Added Section 11 (Goods / unused-items flow): no custom module needed (unlike Blood/
+  Meal-slot) — rides the shared engine with fulfilment target 1, jumps `LIVE → FULFILLED`
+  directly (no `PARTIALLY_FULFILLED`), `claimed` boolean payload field, GOODS contributions are
+  pledges (no amount/kits/units/utr), deliberately no claim-locking (accepted low-frequency-race
+  tradeoff, unlike Meal-slot's D-022).
+- v0.10 — Added Section 10 (Meal-slot booking): the second custom module (CLAUDE.md §3). New
+  `MealSlot` child entity per calendar date; locking via a single conditional `UPDATE ... WHERE
+  status = 'OPEN'` inside the booking transaction (D-022) instead of check-then-act; reject
+  reopens the date instead of just not counting it (the one place this type's confirm/reject
+  differs from Money/Kit); both MONEY/DELIVER modes reused from Kits (D-004).
 - v0.9 — Added Section 8 (Blood module): donor blood profile (incl. `gender` — new field, needed
   to compute D-005's gender-differentiated gap rule, not itself previously decided), eligibility
   computation, BLOOD `Need` payload, geo+eligibility-matched Expo push on verification (D-016),

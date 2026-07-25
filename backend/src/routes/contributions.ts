@@ -7,6 +7,8 @@ import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
 import { parseMoneyPayload } from "../lib/moneyNeed";
 import { parseKitPayload } from "../lib/kitNeed";
 import { parseBloodPayload } from "../lib/bloodNeed";
+import { parseMealSlotPayload } from "../lib/mealSlotNeed";
+import { parseGoodsPayload } from "../lib/goodsNeed";
 
 const router = Router();
 router.use(requireAuth);
@@ -72,6 +74,28 @@ function computeFulfilment(need: Need, contributionAmountOrKits: number): Fulfil
           : need.status;
     return { ok: true, status, payload: { ...blood, units_fulfilled: unitsFulfilled } as Prisma.InputJsonValue };
   }
+  if (need.type === NeedType.MEAL_SLOT) {
+    const mealSlot = parseMealSlotPayload(need.payload);
+    if (!mealSlot) return { ok: false, error: "This need's MEAL_SLOT payload is malformed — cannot confirm" };
+    // PRD §10.4 — the lock (OPEN -> BOOKED) already happened at booking time; slots_confirmed
+    // only advances on confirm, same audit principle as raised_amount/kits_funded/units_fulfilled.
+    const slotsConfirmed = Math.min(mealSlot.slots_confirmed + contributionAmountOrKits, mealSlot.slots_total);
+    const status =
+      slotsConfirmed >= mealSlot.slots_total
+        ? NeedStatus.FULFILLED
+        : slotsConfirmed > 0
+          ? NeedStatus.PARTIALLY_FULFILLED
+          : need.status;
+    return { ok: true, status, payload: { ...mealSlot, slots_confirmed: slotsConfirmed } as Prisma.InputJsonValue };
+  }
+  if (need.type === NeedType.GOODS) {
+    const goods = parseGoodsPayload(need.payload);
+    if (!goods) return { ok: false, error: "This need's GOODS payload is malformed — cannot confirm" };
+    // PRD §11.3 — a claim is one-shot: no PARTIALLY_FULFILLED, straight LIVE -> FULFILLED. Any
+    // other still-pending claims aren't auto-rejected; the beneficiary is expected to reject
+    // them once satisfied.
+    return { ok: true, status: NeedStatus.FULFILLED, payload: { ...goods, claimed: true } as Prisma.InputJsonValue };
+  }
   return { ok: false, error: `Confirming a ${need.type} contribution isn't supported yet` };
 }
 
@@ -85,10 +109,18 @@ router.post("/:id/confirm", async (req, res) => {
     return res.status(409).json({ error: `Contribution is already ${contribution.status}` });
   }
 
-  // KIT contributions track progress via `kits`, BLOOD via `units`, MONEY via `amount` — either
-  // way it's "how much this contribution moves the needle," which is what computeFulfilment needs.
+  // KIT contributions track progress via `kits`, BLOOD via `units`, MEAL_SLOT always books
+  // exactly one date and GOODS is always a single one-shot claim (so both are always "1"),
+  // MONEY via `amount` — either way it's "how much this contribution moves the needle," which is
+  // what computeFulfilment needs.
   const progressAmount =
-    contribution.kind === "KIT" ? contribution.kits : contribution.kind === "BLOOD" ? contribution.units : contribution.amount;
+    contribution.kind === "KIT"
+      ? contribution.kits
+      : contribution.kind === "BLOOD"
+        ? contribution.units
+        : contribution.kind === "MEAL_SLOT" || contribution.kind === "GOODS"
+          ? 1
+          : contribution.amount;
   if (progressAmount == null) {
     return res.status(409).json({ error: "This contribution has no amount/kits/units to confirm — data is inconsistent" });
   }
@@ -120,6 +152,10 @@ router.post("/:id/confirm", async (req, res) => {
     ...(contribution.kind === "BLOOD"
       ? [prisma.user.update({ where: { id: contribution.donorId }, data: { lastDonationDate: new Date() } })]
       : []),
+    // PRD §10.4 — the booked MealSlot moves BOOKED -> CONFIRMED alongside the Contribution.
+    ...(contribution.kind === "MEAL_SLOT"
+      ? [prisma.mealSlot.updateMany({ where: { contributionId: contribution.id }, data: { status: "CONFIRMED" } })]
+      : []),
   ]);
   res.json({ contribution: updatedContribution });
 });
@@ -135,10 +171,24 @@ router.post("/:id/reject", async (req, res) => {
   if (contribution.status !== "PENDING_CONFIRMATION") {
     return res.status(409).json({ error: `Contribution is already ${contribution.status}` });
   }
-  const updated = await prisma.contribution.update({
-    where: { id: contribution.id },
-    data: { status: "REJECTED", confirmedById: req.user!.sub },
-  });
+  const [updated] = await prisma.$transaction([
+    prisma.contribution.update({
+      where: { id: contribution.id },
+      data: { status: "REJECTED", confirmedById: req.user!.sub },
+    }),
+    // PRD §10.4 / D-022 — a rejected meal-slot booking must free the date back up (BOOKED ->
+    // OPEN, contributionId cleared), or one bad payment claim would permanently block that date
+    // from ever being fed. Money/Kit/Blood have no equivalent step: a rejected contribution
+    // there just doesn't count, nothing needs "reopening."
+    ...(contribution.kind === "MEAL_SLOT"
+      ? [
+          prisma.mealSlot.updateMany({
+            where: { contributionId: contribution.id },
+            data: { status: "OPEN", contributionId: null },
+          }),
+        ]
+      : []),
+  ]);
   res.json({ contribution: updated });
 });
 

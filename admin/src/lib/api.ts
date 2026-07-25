@@ -72,6 +72,34 @@ export interface BloodPayload {
   units_fulfilled: number;
 }
 
+// PRD §10.1 — only meaningful when type === "MEAL_SLOT". Per-date state lives in `mealSlots`
+// on the Need (§10.2), not here.
+export interface MealSlotPayload {
+  meal_type: string;
+  cost_per_slot: number;
+  slots_total: number;
+  slots_confirmed: number;
+  mode: "MONEY" | "DELIVER";
+  upi_id?: string;
+}
+
+export type MealSlotStatus = "OPEN" | "BOOKED" | "CONFIRMED";
+
+// PRD §10.2 — one bookable calendar date under a MEAL_SLOT need.
+export interface MealSlot {
+  id: string;
+  date: string;
+  status: MealSlotStatus;
+}
+
+// PRD §11.2 — only meaningful when type === "GOODS". No progress bar — `claimed` is a boolean,
+// there's no partial state (§11.3).
+export interface GoodsPayload {
+  item: string;
+  condition: string;
+  claimed: boolean;
+}
+
 export interface Need {
   id: string;
   type: NeedType;
@@ -87,23 +115,27 @@ export interface Need {
   linkedInstitutionId: string | null;
   institutionVerified: boolean;
   adminVerified: boolean;
-  payload: MoneyPayload | KitPayload | BloodPayload | Record<string, unknown> | null;
+  payload: MoneyPayload | KitPayload | BloodPayload | MealSlotPayload | GoodsPayload | Record<string, unknown> | null;
+  // Only ever non-empty for MEAL_SLOT needs (§10.2).
+  mealSlots: MealSlot[];
   postedBy: { id: string; name: string | null; phone?: string; role: Role };
   createdAt: string;
 }
 
-export type ContributionKind = "MONEY" | "KIT" | "BLOOD";
+export type ContributionKind = "MONEY" | "KIT" | "BLOOD" | "MEAL_SLOT" | "GOODS";
 export type ContributionStatus = "PENDING_CONFIRMATION" | "CONFIRMED" | "REJECTED";
 
 export interface Contribution {
   id: string;
   kind: ContributionKind;
-  // MONEY: amount always set. KIT mode=MONEY: amount+kits set. KIT mode=DELIVER: amount/utr
-  // null, kits set — no payment for a physical delivery pledge (PRD §9.2). BLOOD: units set,
-  // amount/kits/utr null.
+  // MONEY: amount always set. KIT/MEAL_SLOT mode=MONEY: amount+kits set. KIT/MEAL_SLOT
+  // mode=DELIVER: amount/utr null, kits set — no payment for a physical delivery / in-person
+  // pledge (PRD §9.2/§10.4). BLOOD: units set, amount/kits/utr null.
   amount: number | null;
   kits: number | null;
   units: number | null;
+  // MEAL_SLOT only — the calendar date this contribution booked (§10.4).
+  mealSlotDate: string | null;
   status: ContributionStatus;
   utr: string | null;
   donor: { id: string; name: string | null; phone: string };
@@ -260,6 +292,67 @@ export async function postBloodNeed(
       description: data.description,
       photos: data.photos,
       payload: { blood_group: data.bloodGroup, units_needed: data.unitsNeeded },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// PRD §10.1/§10.2 — Admin posting a meal-slot need on behalf of a beneficiary/partner org
+// (D-018, mirrors postBloodNeed). No linkedInstitutionId, same reasoning as postBloodNeed.
+export async function postMealSlotNeed(
+  token: string,
+  data: {
+    title: string;
+    description: string;
+    mealType: string;
+    costPerSlot: number;
+    mode: "MONEY" | "DELIVER";
+    upiId?: string;
+    dates: string[];
+    photos?: string[];
+  }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      type: "MEAL_SLOT",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      payload: {
+        meal_type: data.mealType,
+        cost_per_slot: data.costPerSlot,
+        mode: data.mode,
+        dates: data.dates,
+        ...(data.mode === "MONEY" ? { upi_id: data.upiId } : {}),
+      },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// PRD §11.1/§11.2 — Admin posting a goods need on behalf of a beneficiary/partner org (D-018,
+// mirrors postBloodNeed/postMealSlotNeed).
+export async function postGoodsNeed(
+  token: string,
+  data: { title: string; description: string; item: string; condition: string; photos?: string[] }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      type: "GOODS",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      payload: { item: data.item, condition: data.condition },
     }),
   });
   return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {

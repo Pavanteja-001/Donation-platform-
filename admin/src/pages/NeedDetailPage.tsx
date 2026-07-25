@@ -9,7 +9,9 @@ import {
   verifyNeed,
   type BloodPayload,
   type Contribution,
+  type GoodsPayload,
   type KitPayload,
+  type MealSlotPayload,
   type MoneyPayload,
   type Need,
   type Urgency,
@@ -28,14 +30,28 @@ function isBloodPayload(payload: Need["payload"]): payload is BloodPayload {
   return !!payload && typeof (payload as BloodPayload).units_needed === "number";
 }
 
+function isMealSlotPayload(payload: Need["payload"]): payload is MealSlotPayload {
+  return !!payload && typeof (payload as MealSlotPayload).slots_total === "number";
+}
+
+function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayload {
+  return !!payload && typeof (payload as GoodsPayload).item === "string";
+}
+
 function formatGroup(g: BloodPayload["blood_group"]) {
   return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
 }
 
-// Kind-aware — a BLOOD contribution has neither `amount` nor `kits`, only `units`.
+// Kind-aware — a BLOOD contribution has neither `amount` nor `kits`, only `units`; a MEAL_SLOT
+// one carries the booked date instead; a GOODS one is just a claim.
 function formatContributionAmount(c: Contribution): string {
   if (c.kind === "KIT") return `${c.kits} kits`;
   if (c.kind === "BLOOD") return `${c.units} units`;
+  if (c.kind === "MEAL_SLOT") {
+    const date = c.mealSlotDate ? new Date(c.mealSlotDate).toLocaleDateString() : "";
+    return c.amount != null ? `₹${c.amount.toLocaleString("en-IN")} · ${date}` : date;
+  }
+  if (c.kind === "GOODS") return "Claim";
   return `₹${c.amount?.toLocaleString("en-IN")}`;
 }
 
@@ -121,6 +137,8 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
   const kit = need.type === "KIT" && isKitPayload(need.payload) ? need.payload : null;
   const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
+  const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
+  const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
 
   return (
     <div>
@@ -158,6 +176,27 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
         <p className="hint">
           Progress: {blood.units_fulfilled} / {blood.units_needed} units · blood group: {formatGroup(blood.blood_group)}
           {need.linkedInstitutionId ? ` · institution-verified: ${need.institutionVerified ? "yes" : "no"}` : ""}
+        </p>
+      )}
+      {mealSlot && (
+        <>
+          <p className="hint">
+            Progress: {mealSlot.slots_confirmed} / {mealSlot.slots_total} slots · {mealSlot.meal_type} · mode:{" "}
+            {mealSlot.mode}
+            {need.linkedInstitutionId ? ` · institution-verified: ${need.institutionVerified ? "yes" : "no"}` : ""}
+          </p>
+          <div className="row-actions" style={{ flexWrap: "wrap" }}>
+            {need.mealSlots.map((slot) => (
+              <span key={slot.id} className={`badge status-${slot.status.toLowerCase()}`}>
+                {new Date(slot.date).toLocaleDateString()} · {slot.status}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+      {goods && (
+        <p className="hint">
+          Item: {goods.item} · Acceptable condition: {goods.condition} · {goods.claimed ? "Claimed" : "Not yet claimed"}
         </p>
       )}
       {need.status === "REJECTED" && need.rejectionReason && <p className="error">Rejected: {need.rejectionReason}</p>}

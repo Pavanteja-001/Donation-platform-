@@ -24,10 +24,20 @@ function progressLabel(need: Need): string | null {
     if (typeof p.kits_funded !== "number" || typeof p.kits_needed !== "number") return null;
     return `${p.kits_funded} / ${p.kits_needed} kits`;
   }
+  if (need.type === "MEAL_SLOT") {
+    const p = need.payload as { slots_confirmed?: number; slots_total?: number };
+    if (typeof p.slots_confirmed !== "number" || typeof p.slots_total !== "number") return null;
+    return `${p.slots_confirmed} / ${p.slots_total} slots`;
+  }
   if (need.type === "BLOOD") {
     const p = need.payload as { units_fulfilled?: number; units_needed?: number };
     if (typeof p.units_fulfilled !== "number" || typeof p.units_needed !== "number") return null;
     return `${p.units_fulfilled} / ${p.units_needed} units`;
+  }
+  if (need.type === "GOODS") {
+    const p = need.payload as { claimed?: boolean };
+    if (typeof p.claimed !== "boolean") return null;
+    return p.claimed ? "Claimed" : "Not yet claimed";
   }
   return null;
 }

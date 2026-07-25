@@ -7,11 +7,18 @@ import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
 import { moneyPayloadInputSchema } from "../lib/moneyNeed";
 import { kitPayloadInputSchema, parseKitPayload } from "../lib/kitNeed";
 import { bloodPayloadInputSchema } from "../lib/bloodNeed";
+import { parseMealSlotPayload, dedupeDates } from "../lib/mealSlotNeed";
+import { goodsPayloadInputSchema, parseGoodsPayload } from "../lib/goodsNeed";
 import { expireIfPastDeadline, expireManyIfPastDeadline } from "../lib/needExpiry";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 
 const router = Router();
 router.use(requireAuth);
+
+// D-022 — thrown inside the booking transaction when the conditional UPDATE affects 0 rows
+// (someone else booked this date first); caught below to turn into a 409, and rolls back the
+// Contribution created earlier in the same transaction.
+class SlotAlreadyBookedError extends Error {}
 
 // MONEY/KIT needs always carry a server-managed progress field (`raised_amount`/`kits_funded`,
 // §7.1/§9.1) — client input for it is dropped, never trusted. Other payload fields pass through
@@ -29,7 +36,45 @@ function normalizePayload(type: NeedType, payload: Record<string, unknown> | und
     const { units_fulfilled: _ignored, ...rest } = payload ?? {};
     return { ...rest, units_fulfilled: 0 };
   }
+  if (type === NeedType.GOODS) {
+    const { claimed: _ignored, ...rest } = payload ?? {};
+    return { ...rest, claimed: false };
+  }
+  if (type === NeedType.MEAL_SLOT) {
+    // `dates` drives MealSlot row creation (§10.2) and never lives in the persisted payload
+    // itself — the per-date state is the MealSlot table, not this JSON. `slots_total` is set by
+    // the caller (createMealSlotNeed/patchMealSlotNeed below) based on how many rows actually
+    // got created, not trusted from the client.
+    const { slots_confirmed: _ignored, dates: _datesIgnored, slots_total, ...rest } = payload ?? {};
+    return { ...rest, slots_total: typeof slots_total === "number" ? slots_total : 0, slots_confirmed: 0 };
+  }
   return payload;
+}
+
+// PRD §10.2 — MEAL_SLOT needs a MealSlot child row per date, created atomically alongside the
+// Need itself (or replaced wholesale on a DRAFT edit, see PATCH below). Returns the created Need.
+async function createMealSlotNeed(
+  postedById: string,
+  base: { title: string; description: string; city?: string; area?: string; deadline?: Date; photos?: string[]; linkedInstitutionId?: string },
+  rawPayload: Record<string, unknown> | undefined
+) {
+  const parsedDates = z.array(z.coerce.date()).max(60).safeParse((rawPayload as { dates?: unknown })?.dates);
+  const dates = parsedDates.success ? dedupeDates(parsedDates.data) : [];
+  return prisma.$transaction(async (tx) => {
+    const need = await tx.need.create({
+      data: {
+        ...base,
+        payload: normalizePayload(NeedType.MEAL_SLOT, { ...rawPayload, slots_total: dates.length }) as Prisma.InputJsonValue,
+        postedById,
+        status: NeedStatus.DRAFT,
+        type: NeedType.MEAL_SLOT,
+      },
+    });
+    if (dates.length > 0) {
+      await tx.mealSlot.createMany({ data: dates.map((date) => ({ needId: need.id, date })) });
+    }
+    return need;
+  });
 }
 
 const createSchema = z.object({
@@ -60,6 +105,11 @@ router.post("/", async (req, res) => {
     if (!institution || institution.role !== Role.INSTITUTION) {
       return res.status(400).json({ error: "linkedInstitutionId must be an existing INSTITUTION account" });
     }
+  }
+  if (parsed.data.type === NeedType.MEAL_SLOT) {
+    const { type: _type, payload, ...base } = parsed.data;
+    const need = await createMealSlotNeed(req.user!.sub, base, payload);
+    return res.status(201).json({ need });
   }
   const need = await prisma.need.create({
     data: {
@@ -101,6 +151,25 @@ router.patch("/:id", async (req, res) => {
   }
   const type = parsed.data.type ?? need.type;
   const { payload, ...rest } = parsed.data;
+  // MEAL_SLOT with new `dates` while still DRAFT: wholesale-replace the MealSlot rows (safe —
+  // nothing can be BOOKED yet, since booking only opens up at LIVE) rather than trying to diff
+  // the old/new date lists. Same "fixed set, edit means replace" spirit as §10.2.
+  if (type === NeedType.MEAL_SLOT && payload !== undefined && "dates" in payload) {
+    const parsedDates = z.array(z.coerce.date()).max(60).safeParse((payload as { dates?: unknown }).dates);
+    const dates = parsedDates.success ? dedupeDates(parsedDates.data) : [];
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.mealSlot.deleteMany({ where: { needId: need.id } });
+      const u = await tx.need.update({
+        where: { id: need.id },
+        data: { ...rest, payload: normalizePayload(type, { ...payload, slots_total: dates.length }) as Prisma.InputJsonValue },
+      });
+      if (dates.length > 0) {
+        await tx.mealSlot.createMany({ data: dates.map((date) => ({ needId: need.id, date })) });
+      }
+      return u;
+    });
+    return res.json({ need: updated });
+  }
   const updated = await prisma.need.update({
     where: { id: need.id },
     data: {
@@ -143,6 +212,22 @@ router.post("/:id/submit", async (req, res) => {
     if (!bloodCheck.success) {
       return res.status(400).json({
         error: "A BLOOD need needs blood_group and units_needed set before it can be submitted",
+      });
+    }
+  }
+  if (need.type === NeedType.MEAL_SLOT) {
+    const mealSlot = parseMealSlotPayload(need.payload);
+    if (!mealSlot || mealSlot.slots_total < 1) {
+      return res.status(400).json({
+        error: "A MEAL_SLOT need needs meal_type, cost_per_slot, mode, and at least one date set before it can be submitted",
+      });
+    }
+  }
+  if (need.type === NeedType.GOODS) {
+    const goodsCheck = goodsPayloadInputSchema.safeParse(need.payload);
+    if (!goodsCheck.success) {
+      return res.status(400).json({
+        error: "A GOODS need needs item and condition set before it can be submitted",
       });
     }
   }
@@ -306,10 +391,15 @@ router.get("/mine", async (req, res) => {
 router.get("/:id", async (req, res) => {
   let need = await prisma.need.findUnique({
     where: { id: req.params.id },
-    include: { postedBy: { select: { id: true, name: true, role: true } } },
+    include: {
+      postedBy: { select: { id: true, name: true, role: true } },
+      // MEAL_SLOT only (empty for every other type) — donors need the actual per-date
+      // breakdown to pick a slot (§10.5), not just an aggregate count.
+      mealSlots: { orderBy: { date: "asc" } },
+    },
   });
   if (!need) return res.status(404).json({ error: "Need not found" });
-  need = { ...(await expireIfPastDeadline(need)), postedBy: need.postedBy };
+  need = { ...(await expireIfPastDeadline(need)), postedBy: need.postedBy, mealSlots: need.mealSlots };
 
   const isOwner = need.postedById === req.user!.sub;
   const isAdminOrStaff = req.user!.role === "ADMIN" || req.user!.role === "STAFF";
@@ -339,6 +429,12 @@ const kitDonateSchema = z.object({
 // PRD §8.5 — a blood "respond" is a pledge, never a payment: no utr/proofUrl at all.
 const bloodDonateSchema = z.object({
   units: z.number().int().positive(),
+});
+
+// PRD §11.3 — a GOODS "claim" is a pledge, never a payment: no amount/kits/utr at all, just an
+// optional handover photo (reuses proofUrl, same as Kit's DELIVER mode).
+const goodsClaimSchema = z.object({
+  proofUrl: z.string().url().optional(),
 });
 
 async function createContribution(res: import("express").Response, data: Prisma.ContributionUncheckedCreateInput) {
@@ -426,7 +522,101 @@ router.post("/:id/contributions", async (req, res) => {
     });
   }
 
-  return res.status(400).json({ error: "Only MONEY, KIT, and BLOOD needs accept contributions" });
+  if (need.type === NeedType.GOODS) {
+    const parsed = goodsClaimSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+    }
+    // PRD §11.3 — a claim is a pledge, never a payment: no amount/kits/units/utr at all.
+    // Deliberately no locking (unlike Meal-slot's D-022) — multiple donors can submit competing
+    // pending claims; the beneficiary picks one to confirm.
+    return createContribution(res, {
+      kind: "GOODS",
+      proofUrl: parsed.data.proofUrl,
+      needId: need.id,
+      donorId: req.user!.sub,
+    });
+  }
+
+  return res.status(400).json({ error: "Only MONEY, KIT, BLOOD, and GOODS needs accept contributions" });
+});
+
+// MEAL_SLOT donations (§10.4): `utr` required for mode=MONEY, forbidden for mode=DELIVER — same
+// shape as KIT's rule (§9.2), checked against the need's actual mode below.
+const mealSlotBookSchema = z.object({
+  utr: z.string().min(1).optional(),
+  proofUrl: z.string().url().optional(),
+});
+
+// PRD §10.3 / D-022 — booking a date. This is deliberately its own endpoint, not a branch of
+// POST /:id/contributions, because it needs a specific slotId and the locking transaction below
+// — genuinely different shape from "donate an amount/kits/units against the need as a whole."
+router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
+  let need = await prisma.need.findUnique({ where: { id: req.params.id } });
+  if (!need || need.type !== NeedType.MEAL_SLOT) return res.status(404).json({ error: "Need not found" });
+  need = await expireIfPastDeadline(need);
+
+  const fundable: NeedStatus[] = [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED];
+  if (!fundable.includes(need.status)) {
+    return res.status(409).json({ error: `Cannot book a slot on a need with status ${need.status}` });
+  }
+
+  const mealSlot = parseMealSlotPayload(need.payload);
+  if (!mealSlot) {
+    return res.status(409).json({ error: "This need's MEAL_SLOT payload is malformed — cannot book" });
+  }
+  const parsed = mealSlotBookSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+  if (mealSlot.mode === "MONEY" && !parsed.data.utr) {
+    return res.status(400).json({ error: "utr is required for a money-mode meal-slot booking" });
+  }
+  if (mealSlot.mode === "DELIVER" && parsed.data.utr) {
+    return res.status(400).json({ error: "A deliver-mode meal-slot booking has no payment — don't send a utr" });
+  }
+
+  const slot = await prisma.mealSlot.findUnique({ where: { id: req.params.slotId } });
+  if (!slot || slot.needId !== need.id) {
+    return res.status(404).json({ error: "Meal slot not found" });
+  }
+
+  try {
+    const contribution = await prisma.$transaction(async (tx) => {
+      const created = await tx.contribution.create({
+        data: {
+          kind: "MEAL_SLOT",
+          amount: mealSlot.mode === "MONEY" ? mealSlot.cost_per_slot : undefined,
+          utr: mealSlot.mode === "MONEY" ? parsed.data.utr : undefined,
+          proofUrl: parsed.data.proofUrl,
+          mealSlotDate: slot.date,
+          needId: need!.id,
+          donorId: req.user!.sub,
+        },
+      });
+      // D-022 — the lock: a conditional UPDATE, not a read-then-write. Exactly one of two
+      // racing requests can affect this row (Postgres serializes concurrent UPDATEs to the same
+      // row); the loser's `count` is 0, and throwing here rolls back the Contribution created
+      // above too (same transaction).
+      const result = await tx.mealSlot.updateMany({
+        where: { id: slot.id, status: "OPEN" },
+        data: { status: "BOOKED", contributionId: created.id },
+      });
+      if (result.count === 0) {
+        throw new SlotAlreadyBookedError();
+      }
+      return created;
+    });
+    res.status(201).json({ contribution });
+  } catch (err) {
+    if (err instanceof SlotAlreadyBookedError) {
+      return res.status(409).json({ error: "This date was just booked by someone else — pick another" });
+    }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return res.status(409).json({ error: "This UTR has already been used for a contribution" });
+    }
+    throw err;
+  }
 });
 
 // Owner (beneficiary) or Admin/Staff only — a donor sees their own contributions via a

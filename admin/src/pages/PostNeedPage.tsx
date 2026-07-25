@@ -2,8 +2,16 @@ import { useState } from "react";
 import { CreateMoneyNeedPage } from "./CreateMoneyNeedPage";
 import { CreateKitNeedPage } from "./CreateKitNeedPage";
 import { CreateBloodNeedPage } from "./CreateBloodNeedPage";
+import { CreateMealSlotNeedPage } from "./CreateMealSlotNeedPage";
+import { CreateGoodsNeedPage } from "./CreateGoodsNeedPage";
 
-type Screen = { name: "chooser" } | { name: "money" } | { name: "kit" } | { name: "blood" };
+type Screen =
+  | { name: "chooser" }
+  | { name: "money" }
+  | { name: "kit" }
+  | { name: "blood" }
+  | { name: "meal-slot" }
+  | { name: "goods" };
 
 // Admin-only (D-018) — post a need on behalf of a beneficiary/partner org that doesn't have
 // its own mobile/web-panel account. Goes through the exact same DRAFT -> submit ->
@@ -19,6 +27,12 @@ export function PostNeedPage() {
   }
   if (screen.name === "blood") {
     return <CreateBloodNeedPage onBack={() => setScreen({ name: "chooser" })} onDone={() => setScreen({ name: "chooser" })} />;
+  }
+  if (screen.name === "meal-slot") {
+    return <CreateMealSlotNeedPage onBack={() => setScreen({ name: "chooser" })} onDone={() => setScreen({ name: "chooser" })} />;
+  }
+  if (screen.name === "goods") {
+    return <CreateGoodsNeedPage onBack={() => setScreen({ name: "chooser" })} onDone={() => setScreen({ name: "chooser" })} />;
   }
 
   return (
@@ -37,6 +51,12 @@ export function PostNeedPage() {
         </button>
         <button type="button" className="btn" onClick={() => setScreen({ name: "blood" })}>
           + Blood need
+        </button>
+        <button type="button" className="btn" onClick={() => setScreen({ name: "meal-slot" })}>
+          + Meal-slot need
+        </button>
+        <button type="button" className="btn" onClick={() => setScreen({ name: "goods" })}>
+          + Goods need
         </button>
       </div>
     </div>
