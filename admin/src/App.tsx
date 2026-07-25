@@ -6,6 +6,7 @@ import { StaffPage } from "./pages/StaffPage";
 import { NeedsPage } from "./pages/NeedsPage";
 import { NeedDetailPage } from "./pages/NeedDetailPage";
 import { PostNeedPage } from "./pages/PostNeedPage";
+import { ToastProvider } from "./components/ui";
 
 type Tab = "needs" | "post" | "users" | "staff";
 
@@ -80,7 +81,9 @@ function Root() {
 export default function App() {
   return (
     <AuthProvider>
-      <Root />
+      <ToastProvider>
+        <Root />
+      </ToastProvider>
     </AuthProvider>
   );
 }

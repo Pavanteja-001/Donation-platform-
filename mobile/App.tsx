@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { theme } from "./src/lib/theme";
+import { ToastProvider } from "./src/components/ui";
 
 function Root() {
   const { user, isLoading } = useAuth();
@@ -24,8 +25,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <Root />
-        <StatusBar style="auto" />
+        <ToastProvider>
+          <Root />
+          <StatusBar style="auto" />
+        </ToastProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

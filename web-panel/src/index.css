@@ -1,9 +1,18 @@
+/* PRD Appendix A.2 — Noto Sans covers Latin + Devanagari + Telugu; loading all three subsets now
+   costs nothing (the browser only fetches the glyphs a page actually uses) even though no
+   Hindi/Telugu UI strings exist yet — the tri-language work (D-009) can start using this
+   font-family stack immediately without a separate follow-up change here. */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;700&family=Noto+Sans+Devanagari:wght@400;500;700&family=Noto+Sans+Telugu:wght@400;500;700&display=swap");
+
 /* Shared token palette — same values as src/lib/theme.ts (PRD Appendix A, D-014). */
 :root {
   --color-primary: #0e7c66;
   --color-on-primary: #ffffff;
   --color-accent: #f2a900;
+  --color-success: #2e9e5b;
+  --color-warning: #c98a00;
   --color-danger: #d7263d;
+  --color-info: #2b6cb0;
   --color-background: #f7f8f8;
   --color-surface: #ffffff;
   --color-border: #e2e5e4;
@@ -11,7 +20,23 @@
   --color-text-secondary: #5b6b67;
   --radius: 12px;
 
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  /* A.3 — 4-based spacing scale. */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+
+  /* A.3 — a small, consistent elevation set for cards/modals. */
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --elevation-2: 0 4px 10px rgba(0, 0, 0, 0.1);
+
+  /* A.6 — motion timing, so every transition uses the same feel. */
+  --motion-fast: 150ms;
+  --motion-normal: 220ms;
+
+  font-family: "Noto Sans", "Noto Sans Devanagari", "Noto Sans Telugu", system-ui, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
   color: var(--color-text-primary);
   background: var(--color-background);
@@ -209,6 +234,22 @@ form button[type="submit"]:disabled {
   cursor: not-allowed;
 }
 
+.btn-secondary-outline {
+  padding: 8px 16px;
+  background: none;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .row-actions {
   display: flex;
   gap: 8px;
@@ -374,5 +415,128 @@ th {
   object-fit: cover;
   border-radius: var(--radius);
   background: var(--color-border);
+  flex-shrink: 0;
+}
+
+/* --- Shared UI kit (PRD Appendix A.4) --- */
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-lg);
+}
+
+.card-elevated {
+  box-shadow: var(--elevation-1);
+}
+
+/* Badge tones — `.badge` (existing, neutral) already covers role/status; these add the rest of
+   the tone set (success/danger/accent) for anything that isn't a status/role lookup. */
+.badge-tone-primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.badge-tone-accent {
+  background: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.badge-tone-danger {
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.chip.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field-error {
+  color: var(--color-danger);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.empty-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-xl);
+  color: var(--color-text-secondary);
+}
+
+.error-state {
+  color: var(--color-danger);
+}
+
+.empty-state-title,
+.error-state-message {
+  font-size: 15px;
+  margin: 0 0 var(--space-sm);
+}
+
+.skeleton {
+  background: var(--color-border);
+  border-radius: var(--radius);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-xl);
+  transform: translateX(-50%);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius);
+  box-shadow: var(--elevation-2);
+  color: var(--color-on-primary);
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 1000;
+  transition: opacity var(--motion-fast) ease;
+}
+
+.toast-success { background: var(--color-success); }
+.toast-danger { background: var(--color-danger); }
+.toast-neutral { background: var(--color-text-primary); }
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 700;
   flex-shrink: 0;
 }

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { Button } from "../components/ui";
 
 type Step = "phone" | "otp";
 
@@ -69,9 +70,7 @@ export function LoginPage() {
               />
             </label>
             {error && <p className="error">{error}</p>}
-            <button type="submit" disabled={!phone || isSubmitting}>
-              {isSubmitting ? "Sending…" : "Send OTP"}
-            </button>
+            <Button type="submit" label="Send OTP" disabled={!phone} loading={isSubmitting} />
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp}>
@@ -89,9 +88,7 @@ export function LoginPage() {
             </label>
             {import.meta.env.DEV && <p className="dev-hint">Dev build: the OTP is always 123456 (D-015).</p>}
             {error && <p className="error">{error}</p>}
-            <button type="submit" disabled={!code || isSubmitting}>
-              {isSubmitting ? "Verifying…" : "Verify & continue"}
-            </button>
+            <Button type="submit" label="Verify & continue" disabled={!code} loading={isSubmitting} />
             <button type="button" className="link" onClick={() => setStep("phone")}>
               Change phone number
             </button>

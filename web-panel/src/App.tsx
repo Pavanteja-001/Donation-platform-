@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { ToastProvider } from "./components/ui";
 
 function Root() {
   const { user, isLoading } = useAuth();
@@ -11,7 +12,9 @@ function Root() {
 export default function App() {
   return (
     <AuthProvider>
-      <Root />
+      <ToastProvider>
+        <Root />
+      </ToastProvider>
     </AuthProvider>
   );
 }

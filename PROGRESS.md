@@ -5,6 +5,84 @@
 
 ---
 
+### Session 21 — Milestone 9 Chunk 1: Design-system foundation (all three frontends)
+User handed over a full, user-authored Milestone 9 spec ("Professional UX, Registration &
+Hardening") with 7 chunks and an explicit instruction: work them **one chunk per session**, build
+green + update TASKS.md/PROGRESS.md after each, don't start a chunk that can't finish. This
+session was Chunk 1 only — everything else (navigation, registration/KYC, the duplicate-response
+bug, visual polish) is still ahead, in that order. Milestone 8 (Community layer) remains
+un-started; the user's new spec took priority over the natural Milestone 8→9 sequence, which is
+their call to make.
+
+**Context loaded first, as instructed:** CLAUDE.md, PRD Appendix A + §6, D-007/008/010/014,
+TASKS.md, PROGRESS.md, DECISIONS.md.
+
+**What Chunk 1 actually was:** extract each app's duplicated/drifted theme into a complete token
+set matching Appendix A, and stand up a real shared component kit — foundational, since every
+later chunk (registration forms, KYC screens, the visual-polish pass) will build on it.
+
+**Real bug found, not hypothetical:** admin's `lib/theme.ts` was missing `success`/`warning`/
+`info` and the entire spacing scale — it had silently drifted from mobile's and web-panel's
+theme files, which both had the full set. Fixed by rewriting it to match exactly.
+
+**Typography (A.2) — a deliberate scope split:** web-panel and admin now load Noto Sans (Latin +
+Devanagari + Telugu subsets) via a Google Fonts `@import` in `index.css` — free to add since
+browsers only fetch the glyph subsets a page actually renders, so this costs nothing today and
+means D-009's tri-language work can start using the font stack immediately with no follow-up
+CSS change. Mobile is different: React Native doesn't get that automatic per-glyph fallback, real
+multi-script loading means shipping actual font files + `expo-font` + a `useFonts` gate, and
+**there is zero non-English text anywhere in the app** (no i18n framework has been started at
+all despite D-009 being "committed for v1"). Shipping that dependency now, with nothing to
+render against it and no way to visually verify it in this environment, would be exactly the
+kind of premature work CLAUDE.md's guidelines warn against. Defined the typography *scale*
+(display/h1/h2/body/caption × weights/line-heights) for real — that's what every screen should
+build against today — and left the font *family* on system default with an explicit inline note
+tying the swap to the actual i18n milestone, not silently forgotten.
+
+**Shared UI kit** — `components/ui/` in all three apps, same 10 pieces everywhere (Button, Badge,
+Chip, Card, Input, Avatar, EmptyState, ErrorState, Skeleton, Toast+Provider):
+- Mobile: real React Native components built against the extended `theme.ts` (StyleSheet-based,
+  same convention every existing component already used).
+- Web-panel/admin: thin components wrapping the **existing global CSS classes** (`.btn`,
+  `.badge`, `.chip`, etc.) rather than introducing CSS-in-JS — consistent with how every page in
+  both apps is already styled, and both apps are structurally identical Vite+React+plain-CSS
+  builds with no shared-package tooling, so the two app's kit files are legitimately
+  near-identical copies (same pattern already established for e.g. `CreateBloodNeedPage.tsx`
+  across web-panel/admin all through this build). Added the CSS this needed: `.card`,
+  `.badge-tone-*`, `.field-error`, `.empty-state`/`.error-state`, `.skeleton` (pulse keyframe),
+  `.toast`, `.avatar`, plus a `.btn-secondary-outline` variant neither app had yet.
+- `ToastProvider` mounted at all three app roots (`App.tsx`), ready for Chunk 6's "toast for
+  success" requirement.
+
+**Trivial refactor (as instructed — not a full migration):** swapped LoginScreen's (mobile) and
+both LoginPage's (web-panel, admin) submit buttons over to the new `Button` component. Caught one
+real subtlety while doing it: `Button` hardcodes `type="button"` by default (correct for
+non-form buttons), but the web login forms need `type="submit"` for Enter-key-to-submit
+accessibility — verified the component's prop spread order (`{...rest}` after the default)
+already lets a caller override it, so `<Button type="submit" .../>` works without changing the
+component. Also verified by hand that the existing `form button[type="submit"]` CSS rule still
+wins on specificity over the new `.btn` class for every overlapping property, so the login pages'
+visual appearance is unchanged, not just functionally equivalent — couldn't visually confirm in
+a browser (no way to render one here), so this was reasoned through CSS specificity rules instead
+of assumed.
+
+**Verified:** `tsc -b` + `vite build` clean on web-panel and admin; `tsc --noEmit` + `expo export`
+clean on mobile (752 modules, no bundler errors from the new files). Backend untouched — Chunk 1
+is pure frontend work per its own scope, and the guardrail says don't touch tested backend
+behavior without a chunk actually needing it; confirmed the dev server was still healthy
+regardless. `.env` untracked (unaffected, not re-checked this session since nothing near it
+changed, but no reason to expect drift).
+
+**Not done (correctly, per the milestone's own chunking):** no navigation changes, no refactoring
+beyond the two trivial login-button swaps, no registration/KYC work, no duplicate-response fix,
+no visual-polish pass. All of that is explicitly later chunks.
+
+**Next:** Milestone 9 Chunk 2 — Navigation (React Navigation on mobile, `react-router-dom` +
+sidebar on web-panel and admin), per the milestone spec's own ordering ("everything depends on"
+Chunk 1 being done first, which it now is).
+
+---
+
 ### Session 20 — Milestone 7: Trust tiers & certificates (backend + mobile + admin)
 User said "continue" after Session 19 wrapped Goods. Per TASKS.md/CLAUDE.md workflow, next up was
 Milestone 7 — and it's the first milestone that's purely additive across types rather than a new

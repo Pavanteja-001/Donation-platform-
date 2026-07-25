@@ -1,17 +1,9 @@
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity } from "react-native";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { Button, Input } from "../components/ui";
 
 type Step = "phone" | "otp";
 
@@ -66,59 +58,23 @@ export function LoginScreen() {
 
       {step === "phone" ? (
         <>
-          <TextInput
-            style={styles.input}
+          <Input
             placeholder="Phone number (e.g. +919876543210)"
-            placeholderTextColor={theme.color.textSecondary}
             keyboardType="phone-pad"
             autoComplete="tel"
             value={phone}
             onChangeText={setPhone}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Name (first time only)"
-            placeholderTextColor={theme.color.textSecondary}
-            value={name}
-            onChangeText={setName}
-          />
+          <Input placeholder="Name (first time only)" value={name} onChangeText={setName} />
           {error && <Text style={styles.error}>{error}</Text>}
-          <TouchableOpacity
-            style={[styles.button, (!phone || isSubmitting) && styles.buttonDisabled]}
-            onPress={handleRequestOtp}
-            disabled={!phone || isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={theme.color.onPrimary} />
-            ) : (
-              <Text style={styles.buttonText}>Send OTP</Text>
-            )}
-          </TouchableOpacity>
+          <Button label="Send OTP" onPress={handleRequestOtp} disabled={!phone} loading={isSubmitting} />
         </>
       ) : (
         <>
-          <TextInput
-            style={styles.input}
-            placeholder="6-digit code"
-            placeholderTextColor={theme.color.textSecondary}
-            keyboardType="number-pad"
-            maxLength={6}
-            value={code}
-            onChangeText={setCode}
-          />
+          <Input placeholder="6-digit code" keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode} />
           {__DEV__ && <Text style={styles.devHint}>Dev build: the OTP is always 123456 (D-015).</Text>}
           {error && <Text style={styles.error}>{error}</Text>}
-          <TouchableOpacity
-            style={[styles.button, (!code || isSubmitting) && styles.buttonDisabled]}
-            onPress={handleVerifyOtp}
-            disabled={!code || isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={theme.color.onPrimary} />
-            ) : (
-              <Text style={styles.buttonText}>Verify & continue</Text>
-            )}
-          </TouchableOpacity>
+          <Button label="Verify & continue" onPress={handleVerifyOtp} disabled={!code} loading={isSubmitting} />
           <TouchableOpacity onPress={() => setStep("phone")}>
             <Text style={styles.link}>Change phone number</Text>
           </TouchableOpacity>
@@ -146,26 +102,6 @@ const styles = StyleSheet.create({
     color: theme.color.textSecondary,
     marginBottom: theme.spacing.xl,
   },
-  input: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    fontSize: 16,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.md,
-  },
-  button: {
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    alignItems: "center",
-    marginTop: theme.spacing.sm,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: theme.color.onPrimary, fontSize: 16, fontWeight: "600" },
   link: {
     color: theme.color.primary,
     textAlign: "center",

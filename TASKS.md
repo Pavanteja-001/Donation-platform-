@@ -115,6 +115,54 @@
 - [ ] Q&A forum (ask/answer, admin moderation)
 - [ ] Volunteering: scribe requests + career mentoring
 
+## Milestone 9 — Professional UX, Registration & Hardening
+User-authored milestone spec (not written against a new PRD section — it hardens/polishes
+everything Milestones 0–7 already built). Worked **one chunk per session**, per its own
+instructions. Guardrails for every chunk: don't change/degrade existing curl-tested backend
+behavior; one design system everywhere (D-014, red reserved for danger/emergency/blood only);
+every screen gets all four states (loading/empty/error/success); builds stay green; static-OTP
+dev behavior (D-015) untouched; `.env` stays untracked.
+
+- [x] **Chunk 1 — Design-system foundation.** One tokens file per app (no monorepo/shared-package
+  tooling exists, so "one tokens definition per app," not a cross-app package) mirroring PRD
+  Appendix A: colors, a 4-based spacing scale, radius, a new typography scale (display/h1/h2/
+  body/caption × weights), and a new elevation set. Found and fixed a real drift bug along the
+  way — admin's `theme.ts` was missing `success`/`warning`/`info`/spacing entirely (web-panel and
+  mobile had them; admin's had silently fallen behind). Noto Sans (Latin+Devanagari+Telugu, A.2):
+  wired on web (a Google Fonts `@import` + font-family stack in both `index.css` files — free,
+  the browser only fetches glyphs actually used) but **deliberately deferred on mobile** — no
+  Hindi/Telugu text exists anywhere in the app yet (D-009's i18n framework was never started), so
+  shipping a multi-script font with nothing to render against it would be dead weight; the
+  typography *scale* (sizes/weights/line-heights) is real today and is what mobile now uses,
+  just on the system font pending the actual i18n milestone. Built a `components/ui/` kit in
+  all three apps — Button, Badge, Chip, Card, Input, Avatar, EmptyState, ErrorState, Skeleton,
+  Toast(+Provider) — mobile as real components against the extended `theme.ts`, web-panel/admin
+  as thin wrappers over CSS classes (same approach every existing page already uses, not a new
+  CSS-in-JS layer). `ToastProvider` mounted at all three app roots. Refactored one trivial,
+  clearly-scoped usage per app to prove the kit integrates (LoginScreen/LoginPage's buttons) —
+  full screen-by-screen migration is Chunk 7, not this one. Builds green: `tsc -b`/`vite build`
+  clean on web-panel + admin, `tsc --noEmit` + `expo export` clean on mobile; backend untouched
+  (no backend work needed for this chunk) and confirmed still healthy.
+- [ ] **Chunk 2 — Navigation.** Mobile: React Navigation (native-stack + bottom-tabs), replacing
+  HomeScreen's local view-switching. Web-panel: `react-router-dom` + sidebar layout. Admin:
+  `react-router-dom` + sidebar (incl. a new Institutions nav item for Chunk 5).
+- [ ] **Chunk 3 — Donor registration & profile (mobile).** Post-OTP registration step
+  (name/email/DOB/gender/blood group/permanent city+area, D-010); Profile tab; gate need-posting
+  and blood-respond on a completed profile.
+- [ ] **Chunk 4 — Institution registration + KYC (web-panel), D-007.** Multi-step registration
+  (org type/legal name/reg. no/Darpan ID where applicable/address/bank account + document
+  upload via the existing signed-URL flow); backend `kycStatus`; block need-creation for
+  non-APPROVED institutions; a "Verification status" screen.
+- [ ] **Chunk 5 — Admin approval of institutions, D-007.** Institutions queue (approve/reject-
+  with-reason, D-017 pattern); Admin-vs-Staff permission call documented when made.
+- [ ] **Chunk 6 — Duplicate-response fix + global error handling.** Backend: at most one active
+  `PENDING_CONFIRMATION` contribution per (donor, need) — closes the BLOOD/GOODS double-tap gap.
+  Frontend: disabled/"already responded" button state; shared API-error wrapper (401/403/409/
+  network blips) with friendly messages everywhere; real inline form validation.
+- [ ] **Chunk 7 — Screen-by-screen visual polish.** Bring every screen to the Appendix A bar
+  (skeletons, empty/error states, professional cards, accessible tap targets, motion) — mobile
+  first, one surface at a time, updating PROGRESS.md between surfaces.
+
 ## Cross-cutting (revisit throughout)
 - [ ] Institution web panel (PRD §16) — *partial:* post/track MONEY, KIT, BLOOD, MEAL_SLOT
   **and** GOODS needs + confirm contributions + photo upload, on par with mobile
