@@ -155,7 +155,7 @@ dev behavior (D-015) untouched; `.env` stays untracked.
   non-APPROVED institutions; a "Verification status" screen.
 - [x] **Chunk 5 — Admin approval of institutions, D-007.** Institutions queue (approve/reject-
   with-reason, D-017 pattern); Admin-vs-Staff permission call documented when made.
-- [ ] **Chunk 6 — Duplicate-response fix + global error handling.** Backend: at most one active
+- [x] **Chunk 6 — Duplicate-response fix + global error handling.** Backend: at most one active
   `PENDING_CONFIRMATION` contribution per (donor, need) — closes the BLOOD/GOODS double-tap gap.
   Frontend: disabled/"already responded" button state; shared API-error wrapper (401/403/409/
   network blips) with friendly messages everywhere; real inline form validation.

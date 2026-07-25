@@ -5,6 +5,29 @@
 
 ---
 
+### Session 26 — Milestone 9 Chunk 6: Duplicate-response fix & global error handling
+This session implemented Chunk 6 - closing the double-response gap for needs and setting up friendly error handlers and inline validations across both the Backend and Frontend.
+
+**What was done:**
+1. **Backend Duplicate Response Checks:**
+   - Modified `POST /api/needs/:id/contributions` in `backend/src/routes/needs.ts` to block duplicate responses if the donor already has a contribution in `PENDING_CONFIRMATION` status, returning a **409 Conflict**.
+   - Updated `GET /api/needs/:id` in `backend/src/routes/needs.ts` to query and return `myContribution` indicating if the requesting donor has an active pending/confirmed contribution for that need.
+
+2. **Shared API Error wrappers:**
+   - Updated the global fetch `request` wrappers in `mobile/src/lib/api.ts`, `web-panel/src/lib/api.ts`, and `admin/src/lib/api.ts` to catch network connectivity issues and throw friendly errors ("Unable to connect to the server...").
+   - Integrated status fallbacks into the wrappers for 401 (Session expired), 403 (Access denied), and 409 (Conflict) to output friendly text if the server doesn't send a custom message.
+
+3. **Client Form & Action Gates:**
+   - Extended `fetchNeed` in `mobile/src/lib/api.ts` to return the `myContribution` property.
+   - Refactored `mobile/src/screens/RegisterScreen.tsx` validation logic to use specific inline error slots rather than a single global error state, rendering inline errors below text inputs and chip selections.
+   - Modified `mobile/src/screens/NeedDetailScreen.tsx` to check `myContribution` on load and immediately initialize `hasResponded` (for BLOOD needs) and `hasClaimed` (for GOODS needs), disabling pledge buttons and preventing double pledging.
+
+4. **Build & Automated Verification:**
+   - Wrote and executed a script verifying that a user can submit one contribution successfully (`201`), but submitting a subsequent concurrent contribution returns a `409 Conflict`.
+   - Verified that `backend`, `web-panel`, `admin`, and `mobile` compile and bundle cleanly without errors.
+
+**Next:** Milestone 9 Chunk 7 — Screen-by-screen visual polish, bringing all mobile, web-panel, and admin screens up to the high-premium standards described in Appendix A.
+
 ### Session 25 — Milestone 9 Chunk 5: Admin approval of institutions (admin)
 This session implemented Chunk 5 - building the institution verification queue console and KYC status management (Approve / Reject-with-reason) in both the Backend and the Admin Console.
 

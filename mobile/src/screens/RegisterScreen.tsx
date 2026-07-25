@@ -49,21 +49,30 @@ export function RegisterScreen({
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | null>(user?.bloodGroup ?? null);
   const [gender, setGender] = useState<Gender | null>(user?.gender ?? null);
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
     if (!token) return;
-    if (!name.trim()) return setError("Enter your full name");
+
+    const newErrors: Record<string, string> = {};
+    if (!name.trim()) newErrors.name = "Enter your full name";
     if (!dob.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
-      return setError("Enter your date of birth as YYYY-MM-DD");
+      newErrors.dob = "Enter your date of birth as YYYY-MM-DD";
     }
-    if (!gender) return setError("Select your gender");
-    if (!bloodGroup) return setError("Select your blood group");
-    if (!city.trim()) return setError("Enter your permanent city");
-    if (!area.trim()) return setError("Enter your permanent area");
+    if (!gender) newErrors.gender = "Select your gender";
+    if (!bloodGroup) newErrors.bloodGroup = "Select your blood group";
+    if (!city.trim()) newErrors.city = "Enter your permanent city";
+    if (!area.trim()) newErrors.area = "Enter your permanent area";
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return setError("Enter a valid email address");
+      newErrors.email = "Enter a valid email address";
+    }
+
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+      setError("Please fix the validation errors below.");
+      return;
     }
 
     setError(null);
@@ -73,8 +82,8 @@ export function RegisterScreen({
         name: name.trim(),
         email: email.trim() || null,
         dateOfBirth: dob,
-        gender,
-        bloodGroup,
+        gender: gender || undefined,
+        bloodGroup: bloodGroup || undefined,
         city: city.trim(),
         area: area.trim(),
       });
@@ -98,7 +107,11 @@ export function RegisterScreen({
         label="Full name"
         placeholder="Enter your full name"
         value={name}
-        onChangeText={setName}
+        onChangeText={(txt) => {
+          setName(txt);
+          if (errors.name) setErrors((prev) => ({ ...prev, name: "" }));
+        }}
+        error={errors.name}
       />
 
       <Input
@@ -107,37 +120,56 @@ export function RegisterScreen({
         keyboardType="email-address"
         autoCapitalize="none"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(txt) => {
+          setEmail(txt);
+          if (errors.email) setErrors((prev) => ({ ...prev, email: "" }));
+        }}
+        error={errors.email}
       />
 
       <Input
         label="Date of birth"
         placeholder="YYYY-MM-DD"
         value={dob}
-        onChangeText={setDob}
+        onChangeText={(txt) => {
+          setDob(txt);
+          if (errors.dob) setErrors((prev) => ({ ...prev, dob: "" }));
+        }}
+        error={errors.dob}
       />
 
       <Input
         label="Permanent city"
         placeholder="e.g. Visakhapatnam"
         value={city}
-        onChangeText={setCity}
+        onChangeText={(txt) => {
+          setCity(txt);
+          if (errors.city) setErrors((prev) => ({ ...prev, city: "" }));
+        }}
+        error={errors.city}
       />
 
       <Input
         label="Permanent area / locality"
         placeholder="e.g. Madhurawada"
         value={area}
-        onChangeText={setArea}
+        onChangeText={(txt) => {
+          setArea(txt);
+          if (errors.area) setErrors((prev) => ({ ...prev, area: "" }));
+        }}
+        error={errors.area}
       />
 
       <Text style={styles.label}>Gender</Text>
-      <View style={styles.chipGrid}>
+      <View style={[styles.chipGrid, errors.gender ? { marginBottom: theme.spacing.xs } : null]}>
         {GENDERS.map((g) => (
           <TouchableOpacity
             key={g.value}
             style={[styles.chip, gender === g.value && styles.chipActive]}
-            onPress={() => setGender(g.value)}
+            onPress={() => {
+              setGender(g.value);
+              if (errors.gender) setErrors((prev) => ({ ...prev, gender: "" }));
+            }}
           >
             <Text style={[styles.chipText, gender === g.value && styles.chipTextActive]}>
               {g.label}
@@ -145,14 +177,18 @@ export function RegisterScreen({
           </TouchableOpacity>
         ))}
       </View>
+      {errors.gender ? <Text style={styles.fieldError}>{errors.gender}</Text> : null}
 
       <Text style={styles.label}>Blood group</Text>
-      <View style={styles.chipGrid}>
+      <View style={[styles.chipGrid, errors.bloodGroup ? { marginBottom: theme.spacing.xs } : null]}>
         {BLOOD_GROUPS.map((g) => (
           <TouchableOpacity
             key={g}
             style={[styles.chip, bloodGroup === g && styles.chipActive]}
-            onPress={() => setBloodGroup(g)}
+            onPress={() => {
+              setBloodGroup(g);
+              if (errors.bloodGroup) setErrors((prev) => ({ ...prev, bloodGroup: "" }));
+            }}
           >
             <Text style={[styles.chipText, bloodGroup === g && styles.chipTextActive]}>
               {formatGroup(g)}
@@ -160,6 +196,7 @@ export function RegisterScreen({
           </TouchableOpacity>
         ))}
       </View>
+      {errors.bloodGroup ? <Text style={styles.fieldError}>{errors.bloodGroup}</Text> : null}
 
       {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -192,7 +229,8 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: theme.color.primary, borderColor: theme.color.primary },
   chipText: { fontSize: 13, fontWeight: "600", color: theme.color.textSecondary },
   chipTextActive: { color: theme.color.onPrimary },
-  errorText: { color: theme.color.danger, fontSize: 13, marginBottom: theme.spacing.md },
+  errorText: { color: theme.color.danger, fontSize: 13, marginTop: theme.spacing.md, marginBottom: theme.spacing.md },
+  fieldError: { color: theme.color.danger, fontSize: 12, marginTop: 0, marginBottom: theme.spacing.md },
   actions: { gap: theme.spacing.md, marginTop: theme.spacing.md, marginBottom: 40 },
   skipButton: { paddingVertical: theme.spacing.md, alignItems: "center" },
   skipText: { color: theme.color.textSecondary, fontSize: 15, fontWeight: "600" },

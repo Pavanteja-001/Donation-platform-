@@ -116,8 +116,18 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const { need } = await fetchNeed(token, needId);
+      const { need, myContribution } = await fetchNeed(token, needId);
       setNeed(need);
+
+      if (myContribution) {
+        if (myContribution.kind === "BLOOD") {
+          setHasResponded(true);
+        }
+        if (myContribution.kind === "GOODS") {
+          setHasClaimed(true);
+        }
+      }
+
       if (user && need.postedBy.id === user.id) {
         const { contributions } = await fetchContributions(token, needId);
         setContributions(contributions);

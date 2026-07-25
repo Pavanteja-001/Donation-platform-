@@ -161,13 +161,31 @@ export interface Contribution {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...options.headers },
+    });
+  } catch (err) {
+    throw new Error("Unable to connect to the server. Please check your internet connection and try again.");
+  }
+
   const body = await res.json().catch(() => undefined);
   if (!res.ok) {
-    throw new Error(body?.error ?? `Request failed (${res.status})`);
+    if (body?.error) {
+      throw new Error(body.error);
+    }
+    if (res.status === 401) {
+      throw new Error("Session expired. Please log in again.");
+    }
+    if (res.status === 403) {
+      throw new Error("Access denied: You do not have permission to perform this action.");
+    }
+    if (res.status === 409) {
+      throw new Error("Conflict: This request has already been processed or a duplicate exists.");
+    }
+    throw new Error(`Request failed with status code ${res.status}. Please try again later.`);
   }
   return body as T;
 }

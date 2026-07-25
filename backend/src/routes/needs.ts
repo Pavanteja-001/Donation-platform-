@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { KycStatus, NeedStatus, NeedType, Prisma, Role, Urgency } from "@prisma/client";
+import { KycStatus, NeedStatus, NeedType, Prisma, Role, Urgency, ContributionStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
@@ -424,7 +424,17 @@ router.get("/:id", async (req, res) => {
   if (!isOwner && !isAdminOrStaff && !isPubliclyVisible) {
     return res.status(404).json({ error: "Need not found" });
   }
-  res.json({ need });
+
+  const myContribution = await prisma.contribution.findFirst({
+    where: {
+      needId: need.id,
+      donorId: req.user!.sub,
+      status: { in: [ContributionStatus.PENDING_CONFIRMATION, ContributionStatus.CONFIRMED] },
+    },
+    select: { id: true, status: true, kind: true },
+  });
+
+  res.json({ need, myContribution });
 });
 
 const moneyDonateSchema = z.object({
@@ -474,6 +484,20 @@ router.post("/:id/contributions", async (req, res) => {
   let need = await prisma.need.findUnique({ where: { id: req.params.id } });
   if (!need) return res.status(404).json({ error: "Need not found" });
   need = await expireIfPastDeadline(need);
+
+  // Check for duplicate pending responses (Chunk 6)
+  const existingPending = await prisma.contribution.findFirst({
+    where: {
+      needId: need.id,
+      donorId: req.user!.sub,
+      status: ContributionStatus.PENDING_CONFIRMATION,
+    },
+  });
+  if (existingPending) {
+    return res.status(409).json({
+      error: "You already have a pending response for this request.",
+    });
+  }
 
   const fundable: NeedStatus[] = [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED];
   if (!fundable.includes(need.status)) {
