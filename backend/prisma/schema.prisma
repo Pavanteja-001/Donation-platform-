@@ -39,6 +39,9 @@ model User {
   postedNeeds            Need[] @relation("NeedsPosted")
   linkedInstitutionNeeds Need[] @relation("NeedsLinkedInstitution")
 
+  contributionsMade      Contribution[] @relation("ContributionsMade")
+  contributionsConfirmed Contribution[] @relation("ContributionsConfirmed")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -107,14 +110,66 @@ model Need {
   // Mandatory on REJECTED (D-017), shown live to the poster.
   rejectionReason String?
 
-  // Type-specific fields (PRD §6.4) — target_amount/upi_id for MONEY, blood_group/units for
-  // BLOOD, etc. Validated per-type at the API layer once each flow is built (Milestone 2+);
-  // stored as JSON here so the shared engine doesn't need a schema change per type.
+  // Shared (not per-type payload) because the lifecycle engine reads it generically to drive
+  // the EXPIRED transition (D-013, PRD §7.1/7.4) without knowing type-specific payload shape.
+  // Only MONEY uses it for now; KIT will reuse it in Milestone 3. Null = no deadline.
+  deadline DateTime?
+
+  // Type-specific fields (PRD §6.4) — target_amount/upi_id/upi_qr for MONEY (§7.1;
+  // raised_amount is server-computed, never client-supplied), blood_group/units for BLOOD, etc.
+  // Validated per-type at the API layer once each flow is built (Milestone 2+); stored as JSON
+  // here so the shared engine doesn't need a schema change per type.
   payload Json?
+
+  contributions Contribution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status, urgency])
   @@index([postedById])
+}
+
+// PRD §6.5 / §7.2-7.3 — a donor acting on a Need. Money-only in Milestone 2 (`kind` is always
+// MONEY today); `kind` exists so BLOOD/KIT/GOODS contributions in later milestones reuse this
+// table instead of inventing a parallel one per type.
+enum ContributionKind {
+  MONEY
+}
+
+enum ContributionStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  REJECTED
+}
+
+model Contribution {
+  id String @id @default(cuid())
+
+  needId String
+  need   Need   @relation(fields: [needId], references: [id])
+
+  donorId String
+  donor   User   @relation("ContributionsMade", fields: [donorId], references: [id])
+
+  kind   ContributionKind   @default(MONEY)
+  amount Int
+  status ContributionStatus @default(PENDING_CONFIRMATION)
+
+  // Proof of payment (§7.2). Real signed-upload support (object storage + CDN) is a
+  // cross-cutting TODO — proofUrl is a plain client-supplied string until that pipeline exists.
+  // UTR uniqueness is a hard DB constraint (D-019), not just an app-level flag.
+  utr      String @unique
+  proofUrl String?
+
+  // Beneficiary (default) or Admin (override) — D-002, D-018. Never Staff — confirming/
+  // overriding a donation is explicitly Admin-only.
+  confirmedById String?
+  confirmedBy   User?   @relation("ContributionsConfirmed", fields: [confirmedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([needId])
+  @@index([donorId])
 }

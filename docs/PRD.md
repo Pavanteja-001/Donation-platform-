@@ -1,8 +1,8 @@
 # Product Requirements Document — DonationPlatform
 
-**Status:** Living document · **Version:** 0.5 · **Region:** India (Andhra Pradesh first)
+**Status:** Living document · **Version:** 0.6 · **Region:** India (Andhra Pradesh first)
 
-> Living document. Sections 1–6 and Appendix A (design system) are drafted. Sections 7+ are mapped
+> Living document. Sections 1–7 and Appendix A (design system) are drafted. Sections 8+ are mapped
 > in the ToC and written just before their build milestone. Update the version and changelog whenever
 > a section changes.
 
@@ -18,7 +18,7 @@
 | 4 | Users & Personas | ✅ drafted |
 | 5 | Scope & Build Order | ✅ drafted |
 | 6 | Core "Need" Engine (shared lifecycle) | ✅ drafted |
-| 7 | Money Need flow | ⬜ to write |
+| 7 | Money Need flow | ✅ drafted |
 | 8 | Blood module (eligibility + geo-matching) | ⬜ to write |
 | 9 | Kit flow (grocery / education) | ⬜ to write |
 | 10 | Meal-slot booking (orphanages) | ⬜ to write |
@@ -236,6 +236,71 @@ polling, no stale views.
 
 ---
 
+## 7. Money Need flow
+
+The first end-to-end loop through the shared engine (§5, §6) — proves post → verify → fund →
+confirm works before any type-specific module (Blood, Kits, …) is built on top of it.
+
+### 7.1 Payload fields (extends §6.4)
+
+| Field | Notes |
+|---|---|
+| `target_amount` | required at submission; positive integer (paise or whole ₹ — whole ₹ for v1) |
+| `raised_amount` | **server-computed only** — never accepted from the client on create/edit; starts at 0 |
+| `upi_id` | required at submission — the beneficiary's UPI ID, shown to donors (D-001) |
+| `upi_qr` | optional — a QR image for the same UPI ID, alongside the deep-link (D-009) |
+| `deadline` | optional — if set, an unfulfilled MONEY need past its deadline auto-**EXPIRES** (D-013) |
+
+`deadline` lives as a **shared `Need` field** (not nested in `payload`), not because every type
+uses it yet, but because the lifecycle engine (§6.2) needs to read it generically to drive the
+EXPIRED transition without knowing type-specific payload shapes. KIT will reuse it in Milestone 3;
+other types leave it null.
+
+A `MONEY` need cannot move DRAFT → PENDING_VERIFICATION (submit) without `target_amount` and
+`upi_id` set.
+
+### 7.2 The donate step (no gateway, D-001)
+
+1. Donor sees the need's UPI ID / QR and a **"Pay via UPI"** action that opens a UPI deep link
+   (`upi://pay?pa=<upi_id>&pn=<beneficiary_name>&am=<amount>&cu=INR&tn=<need_title>`, D-009) —
+   handled client-side, no backend call.
+2. Donor pays **directly, outside the platform**, then comes back and submits proof: `amount`,
+   `utr`, and a proof screenshot. This creates a `Contribution` (§6.5) in `PENDING_CONFIRMATION`.
+3. **UTR must be unique platform-wide** — enforced as a DB unique constraint (D-019), not just a
+   flag, so two uploads of the same UTR can never both succeed even under a race.
+4. A need only accepts new contributions while `LIVE` or `PARTIALLY_FULFILLED` — once `FULFILLED`
+   it stops accepting more (D-013).
+
+> Proof-screenshot storage: the real upload pipeline (object-storage bucket + CDN, per CLAUDE.md
+> §6) is a cross-cutting concern shared by every flow that uploads images/docs, not Money-specific.
+> Until that pipeline exists, `Contribution.proofUrl` is stored as a plain string (client-supplied
+> URL) — real signed-upload support is a TODO for whenever the storage cross-cutting task is built.
+
+### 7.3 Confirmation (D-002)
+
+- The **beneficiary** (the need's `postedBy`) confirms or rejects a `PENDING_CONFIRMATION`
+  contribution. **Admin (not Staff — this is an override, D-018) can also confirm/reject any
+  contribution**, e.g. if the beneficiary is unresponsive or disputes it.
+- On **confirm**: `raised_amount += amount`, clamped so it never exceeds `target_amount` (avoids
+  the awkward >100% display D-013 is trying to avoid). If the clamped `raised_amount` reaches
+  `target_amount`, the need moves `→ FULFILLED`; otherwise, if this is its first confirmed
+  contribution, `→ PARTIALLY_FULFILLED`.
+- On **reject**: the contribution is marked `REJECTED`; `raised_amount` is untouched. Unlike
+  rejecting a *Need* (D-017), rejecting a *Contribution* does not require a reason in v1 — the
+  donor can just re-submit with a corrected UTR/screenshot.
+
+### 7.4 Progress & completion
+
+- Every MONEY need's card/detail shows a public progress bar: `raised_amount ÷ target_amount`.
+- **Auto-close at 100%** → `FULFILLED`, listed in the public **Completed** section (impact wall,
+  D-013) — not built this milestone, but the state transition it depends on is.
+- **Deadline passed, still `LIVE`/`PARTIALLY_FULFILLED`** → `EXPIRED`. Checked lazily whenever a
+  need is read (no scheduler/cron infra yet) rather than on a timer. The beneficiary can
+  **re-submit**: `EXPIRED → DRAFT` (edit — e.g. push the deadline out — then submit again through
+  the normal flow).
+
+---
+
 ## Appendix A — Design System (one shared theme, all surfaces)
 
 **Principle (D-014):** the donor mobile app, institution/hospital web panel, and admin console all use
@@ -274,6 +339,9 @@ Loading (skeletons) · Empty · Error · Success.
 
 ## Changelog
 
+- v0.6 — Added Section 7 (Money Need flow): payload fields (incl. shared `deadline`), donate step
+  (UPI deep-link, UTR uniqueness), confirmation + admin override, progress bar, auto-close/expiry/
+  resubmit.
 - v0.5 — Auth/notifications/roles/UTR decisions (D-015…D-019): OTP, Expo push + emergency priority +
   WhatsApp, mandatory rejection reasons (live), Admin+Staff RBAC, UTR uniqueness.
 - v0.4 — Added Appendix A (shared design system, D-014) and gap register (O-5…O-10).

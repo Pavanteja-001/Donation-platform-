@@ -5,6 +5,150 @@
 
 ---
 
+### Session 13 — Object storage: real proof-of-payment upload (D-021)
+Closes the "proof-doc upload" TODO flagged in every session since Milestone 2 (Session 11).
+
+**Done:**
+- **D-021**: chose **Supabase Storage** over Cloudflare R2 (R2 requires a card on file even for
+  its free tier; the user doesn't have one available). Uses Supabase's **S3-compatible API**, not
+  its native JS client — `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`.
+- `backend/src/lib/storage.ts`: `createUploadUrl({ contentType, folder })` → 5-minute presigned
+  PUT URL + the resulting public URL. Env vars read **lazily** (not thrown at module load like
+  `JWT_SECRET` is) — an incomplete storage config only breaks the upload route, not the whole
+  server. Non-obvious gotcha now documented in D-021: Supabase's **public** object URLs live on
+  a different hostname (`<ref>.supabase.co`) than the **S3-compatible** one used for signing
+  (`<ref>.storage.supabase.co`) — `storage.ts` derives the project ref from the S3 endpoint to
+  build the public URL.
+- `backend/src/routes/uploads.ts`: `POST /api/uploads/sign { contentType, folder }` (auth
+  required) — client uploads directly to the bucket with the returned URL, never through this
+  backend.
+- Credentials stored **only** in `backend/.env` (confirmed still gitignored, never committed) —
+  user supplied the S3 endpoint + access key pair in chat; region (`ap-south-1`) and bucket
+  (`uploads`) got filled in shortly after.
+- **Verified thoroughly, including live network calls** (not just curl-against-localhost): signed
+  a real upload, `PUT` a test file to it (200), fetched it back via a **signed GET** (200, bytes
+  matched) — proves credentials/region/bucket are all correct. Public **unsigned** read currently
+  404s ("Bucket not found") — diagnosed precisely to **the bucket's "Public" toggle being off** in
+  the Supabase dashboard (a one-click fix on the user's end, not a code problem). Also ran the
+  full donate flow end-to-end with a real uploaded `proofUrl` and confirmed it round-trips
+  correctly through `POST .../contributions` → `GET .../contributions`.
+- Mobile: `expo-image-picker` installed + added as an `app.json` config plugin (photo-library
+  permission text) → `expo prebuild` re-run to sync native projects. `NeedDetailScreen`'s donate
+  form now has an optional "Attach payment screenshot" step (pick → sign → upload → submit
+  `proofUrl` alongside the UTR). `tsc --noEmit` clean; `expo export --platform ios` bundled clean
+  (659 modules).
+
+**Not done / caveat:** The bucket's public-read isn't confirmed working yet — waiting on the user
+to flip "Public bucket" in the Supabase dashboard (Storage → `uploads` → Edit bucket). Everything
+else in the pipeline (signing, upload, DB storage, retrieval via the API) is confirmed working.
+QR-code upload for a `MONEY` need's `upi_qr` field is *not* wired into `CreateMoneyNeedScreen` —
+only the donate-proof upload got built; typing a UPI ID still works without it. Web-panel doesn't
+have image upload UI either (it only confirms/rejects contributions, doesn't donate). No
+simulator/browser to see any of this render, same standing caveat as every prior session.
+
+**Next:** Confirm the bucket is public (ask the user, or just re-test `curl` on a `publicUrl`),
+then resume Milestone 3 (Kits, PRD §9 first) per TASKS.md's build order — or, per the user's
+broader ask this session, push to GitHub + get the backend itself deployed (only its Postgres is
+on Railway right now; the Express server isn't deployed anywhere, so the Vercel-hosted admin/
+web-panel currently have nothing real to talk to except localhost).
+
+---
+
+### Session 12 — Wiring pass: admin console + web-panel Needs UI, mobile "My needs"
+Not a TASKS.md milestone — a deliberate detour to close UI gaps flagged (but not fixed) in
+Sessions 10–11: the backend supported need-verification and contribution-override, but only
+mobile had UI for any of it. User had also independently deployed `admin` and `web-panel` to
+Vercel (`donation-platform-rho-six.vercel.app` = admin; an "organizers" URL for web-panel, behind
+Vercel's SSO protection so not previewable) — this session wires up what those deployments show.
+
+**Done:**
+- Backend: `GET /api/needs/mine` (owner's own needs, any status — registered before `GET /:id` to
+  avoid Express route-order collision) and `GET /api/admin/needs?status=...` (was hardcoded to the
+  `PENDING_VERIFICATION` queue; now defaults there but accepts any status or `ALL` for general
+  oversight). Both curl-verified (isolation between users' `/mine`, 400 on a bogus status, correct
+  filtering).
+- **Admin**: new "Needs" tab (default tab now, ahead of "All users") — `NeedsPage.tsx` (status
+  filter chips, verify/reject with a `window.prompt` reason per D-017) and `NeedDetailPage.tsx`
+  (progress bar, contributions table with Confirm/Reject **restricted to `isAdmin`** in the JSX —
+  Staff sees the table read-only, matching the backend's D-018 enforcement). Added `.btn`/
+  `.btn-danger-outline`/`.chip`/status-badge CSS.
+- **Web-panel**: `DashboardPage` now switches between `MyNeedsPage` (default — `GET /api/needs/mine`,
+  since the public feed alone can't show a `PENDING_VERIFICATION` or `REJECTED` need),
+  `CreateMoneyNeedPage`, and `NeedDetailPage` (confirm/reject as beneficiary — no admin-override
+  concept needed here since the institution *is* the postedBy). Ported the same table/badge/button
+  CSS as admin for consistency (D-014 shared design system — still hand-duplicated per app, same
+  TODO-to-extract noted since Session 9).
+- **Mobile**: added a "My needs" tab alongside the live feed (`MyNeedsScreen.tsx`,
+  `GET /api/needs/mine`) — previously a poster had no way to see their own `DRAFT`/
+  `PENDING_VERIFICATION`/`REJECTED` needs at all once they navigated away from the create screen.
+- All three frontends: `tsc`/`vite build` (web-panel, admin) and `tsc --noEmit` + `expo export
+  --platform ios` (mobile, 655 modules) all clean.
+
+**Not done / caveat:** Still no browser/simulator to actually click through any of this — same
+caveat as every prior session, now covering three more pages per surface. Didn't touch the actual
+Vercel deployments (env vars, redeploys) — that's a separate action if the user wants these code
+changes live on the URLs above. KYC (D-007), notifications, and the full admin console (settings,
+analytics per PRD §15) are still untouched — only the Needs-specific slice was in scope here.
+
+**Next:** Either resume Milestone 3 (Kits, PRD §9 first) per TASKS.md's build order, or — if the
+user wants the Vercel deployments to reflect this session's work — push to GitHub and
+redeploy/reconfigure admin + web-panel on Vercel (their `VITE_API_URL` needs to point at a real
+deployed backend, not `localhost`; the backend itself isn't deployed anywhere yet, only its
+Postgres is, on Railway).
+
+---
+
+### Session 11 — Milestone 2: Money needs (post → donate → confirm → progress bar)
+**Done:**
+- Wrote **PRD §7** (Money Need flow, v0.6): payload fields incl. a shared `Need.deadline` field
+  (not per-type payload — the lifecycle engine needs to read it generically for auto-expiry),
+  the donate step (UPI deep-link + UTR proof, D-009), confirmation + admin override (D-002/D-018),
+  progress bar + auto-close/expiry/resubmit (D-013).
+- `backend/prisma/schema.prisma`: added `Contribution` model (`kind`/`amount`/`status`/**unique
+  `utr`** per D-019/`proofUrl`/`confirmedById`) and `Need.deadline`. Migrated against the same
+  Railway DB from Session 10.
+- `backend/src/lib/moneyNeed.ts` (payload validation/parsing) and `needExpiry.ts` (lazy
+  deadline-expiry check — no cron/scheduler infra yet, so it runs on every read path instead).
+- `backend/src/routes/needs.ts`: MONEY payload is normalized on create/edit — **client-supplied
+  `raised_amount` is always stripped and forced to 0**, since it must only ever come from
+  confirmed contributions, never client input. Submit is blocked (400) until `target_amount` +
+  `upi_id` are set. Added donate (`POST /:id/contributions`, blocked once non-fundable —
+  covers the FULFILLED-stops-accepting rule from D-013) and list-contributions routes, plus
+  `POST /:id/resubmit` (EXPIRED → DRAFT) and `EXPIRED → DRAFT` added to the lifecycle transition
+  table in `needLifecycle.ts`.
+- `backend/src/routes/contributions.ts` (new, mounted at `/api/contributions`): confirm/reject.
+  Confirm clamps `raised_amount` at `target_amount` (avoids >100% display) and advances the Need
+  `LIVE → PARTIALLY_FULFILLED → FULFILLED` through `assertTransition`. `canDecide()` allows the
+  need's beneficiary **or ADMIN** (override) — explicitly not STAFF, matching D-018's "cannot
+  override confirmed donations."
+- **Verified end-to-end against the live Railway DB with curl** (extensive — see TASKS.md for the
+  full list): tamper-guard on `raised_amount`, submit-gating, UTR uniqueness (P2002 → 409),
+  RBAC on confirm/reject (donor 403, staff 403, beneficiary/admin 200), overshoot clamping to
+  exactly target (not over), FULFILLED need rejects further contributions, FULFILLED need drops
+  out of the public feed, a past-deadline need lazily flips to EXPIRED on read, EXPIRED → resubmit
+  → DRAFT → (edit deadline) → submit → verify works, contribution reject leaves `raised_amount`
+  untouched.
+- Mobile: `HomeScreen` now does simple local-state view-switching (feed/detail/create — no router
+  yet, noted as a deliberate "revisit once it's needed" choice) between the existing feed,
+  `NeedDetailScreen` (progress bar, `lib/upi.ts` UPI deep-link via `Linking.openURL`, UTR donate
+  form, and — if you're the need's owner — a confirm/reject panel for pending contributions), and
+  `CreateMoneyNeedScreen` (title/description/target/UPI, creates + auto-submits). `npx tsc
+  --noEmit` clean; `npx expo export --platform ios` bundled clean (654 modules).
+
+**Not done / caveat:** Same as Session 10 — no simulator/browser tool available, so mobile UI is
+verified by typecheck + bundle export + the backend endpoints it calls (curl-tested thoroughly),
+not an actual render. QR-code display and screenshot/proof-doc upload are **not built** — there's
+no object-storage bucket/CDN pipeline yet (`backend/README.md` flags this as a cross-cutting TODO
+shared by every flow that uploads images); UTR-as-text-proof works without it, so the core loop
+isn't blocked. No admin-console UI for verify/reject/override — backend-only, same gap as Session
+10, now also covering contribution confirm/reject.
+
+**Next:** Milestone 3 — Kits (write PRD §9 first): kit definition (contents, cost/kit, kits
+needed), money-per-kit vs buy-&-deliver modes, funded/needed progress + fulfilment confirmation.
+Reuses the `Need`/`Contribution` engine from Milestones 1–2 with `KIT`-shaped payloads.
+
+---
+
 ### Session 10 — Milestone 1: the Need engine (data model, verification, browse feed)
 **Done:**
 - `backend/prisma/schema.prisma`: added `Need` model + `NeedType`/`Urgency`/`NeedStatus` enums

@@ -180,6 +180,26 @@
 - **Impact:** `backend/prisma/schema.prisma` is the schema source of truth; `backend/prisma/seed.ts`
   provisions the founding admin (`SEED_ADMIN_PHONE` env var).
 
+### D-021 · Object storage: Supabase Storage (resolves the R2-or-Supabase "or" in D-011)
+- **Decision:** Use **Supabase Storage**, via its **S3-compatible API**, not Cloudflare R2. The
+  backend signs short-lived upload URLs (`POST /api/uploads/sign`); the client uploads the file
+  **directly to the bucket**, never through the backend, and only the resulting URL is stored in
+  the DB (e.g. `Contribution.proofUrl`). Bucket: `uploads`, one bucket for now with a `folder`
+  namespace per use (`contribution-proofs`, `need-qr`, …) rather than one bucket per use case.
+- **Why:** R2 requires a payment method on file to activate even within its free tier; the user
+  doesn't have one available right now. Supabase Storage's free tier (1GB storage, 2GB
+  bandwidth/month) needs no card. Both were already-locked options in D-011, so this just resolves
+  the "or" rather than introducing a new choice.
+- **Gotcha (matters if this ever gets re-implemented):** Supabase's **public object URLs are
+  served from the main project domain** (`https://<ref>.supabase.co/storage/v1/object/public/...`),
+  **not** the S3-compatible domain (`https://<ref>.storage.supabase.co/...`) used for signing
+  PUT/GET requests. `backend/src/lib/storage.ts` derives the project ref from the S3 endpoint's
+  hostname to build the public URL — if Supabase ever changes that hostname pattern, this breaks.
+- **Impact:** New env vars `SUPABASE_S3_ENDPOINT`/`_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY`/`_BUCKET`/
+  `_REGION` (`backend/.env.example`). The `uploads` bucket must be set **public** in the Supabase
+  dashboard for the stored URLs to actually resolve — this is a manual one-time step outside the
+  codebase (Storage → bucket → Edit bucket → Public bucket).
+
 ---
 
 ### Open decisions (gap register — resolve before / during build)

@@ -56,12 +56,66 @@ Shared lifecycle for every need type — `DRAFT → PENDING_VERIFICATION → LIV
 - `POST /api/needs/:id/cancel` — owner or Admin/Staff, any non-terminal status → `CANCELLED`.
 - `GET /api/needs` — the public feed: `LIVE`/`PARTIALLY_FULFILLED` only, ranked Emergency → Urgent
   → Normal (D-012) then recency.
+- `GET /api/needs/mine` — every need the caller posted, **any status** (including `DRAFT`/
+  `PENDING_VERIFICATION`/`REJECTED`, which the public feed never shows) — how a poster tracks
+  their own need. Must be registered before `GET /:id` (Express route order) or `/mine` gets
+  swallowed as `id="mine"`.
 - `GET /api/needs/:id` — owner, Admin/Staff, or anyone once it's publicly visible (`LIVE`+);
   404s otherwise (doesn't leak existence of private/rejected needs).
-- `GET /api/admin/needs` — the verification queue (`PENDING_VERIFICATION`), Admin + Staff.
+- `GET /api/admin/needs` — Admin + Staff. No `?status=` = the verification queue
+  (`PENDING_VERIFICATION` only, oldest first — the actionable default). `?status=LIVE` (any
+  `NeedStatus`) or `?status=ALL` for general oversight, newest first.
 - `POST /api/admin/needs/:id/verify` — Admin + Staff, `PENDING_VERIFICATION → LIVE`.
 - `POST /api/admin/needs/:id/reject { reason }` — Admin + Staff; `reason` is mandatory (D-017) and
-  shown to the poster via `GET /api/needs/:id`.
+  shown to the poster via `GET /api/needs/:id` or `/mine`.
 
 Type-specific fields (target amount/UPI for `MONEY`, blood group/units for `BLOOD`, …) live in the
 untyped `payload` JSON column for now — validated per type as each flow gets built (Milestone 2+).
+
+`Need.deadline` is a shared (not per-type-payload) field so the lifecycle engine can read it
+generically — see the Money flow section below for why.
+
+## Money flow (PRD §7, `src/routes/needs.ts` + `src/routes/contributions.ts`)
+
+- A `MONEY` need's `payload` is `{ target_amount, raised_amount, upi_id, upi_qr? }`.
+  **`raised_amount` is always server-computed** — any client-supplied value on create/edit is
+  silently dropped (`normalizePayload` in `needs.ts`), and it only ever changes via a confirmed
+  Contribution. `POST /:id/submit` 400s until `target_amount` + `upi_id` are both set.
+- `POST /api/needs/:id/contributions { amount, utr, proofUrl? }` — the donate step (D-001: no
+  gateway, paid directly to the beneficiary's UPI outside the platform, this just records proof).
+  409s unless the need is `LIVE`/`PARTIALLY_FULFILLED` (covers D-013's "stops accepting once
+  FULFILLED"). **`utr` has a DB-level unique constraint (D-019)** — a duplicate 409s
+  (`Prisma P2002`), not just an app-level flag.
+- `GET /api/needs/:id/contributions` — owner or Admin/Staff only.
+- `POST /api/contributions/:id/confirm` / `.../reject` — the need's beneficiary, **or ADMIN as an
+  override** (D-002/D-018 — deliberately not STAFF, since "override confirmed donations" is
+  admin-only). Confirm clamps `raised_amount` at `target_amount` and advances
+  `LIVE → PARTIALLY_FULFILLED → FULFILLED` via `assertTransition`. Reject requires no reason in
+  v1 (unlike rejecting a *Need*, D-017) — the donor can just resubmit with a corrected UTR.
+- **Deadline expiry** (D-013) is checked **lazily** on every read (`src/lib/needExpiry.ts`) —
+  there's no cron/scheduler yet. A `LIVE`/`PARTIALLY_FULFILLED` need past its `deadline` flips to
+  `EXPIRED` the next time anyone reads it (feed, detail, etc.), not on a timer.
+- `POST /api/needs/:id/resubmit` — owner-only, `EXPIRED → DRAFT`, so the poster can `PATCH` (e.g.
+  push the deadline out) and submit again.
+
+Proof-of-payment upload is wired up (see Object storage below) — `Contribution.proofUrl` is a
+real bucket URL now, not a client-typed string.
+
+## Object storage (CLAUDE.md §6, D-021, `src/lib/storage.ts` + `src/routes/uploads.ts`)
+
+**Supabase Storage** via its S3-compatible API (D-021 — chosen over R2, which needs a card on
+file even for its free tier). The backend never touches image bytes:
+
+1. `POST /api/uploads/sign { contentType, folder }` (auth required) — `folder` is
+   `"contribution-proofs"` or `"need-qr"`; `contentType` is `image/jpeg`\|`image/png`\|`image/webp`.
+   Returns `{ uploadUrl, publicUrl, key }` — `uploadUrl` is a **5-minute presigned PUT URL**.
+2. The client `PUT`s the file bytes straight to `uploadUrl` (never through this backend).
+3. The client then sends `publicUrl` as e.g. `proofUrl` on `POST /api/needs/:id/contributions`.
+
+Requires `SUPABASE_S3_ENDPOINT`/`_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY`/`_BUCKET`/`_REGION` in
+`.env` (see `.env.example`) — **reads lazily**, so a missing/incomplete config only breaks
+`/api/uploads/sign` (503) rather than crashing the whole server. The `SUPABASE_S3_BUCKET` bucket
+must be set **Public** in the Supabase dashboard (Storage → bucket → Edit bucket) for `publicUrl`
+to actually resolve; the S3 API itself (signing, PUT, and even a signed GET) works regardless of
+that toggle — only the public read path depends on it. See D-021 for the gotcha on how the public
+URL's hostname is derived from the S3 endpoint.

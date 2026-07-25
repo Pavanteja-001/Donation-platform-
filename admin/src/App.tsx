@@ -3,12 +3,20 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
 import { StaffPage } from "./pages/StaffPage";
+import { NeedsPage } from "./pages/NeedsPage";
+import { NeedDetailPage } from "./pages/NeedDetailPage";
 
-type Tab = "users" | "staff";
+type Tab = "needs" | "users" | "staff";
 
 function Console() {
   const { user, isAdmin, signOut } = useAuth();
-  const [tab, setTab] = useState<Tab>("users");
+  const [tab, setTab] = useState<Tab>("needs");
+  const [selectedNeedId, setSelectedNeedId] = useState<string | null>(null);
+
+  function goToTab(next: Tab) {
+    setTab(next);
+    setSelectedNeedId(null);
+  }
 
   return (
     <div className="console">
@@ -25,26 +33,30 @@ function Console() {
       </header>
 
       <nav className="console-nav">
-        <button
-          type="button"
-          className={tab === "users" ? "tab active" : "tab"}
-          onClick={() => setTab("users")}
-        >
+        <button type="button" className={tab === "needs" ? "tab active" : "tab"} onClick={() => goToTab("needs")}>
+          Needs
+        </button>
+        <button type="button" className={tab === "users" ? "tab active" : "tab"} onClick={() => goToTab("users")}>
           All users
         </button>
         {/* Staff management is ADMIN-only (D-018) — Staff never even see the tab. */}
         {isAdmin && (
-          <button
-            type="button"
-            className={tab === "staff" ? "tab active" : "tab"}
-            onClick={() => setTab("staff")}
-          >
+          <button type="button" className={tab === "staff" ? "tab active" : "tab"} onClick={() => goToTab("staff")}>
             Staff accounts
           </button>
         )}
       </nav>
 
-      <main className="console-main">{tab === "staff" && isAdmin ? <StaffPage /> : <UsersPage />}</main>
+      <main className="console-main">
+        {tab === "needs" &&
+          (selectedNeedId ? (
+            <NeedDetailPage needId={selectedNeedId} onBack={() => setSelectedNeedId(null)} />
+          ) : (
+            <NeedsPage onSelectNeed={setSelectedNeedId} />
+          ))}
+        {tab === "users" && <UsersPage />}
+        {tab === "staff" && isAdmin && <StaffPage />}
+      </main>
     </div>
   );
 }

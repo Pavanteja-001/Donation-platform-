@@ -7,7 +7,7 @@ import { NeedCard } from "../components/NeedCard";
 import { theme } from "../lib/theme";
 
 // CLAUDE.md performance rules: FlashList for feeds, skeleton/empty/error states — never default.
-export function NeedsFeedScreen() {
+export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
   const { token } = useAuth();
   const [needs, setNeeds] = useState<Need[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export function NeedsFeedScreen() {
     <FlashList
       data={needs}
       keyExtractor={(item) => item.id}
-      renderItem={({ item }) => <NeedCard need={item} />}
+      renderItem={({ item }) => <NeedCard need={item} onPress={() => onSelectNeed(item)} />}
       contentContainerStyle={styles.listContent}
       refreshControl={
         <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.color.primary} />

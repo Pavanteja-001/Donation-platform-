@@ -229,6 +229,100 @@ th {
   color: var(--color-text-primary);
 }
 
+/* Need status badges (PRD §6.2 lifecycle) */
+.status-live,
+.status-partially_fulfilled,
+.status-fulfilled {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.status-pending_verification {
+  background: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.status-rejected,
+.status-expired,
+.status-cancelled {
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger-outline {
+  padding: 8px 16px;
+  background: none;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-danger-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.link-cell {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+/* Status filter chips */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.chip {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+}
+
 /* Inline forms (e.g. Add staff) */
 .inline-form {
   display: flex;

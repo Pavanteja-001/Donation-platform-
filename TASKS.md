@@ -22,11 +22,11 @@
 - [x] Test the full lifecycle end-to-end — curl-tested against the real (Railway) Postgres DB: draft isolation, submit, RBAC on verify/reject, mandatory rejection reason, visibility rules, staff-vs-admin permission split
 
 ## Milestone 2 — Money needs  *(write PRD §7 first)*
-- [ ] Post a money need (target, UPI/QR, proof docs)
-- [ ] Donor donates → upload screenshot/UTR
-- [ ] Beneficiary confirms receipt; admin override
-- [ ] Public progress bar (raised ÷ target); partial fulfilment
-- [ ] Test every API in this flow
+- [x] Post a money need (target, UPI) — `mobile/src/screens/CreateMoneyNeedScreen.tsx`; QR + proof-doc upload deferred to the object-storage cross-cutting task (no bucket/CDN pipeline yet)
+- [x] Donor donates → upload UTR — UPI deep-link (D-009) + UTR proof; `mobile/src/screens/NeedDetailScreen.tsx` / `POST /api/needs/:id/contributions`; screenshot upload deferred with proof docs above
+- [x] Beneficiary confirms receipt; admin override — `POST /api/contributions/:id/confirm|reject` (D-002); mobile UI for beneficiary, backend-only for admin override (no admin-console UI yet)
+- [x] Public progress bar (raised ÷ target); partial fulfilment — `mobile/src/components/ProgressBar.tsx`; clamped-at-target fulfilment logic in `backend/src/routes/contributions.ts` (D-013)
+- [x] Test every API in this flow — curl-tested end-to-end against the live Railway DB: submit-gating, payload tamper-guard, UTR uniqueness (D-019), RBAC on confirm/reject (donor/staff blocked, beneficiary/admin allowed), overshoot clamping, FULFILLED lockout, feed exclusion, deadline expiry + resubmit
 
 ## Milestone 3 — Kits  *(write PRD §9 first)*
 - [ ] Kit definition (contents, cost/kit, kits needed)
@@ -60,8 +60,11 @@
 - [ ] Volunteering: scribe requests + career mentoring
 
 ## Cross-cutting (revisit throughout)
-- [ ] Institution web panel (PRD §16)
-- [ ] Admin console (PRD §15)
+- [ ] Institution web panel (PRD §16) — *partial:* post/track a MONEY need + confirm contributions
+  wired (`web-panel/src/pages/MyNeedsPage.tsx` etc.); KYC onboarding (D-007) not started
+- [ ] Admin console (PRD §15) — *partial:* Needs tab wired (verification queue + status browser +
+  contribution override, `admin/src/pages/NeedsPage.tsx`/`NeedDetailPage.tsx`); settings/analytics
+  screens not started
 - [ ] Notifications system (PRD §17)
 - [ ] Security & privacy pass (PRD §20)
 - [ ] Analytics & metrics (PRD §21)

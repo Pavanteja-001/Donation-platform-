@@ -23,10 +23,20 @@ router.get("/users", async (_req, res) => {
 });
 
 // Admin + Staff: the verification queue and verify/reject actions (D-018 — "verify/accept").
-router.get("/needs", async (_req, res) => {
+// Default (no `status`) is the queue — PENDING_VERIFICATION only, oldest first, since that's
+// the actionable view. Pass `?status=LIVE` etc. (or `?status=ALL`) for general oversight of
+// needs regardless of status — used by the admin console's "All needs" tab.
+const needsQueryStatusSchema = z.union([z.nativeEnum(NeedStatus), z.literal("ALL")]).optional();
+
+router.get("/needs", async (req, res) => {
+  const parsed = needsQueryStatusSchema.safeParse(req.query.status);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid status filter" });
+  }
+  const status = parsed.data ?? NeedStatus.PENDING_VERIFICATION;
   const needs = await prisma.need.findMany({
-    where: { status: NeedStatus.PENDING_VERIFICATION },
-    orderBy: { createdAt: "asc" },
+    where: status === "ALL" ? {} : { status },
+    orderBy: { createdAt: status === NeedStatus.PENDING_VERIFICATION ? "asc" : "desc" },
     include: { postedBy: { select: { id: true, name: true, phone: true, role: true } } },
   });
   res.json({ needs });

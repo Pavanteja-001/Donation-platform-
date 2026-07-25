@@ -10,7 +10,9 @@ const ALLOWED_TRANSITIONS: Record<NeedStatus, NeedStatus[]> = {
   [NeedStatus.PARTIALLY_FULFILLED]: [NeedStatus.FULFILLED, NeedStatus.EXPIRED, NeedStatus.CANCELLED],
   [NeedStatus.FULFILLED]: [],
   [NeedStatus.REJECTED]: [],
-  [NeedStatus.EXPIRED]: [],
+  // D-013 / PRD §7.4: an expired need can be re-submitted — back to DRAFT for editing
+  // (e.g. pushing the deadline out), then through the normal submit flow again.
+  [NeedStatus.EXPIRED]: [NeedStatus.DRAFT],
   [NeedStatus.CANCELLED]: [],
 };
 
