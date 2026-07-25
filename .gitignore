@@ -1,0 +1,30 @@
+node_modules/
+.DS_Store
+files.zip
+
+# env
+.env
+.env.local
+*.env
+
+# backend
+backend/dist/
+backend/generated/
+
+# mobile (Expo)
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/*.jks
+mobile/*.p8
+mobile/*.p12
+mobile/*.key
+mobile/*.mobileprovision
+
+# web builds
+web-panel/dist/
+admin/dist/
+
+# logs
+*.log
+npm-debug.log*

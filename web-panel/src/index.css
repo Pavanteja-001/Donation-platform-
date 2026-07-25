@@ -1,0 +1,159 @@
+/* Shared token palette — same values as src/lib/theme.ts (PRD Appendix A, D-014). */
+:root {
+  --color-primary: #0e7c66;
+  --color-on-primary: #ffffff;
+  --color-accent: #f2a900;
+  --color-danger: #d7263d;
+  --color-background: #f7f8f8;
+  --color-surface: #ffffff;
+  --color-border: #e2e5e4;
+  --color-text-primary: #14201d;
+  --color-text-secondary: #5b6b67;
+  --radius: 12px;
+
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+  color: var(--color-text-primary);
+  background: var(--color-background);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100svh;
+  color: var(--color-text-secondary);
+}
+
+.auth-screen {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 32px;
+}
+
+.auth-card h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  margin: 0 0 24px;
+  font-size: 14px;
+}
+
+.hint {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+
+form label {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 16px;
+}
+
+form input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  color: var(--color-text-primary);
+}
+
+button {
+  font-family: inherit;
+}
+
+form button[type="submit"] {
+  width: 100%;
+  padding: 12px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+form button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: 13px;
+  margin: -8px 0 16px;
+}
+
+.dev-hint {
+  color: var(--color-accent);
+  font-size: 12px;
+  margin: -8px 0 16px;
+}
+
+.dashboard {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboard-header h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.dashboard main p {
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}

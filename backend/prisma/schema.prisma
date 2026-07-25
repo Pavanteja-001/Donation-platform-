@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Roles per CLAUDE.md §4 and D-018:
+// - USER: the mobile donor/beneficiary account (same account acts as both — D-002/PRD §4)
+// - INSTITUTION: NGO / hospital / blood bank / orphanage (web panel, D-007 KYC applies later)
+// - ADMIN: super admin on the admin console — can create STAFF logins
+// - STAFF: limited admin console role (D-018) — can verify/accept needs and list users,
+//          cannot edit users/settings, manage staff, or override confirmed donations
+enum Role {
+  USER
+  INSTITUTION
+  ADMIN
+  STAFF
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String?
+  role      Role     @default(USER)
+
+  // Permanent ("go-to") location captured at registration — basis for notifications (D-010).
+  // No real-time GPS / live tracking.
+  city      String?
+  area      String?
+
+  // Set only for STAFF accounts — which ADMIN created them (D-018).
+  createdByAdminId String?
+  createdByAdmin   User?   @relation("StaffCreatedBy", fields: [createdByAdminId], references: [id])
+  staffCreated     User[]  @relation("StaffCreatedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+}
