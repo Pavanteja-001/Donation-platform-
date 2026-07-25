@@ -51,8 +51,17 @@ function progressLabel(need: Need): string | null {
   return null;
 }
 
-// Chunk 2 (Milestone 9) — no longer owns the "+ X need" buttons (moved to the new /post chooser
-// page, reached via the sidebar's "Post a Need" item); this is just the list + row navigation now.
+function TableSkeleton() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "20px" }}>
+      <Skeleton width="100%" height={40} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+    </div>
+  );
+}
+
 export function MyNeedsPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -77,13 +86,7 @@ export function MyNeedsPage() {
       <p className="hint">Every need is admin-verified before donors can see it (PRD §6.3).</p>
 
       {error && <ErrorState message={error} onRetry={load} />}
-      {!needs && !error && (
-        <>
-          <Skeleton height={40} style={{ marginBottom: 8 }} />
-          <Skeleton height={40} style={{ marginBottom: 8 }} />
-          <Skeleton height={40} />
-        </>
-      )}
+      {!needs && !error && <TableSkeleton />}
       {needs && needs.length === 0 && (
         <EmptyState title="You haven't posted anything yet" actionLabel="Post a need" onAction={() => navigate("/post")} />
       )}
@@ -103,15 +106,15 @@ export function MyNeedsPage() {
             {needs.map((n) => (
               <tr key={n.id}>
                 <td>
-                  <button type="button" className="link-cell" onClick={() => navigate(`/needs/${n.id}`)}>
+                  <button type="button" className="link-cell" onClick={() => navigate(`/needs/${n.id}`)} style={{ fontWeight: 600 }}>
                     {n.title}
                   </button>
                 </td>
-                <td>{n.type}</td>
+                <td style={{ fontWeight: 500 }}>{n.type}</td>
                 <td>
                   <span className={`badge status-${n.status.toLowerCase()}`}>{n.status.replace("_", " ")}</span>
                 </td>
-                <td>{progressLabel(n) ?? "—"}</td>
+                <td style={{ fontWeight: 500 }}>{progressLabel(n) ?? "—"}</td>
                 <td>{new Date(n.createdAt).toLocaleDateString()}</td>
               </tr>
             ))}

@@ -1,22 +1,21 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { fetchMyContributions, type Contribution } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { EmptyState, ErrorState, Skeleton, Badge, type BadgeTone } from "../components/ui";
 
-const STATUS_COLOR: Record<Contribution["status"], string> = {
-  PENDING_CONFIRMATION: theme.color.accent,
-  CONFIRMED: theme.color.primary,
-  REJECTED: theme.color.danger,
+const STATUS_BADGE_TONE: Record<Contribution["status"], BadgeTone> = {
+  PENDING_CONFIRMATION: "accent",
+  CONFIRMED: "primary",
+  REJECTED: "danger",
 };
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
-// Kind-aware — mirrors the formatContributionAmount() already built for NeedDetailScreen, but
-// this list has no Need payload to lean on, only the Contribution's own fields.
 function summarize(c: Contribution): string {
   if (c.kind === "MONEY") return `₹${c.amount?.toLocaleString("en-IN")}`;
   if (c.kind === "KIT") return `${c.kits} kits`;
@@ -28,8 +27,33 @@ function summarize(c: Contribution): string {
   return "Claimed item";
 }
 
-// PRD §14.3 — the first place a donor sees their own contribution history, not just what a
-// beneficiary sees of it. Confirmed ones link to a certificate (§14.2).
+function ContributionsListSkeleton() {
+  return (
+    <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
+      {[1, 2, 3].map((i) => (
+        <View
+          key={i}
+          style={{
+            padding: theme.spacing.lg,
+            borderWidth: 1,
+            borderColor: theme.color.border,
+            borderRadius: theme.radius,
+            gap: theme.spacing.sm,
+            backgroundColor: theme.color.surface,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Skeleton width="50%" height={18} />
+            <Skeleton width="20%" height={14} />
+          </View>
+          <Skeleton width="40%" height={12} />
+          <Skeleton width="30%" height={10} style={{ marginTop: 4 }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function MyContributionsScreen({
   onViewCertificate,
 }: {
@@ -54,7 +78,6 @@ export function MyContributionsScreen({
     [token]
   );
 
-  // Chunk 2 (Milestone 9) — refetch on focus instead of the old refreshKey-remount trick.
   useFocusEffect(
     useCallback(() => {
       load();
@@ -70,21 +93,22 @@ export function MyContributionsScreen({
   if (error) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
+        <ErrorState message={error} onRetry={load} />
       </View>
     );
   }
+
   if (!contributions) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={theme.color.primary} />
-      </View>
-    );
+    return <ContributionsListSkeleton />;
   }
+
   if (contributions.length === 0) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyTitle}>You haven't contributed to anything yet</Text>
+        <EmptyState
+          title="You haven't contributed to anything yet"
+          subtitle="Your contributions history will appear here once you make a donation or pledge."
+        />
       </View>
     );
   }
@@ -97,15 +121,17 @@ export function MyContributionsScreen({
       {contributions.map((c) => (
         <View key={c.id} style={styles.card}>
           <View style={styles.headerRow}>
-            <Text style={styles.title} numberOfLines={1}>
-              {c.need?.title ?? "—"}
-            </Text>
-            <Text style={[styles.status, { color: STATUS_COLOR[c.status] }]}>{c.status.replace("_", " ")}</Text>
+            <View style={{ flex: 1, paddingRight: theme.spacing.sm }}>
+              <Text style={styles.title} numberOfLines={1}>
+                {c.need?.title ?? "—"}
+              </Text>
+            </View>
+            <Badge label={c.status.replace("_", " ")} tone={STATUS_BADGE_TONE[c.status]} />
           </View>
           <Text style={styles.meta}>{summarize(c)}</Text>
           <Text style={styles.date}>{formatDate(c.createdAt)}</Text>
           {c.status === "CONFIRMED" && (
-            <TouchableOpacity onPress={() => onViewCertificate(c.id)}>
+            <TouchableOpacity onPress={() => onViewCertificate(c.id)} activeOpacity={0.7}>
               <Text style={styles.link}>View certificate</Text>
             </TouchableOpacity>
           )}
@@ -118,8 +144,6 @@ export function MyContributionsScreen({
 const styles = StyleSheet.create({
   list: { padding: theme.spacing.lg },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
-  errorText: { color: theme.color.danger, textAlign: "center" },
-  emptyTitle: { fontSize: 15, color: theme.color.textSecondary, textAlign: "center" },
   card: {
     backgroundColor: theme.color.surface,
     borderWidth: 1,
@@ -129,8 +153,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { flex: 1, fontSize: 15, fontWeight: "700", color: theme.color.textPrimary, marginRight: theme.spacing.sm },
-  status: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  title: { fontSize: 15, fontWeight: "700", color: theme.color.textPrimary },
   meta: { fontSize: 13, color: theme.color.textPrimary, marginTop: 4 },
   date: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2 },
   link: { color: theme.color.primary, fontSize: 13, fontWeight: "600", marginTop: theme.spacing.sm },

@@ -1,27 +1,52 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { fetchMyNeeds, type MoneyPayload, type Need } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { EmptyState, ErrorState, Skeleton, Badge, type BadgeTone } from "../components/ui";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
 }
 
-const STATUS_COLOR: Record<Need["status"], string> = {
-  DRAFT: theme.color.textSecondary,
-  PENDING_VERIFICATION: theme.color.accent,
-  LIVE: theme.color.primary,
-  PARTIALLY_FULFILLED: theme.color.primary,
-  FULFILLED: theme.color.primary,
-  REJECTED: theme.color.danger,
-  EXPIRED: theme.color.danger,
-  CANCELLED: theme.color.danger,
+const STATUS_BADGE_TONE: Record<Need["status"], BadgeTone> = {
+  DRAFT: "neutral",
+  PENDING_VERIFICATION: "accent",
+  LIVE: "primary",
+  PARTIALLY_FULFILLED: "primary",
+  FULFILLED: "primary",
+  REJECTED: "danger",
+  EXPIRED: "danger",
+  CANCELLED: "danger",
 };
 
-// PRD §6.2 — lets a poster track their own need through verification/funding without needing
-// to know its id (a gap the public feed alone can't fill, since it only shows LIVE+ needs).
+function NeedsListSkeleton() {
+  return (
+    <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
+      {[1, 2, 3].map((i) => (
+        <View
+          key={i}
+          style={{
+            padding: theme.spacing.lg,
+            borderWidth: 1,
+            borderColor: theme.color.border,
+            borderRadius: theme.radius,
+            gap: theme.spacing.sm,
+            backgroundColor: theme.color.surface,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Skeleton width="50%" height={18} />
+            <Skeleton width="20%" height={14} />
+          </View>
+          <Skeleton width="30%" height={12} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
   const { token } = useAuth();
   const [needs, setNeeds] = useState<Need[] | null>(null);
@@ -42,8 +67,6 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
     [token]
   );
 
-  // Chunk 2 (Milestone 9) — refetch on focus (e.g. after posting a need or returning from a
-  // detail screen) instead of the old refreshKey-remount trick.
   useFocusEffect(
     useCallback(() => {
       load();
@@ -59,21 +82,22 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
   if (error) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
+        <ErrorState message={error} onRetry={load} />
       </View>
     );
   }
+
   if (!needs) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={theme.color.primary} />
-      </View>
-    );
+    return <NeedsListSkeleton />;
   }
+
   if (needs.length === 0) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyTitle}>You haven't posted anything yet</Text>
+        <EmptyState
+          title="You haven't posted any needs yet"
+          subtitle="Your posted help requests will be visible here."
+        />
       </View>
     );
   }
@@ -88,10 +112,12 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
         return (
           <TouchableOpacity key={need.id} style={styles.card} onPress={() => onSelectNeed(need)} activeOpacity={0.7}>
             <View style={styles.headerRow}>
-              <Text style={styles.title} numberOfLines={1}>
-                {need.title}
-              </Text>
-              <Text style={[styles.status, { color: STATUS_COLOR[need.status] }]}>{need.status.replace("_", " ")}</Text>
+              <View style={{ flex: 1, paddingRight: theme.spacing.sm }}>
+                <Text style={styles.title} numberOfLines={1}>
+                  {need.title}
+                </Text>
+              </View>
+              <Badge label={need.status.replace("_", " ")} tone={STATUS_BADGE_TONE[need.status]} />
             </View>
             {money && (
               <Text style={styles.meta}>
@@ -113,8 +139,6 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
 const styles = StyleSheet.create({
   list: { padding: theme.spacing.lg },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
-  errorText: { color: theme.color.danger, textAlign: "center" },
-  emptyTitle: { fontSize: 15, color: theme.color.textSecondary, textAlign: "center" },
   card: {
     backgroundColor: theme.color.surface,
     borderWidth: 1,
@@ -124,8 +148,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { flex: 1, fontSize: 15, fontWeight: "700", color: theme.color.textPrimary, marginRight: theme.spacing.sm },
-  status: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  title: { fontSize: 15, fontWeight: "700", color: theme.color.textPrimary },
   meta: { fontSize: 12, color: theme.color.textSecondary, marginTop: 4 },
   rejection: { fontSize: 12, color: theme.color.danger, marginTop: 4 },
 });

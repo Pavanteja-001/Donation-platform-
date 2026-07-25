@@ -14,7 +14,7 @@ import {
   type Need,
 } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-
+import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -40,9 +40,6 @@ function formatGroup(g: BloodPayload["blood_group"]) {
   return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
 }
 
-// Kind-aware — a BLOOD contribution has neither `amount` nor `kits`, only `units`; a MEAL_SLOT
-// one carries the booked date instead of a UTR-tracked amount necessarily; a GOODS one is just a
-// claim (no amount/kits/units/utr at all).
 function formatContributionAmount(c: Contribution): string {
   if (c.kind === "KIT") return `${c.kits} kits`;
   if (c.kind === "BLOOD") return `${c.units} units`;
@@ -54,6 +51,17 @@ function formatContributionAmount(c: Contribution): string {
   return `₹${c.amount?.toLocaleString("en-IN")}`;
 }
 
+function DetailSkeleton() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "24px" }}>
+      <Skeleton width="120px" height={16} />
+      <Skeleton width="60%" height={32} />
+      <Skeleton width="100%" height={80} style={{ borderRadius: "8px" }} />
+      <Skeleton width="100%" height={160} style={{ borderRadius: "8px" }} />
+    </div>
+  );
+}
+
 export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () => void }) {
   const { token, user } = useAuth();
   const [need, setNeed] = useState<Need | null>(null);
@@ -63,6 +71,7 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
 
   function load() {
     if (!token) return;
+    setError(null);
     fetchNeed(token, needId)
       .then(({ need }) => setNeed(need))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load this need"));
@@ -99,8 +108,8 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
     }
   }
 
-  if (error && !need) return <p className="error">{error}</p>;
-  if (!need) return <p className="hint">Loading…</p>;
+  if (error && !need) return <ErrorState message={error} onRetry={load} />;
+  if (!need) return <DetailSkeleton />;
 
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
   const kit = need.type === "KIT" && isKitPayload(need.payload) ? need.payload : null;
@@ -108,80 +117,100 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
   const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
   const pending = contributions?.filter((c) => c.status === "PENDING_CONFIRMATION") ?? [];
-  // D-008 — fast-track: this institution can self-verify its own linked need instead of
-  // waiting on admin, but only while it's still pending and only if it's really theirs.
   const canInstitutionVerify =
     need.status === "PENDING_VERIFICATION" && !!user && need.linkedInstitutionId === user.id && !need.institutionVerified;
 
   return (
     <div>
-      <button type="button" className="link" onClick={onBack}>
+      <button type="button" className="link" onClick={onBack} style={{ marginBottom: "16px" }}>
         ‹ Back to your needs
       </button>
       <h2>{need.title}</h2>
-      <p className="hint">
+      <p className="hint" style={{ marginTop: "4px" }}>
         <span className={`badge status-${need.status.toLowerCase()}`}>{need.status.replace("_", " ")}</span>
       </p>
-      <p>{need.description}</p>
+      <p style={{ marginTop: "16px", marginBottom: "16px", fontSize: "15px", lineHeight: "1.5" }}>{need.description}</p>
 
       {need.photos.length > 0 && (
-        <div className="photo-gallery">
+        <div className="photo-gallery" style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
           {need.photos.map((url) => (
-            <img key={url} src={url} alt="" />
+            <img key={url} src={url} alt="" style={{ width: "120px", height: "120px", objectFit: "cover", borderRadius: "8px", border: "1px solid var(--color-border)" }} />
           ))}
         </div>
       )}
 
       {money && (
-        <p className="hint">
-          Progress: ₹{money.raised_amount.toLocaleString("en-IN")} / ₹{money.target_amount.toLocaleString("en-IN")} ·
-          UPI: {money.upi_id}
-        </p>
+        <div style={{ backgroundColor: "var(--color-surface)", padding: "16px", borderRadius: "8px", border: "1px solid var(--color-border)", marginBottom: "20px" }}>
+          <strong>Target Raised:</strong> ₹{money.raised_amount.toLocaleString("en-IN")} / ₹{money.target_amount.toLocaleString("en-IN")}
+          <br />
+          <strong>UPI ID:</strong> {money.upi_id}
+        </div>
       )}
       {kit && (
-        <p className="hint">
-          Progress: {kit.kits_funded} / {kit.kits_needed} kits · {kit.contents} · mode: {kit.mode}
-        </p>
+        <div style={{ backgroundColor: "var(--color-surface)", padding: "16px", borderRadius: "8px", border: "1px solid var(--color-border)", marginBottom: "20px" }}>
+          <strong>Kits Progress:</strong> {kit.kits_funded} / {kit.kits_needed} kits
+          <br />
+          <strong>Contents:</strong> {kit.contents}
+          <br />
+          <strong>Mode:</strong> {kit.mode}
+        </div>
       )}
       {blood && (
-        <p className="hint">
-          Progress: {blood.units_fulfilled} / {blood.units_needed} units · blood group: {formatGroup(blood.blood_group)}
-        </p>
+        <div style={{ backgroundColor: "var(--color-surface)", padding: "16px", borderRadius: "8px", border: "1px solid var(--color-border)", marginBottom: "20px" }}>
+          <strong>Units Progress:</strong> {blood.units_fulfilled} / {blood.units_needed} units
+          <br />
+          <strong>Blood Group Required:</strong> {formatGroup(blood.blood_group)}
+        </div>
       )}
       {mealSlot && (
-        <>
-          <p className="hint">
-            Progress: {mealSlot.slots_confirmed} / {mealSlot.slots_total} slots · {mealSlot.meal_type} · mode:{" "}
-            {mealSlot.mode}
-          </p>
-          <div className="row-actions" style={{ flexWrap: "wrap" }}>
+        <div style={{ backgroundColor: "var(--color-surface)", padding: "16px", borderRadius: "8px", border: "1px solid var(--color-border)", marginBottom: "20px" }}>
+          <strong>Slots Confirmed:</strong> {mealSlot.slots_confirmed} / {mealSlot.slots_total} slots
+          <br />
+          <strong>Meal Type:</strong> {mealSlot.meal_type} · <strong>Mode:</strong> {mealSlot.mode}
+          <div className="row-actions" style={{ flexWrap: "wrap", marginTop: "12px", gap: "8px" }}>
             {need.mealSlots.map((slot) => (
               <span key={slot.id} className={`badge status-${slot.status.toLowerCase()}`}>
                 {new Date(slot.date).toLocaleDateString()} · {slot.status}
               </span>
             ))}
           </div>
-        </>
+        </div>
       )}
       {goods && (
-        <p className="hint">
-          Item: {goods.item} · Acceptable condition: {goods.condition} · {goods.claimed ? "Claimed" : "Not yet claimed"}
-        </p>
+        <div style={{ backgroundColor: "var(--color-surface)", padding: "16px", borderRadius: "8px", border: "1px solid var(--color-border)", marginBottom: "20px" }}>
+          <strong>Item:</strong> {goods.item}
+          <br />
+          <strong>Condition Required:</strong> {goods.condition}
+          <br />
+          <strong>Status:</strong> {goods.claimed ? "Claimed" : "Not yet claimed"}
+        </div>
       )}
+
       {canInstitutionVerify && (
-        <p>
+        <div style={{ marginTop: "16px", marginBottom: "20px" }}>
           <button type="button" className="btn" onClick={handleInstitutionVerify} disabled={busy}>
             Verify this need (fast-track)
           </button>
-        </p>
+        </div>
       )}
-      {need.status === "REJECTED" && need.rejectionReason && <p className="error">Rejected: {need.rejectionReason}</p>}
-      {error && <p className="error">{error}</p>}
+
+      {need.status === "REJECTED" && need.rejectionReason && (
+        <div style={{ backgroundColor: "#fff5f5", border: "1px solid #feb2b2", padding: "16px", borderRadius: "8px", color: "#c53030", marginBottom: "20px" }}>
+          <strong>Rejected Reason:</strong> {need.rejectionReason}
+        </div>
+      )}
+
+      {error && <p className="error" style={{ marginBottom: "16px" }}>{error}</p>}
 
       <h3>Contributions awaiting your confirmation</h3>
-      {pending.length === 0 && <p className="hint">Nothing pending right now.</p>}
+      {pending.length === 0 && (
+        <div style={{ marginTop: "12px" }}>
+          <EmptyState title="No pending contributions" subtitle="All contributions to this need have been confirmed or rejected." />
+        </div>
+      )}
+      
       {pending.length > 0 && (
-        <table>
+        <table style={{ marginTop: "12px" }}>
           <thead>
             <tr>
               <th>Donor</th>
@@ -193,11 +222,11 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
           <tbody>
             {pending.map((c) => (
               <tr key={c.id}>
-                <td>{c.donor.name ?? c.donor.phone}</td>
-                <td>{formatContributionAmount(c)}</td>
+                <td style={{ fontWeight: 600 }}>{c.donor.name ?? c.donor.phone}</td>
+                <td style={{ fontWeight: 500 }}>{formatContributionAmount(c)}</td>
                 <td>{c.utr ?? "—"}</td>
                 <td>
-                  <div className="row-actions">
+                  <div className="row-actions" style={{ gap: "8px" }}>
                     <button type="button" className="btn" onClick={() => handleDecision(c.id, "confirm")} disabled={busy}>
                       Confirm
                     </button>

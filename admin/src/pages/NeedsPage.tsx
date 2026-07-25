@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAdminNeeds, rejectNeed, verifyNeed, type Need, type NeedStatus } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 
 const STATUS_FILTERS: { label: string; value: NeedStatus | "ALL" | undefined }[] = [
   { label: "Verification queue", value: undefined },
@@ -43,6 +44,18 @@ function progressLabel(need: Need): string | null {
   return null;
 }
 
+function TableSkeleton() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "20px" }}>
+      <Skeleton width="100%" height={40} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+    </div>
+  );
+}
+
 export function NeedsPage() {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -53,6 +66,7 @@ export function NeedsPage() {
 
   function load() {
     if (!token) return;
+    setError(null);
     fetchAdminNeeds(token, filter)
       .then(({ needs }) => setNeeds(needs))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load needs"));
@@ -106,57 +120,55 @@ export function NeedsPage() {
         ))}
       </div>
 
-      {error && <p className="error">{error}</p>}
-      {!needs && !error && <p className="hint">Loading…</p>}
+      {error && <ErrorState message={error} onRetry={load} />}
+      {!error && !needs && <TableSkeleton />}
+      {!error && needs && needs.length === 0 && (
+        <EmptyState title="No needs found" subtitle="Needs matching this status filter will show up here." />
+      )}
 
-      <table>
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Posted by</th>
-            <th>Progress</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {needs?.map((n) => (
-            <tr key={n.id}>
-              <td>
-                <button type="button" className="link-cell" onClick={() => navigate(`/needs/${n.id}`)}>
-                  {n.title}
-                </button>
-              </td>
-              <td>{n.type}</td>
-              <td>
-                <span className={`badge status-${n.status.toLowerCase()}`}>{n.status.replace("_", " ")}</span>
-              </td>
-              <td>{n.postedBy.name ?? n.postedBy.phone ?? "—"}</td>
-              <td>{progressLabel(n) ?? "—"}</td>
-              <td>
-                {n.status === "PENDING_VERIFICATION" && (
-                  <div className="row-actions">
-                    <button type="button" className="link" onClick={() => handleVerify(n.id)} disabled={busyId === n.id}>
-                      Verify
-                    </button>
-                    <button type="button" className="link danger" onClick={() => handleReject(n.id)} disabled={busyId === n.id}>
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
-          {needs && needs.length === 0 && (
+      {!error && needs && needs.length > 0 && (
+        <table>
+          <thead>
             <tr>
-              <td colSpan={6} className="hint">
-                Nothing here.
-              </td>
+              <th>Title</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Posted by</th>
+              <th>Progress</th>
+              <th />
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {needs.map((n) => (
+              <tr key={n.id}>
+                <td>
+                  <button type="button" className="link-cell" onClick={() => navigate(`/needs/${n.id}`)} style={{ fontWeight: 600 }}>
+                    {n.title}
+                  </button>
+                </td>
+                <td style={{ fontWeight: 500 }}>{n.type}</td>
+                <td>
+                  <span className={`badge status-${n.status.toLowerCase()}`}>{n.status.replace("_", " ")}</span>
+                </td>
+                <td>{n.postedBy.name ?? n.postedBy.phone ?? "—"}</td>
+                <td style={{ fontWeight: 500 }}>{progressLabel(n) ?? "—"}</td>
+                <td>
+                  {n.status === "PENDING_VERIFICATION" && (
+                    <div className="row-actions">
+                      <button type="button" className="link" onClick={() => handleVerify(n.id)} disabled={busyId === n.id}>
+                        Verify
+                      </button>
+                      <button type="button" className="link danger" onClick={() => handleReject(n.id)} disabled={busyId === n.id}>
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

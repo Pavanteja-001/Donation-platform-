@@ -1,6 +1,17 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createStaff, deleteStaff, fetchStaff, type StaffAccount } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { EmptyState, ErrorState, Skeleton, Button, Input } from "../components/ui";
+
+function TableSkeleton() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "20px" }}>
+      <Skeleton width="100%" height={40} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
+    </div>
+  );
+}
 
 // ADMIN-only page (see App.tsx nav gating) — manage Staff logins per D-018.
 export function StaffPage() {
@@ -55,58 +66,60 @@ export function StaffPage() {
         or override confirmed donations (D-018).
       </p>
 
-      <form className="inline-form" onSubmit={handleCreate}>
-        <input
+      <form className="inline-form" onSubmit={handleCreate} style={{ display: "flex", gap: "16px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "24px", marginTop: "16px" }}>
+        <Input
+          label="Phone number"
           type="tel"
-          placeholder="Phone number"
+          placeholder="e.g. +919999999999"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           required
+          style={{ width: "240px" }}
         />
-        <input
+        <Input
+          label="Full Name"
           type="text"
-          placeholder="Name"
+          placeholder="e.g. Ramesh Kumar"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
+          style={{ width: "240px" }}
         />
-        <button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Adding…" : "Add staff"}
-        </button>
+        <Button type="submit" label={isSubmitting ? "Adding…" : "Add staff"} loading={isSubmitting} style={{ height: "40px" }} />
       </form>
-      {error && <p className="error">{error}</p>}
 
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Phone</th>
-            <th>Added</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {staff?.map((s) => (
-            <tr key={s.id}>
-              <td>{s.name ?? "—"}</td>
-              <td>{s.phone}</td>
-              <td>{new Date(s.createdAt).toLocaleDateString()}</td>
-              <td>
-                <button type="button" className="link danger" onClick={() => handleDelete(s.id)}>
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
-          {staff && staff.length === 0 && (
+      {error && <ErrorState message={error} onRetry={load} />}
+      {!error && !staff && <TableSkeleton />}
+      {!error && staff && staff.length === 0 && (
+        <EmptyState title="No staff accounts yet" subtitle="Created staff logins will show up here." />
+      )}
+
+      {!error && staff && staff.length > 0 && (
+        <table>
+          <thead>
             <tr>
-              <td colSpan={4} className="hint">
-                No staff accounts yet.
-              </td>
+              <th>Name</th>
+              <th>Phone</th>
+              <th>Added</th>
+              <th />
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {staff.map((s) => (
+              <tr key={s.id}>
+                <td style={{ fontWeight: 600 }}>{s.name ?? "—"}</td>
+                <td>{s.phone}</td>
+                <td>{new Date(s.createdAt).toLocaleDateString()}</td>
+                <td>
+                  <button type="button" className="link danger" onClick={() => handleDelete(s.id)}>
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

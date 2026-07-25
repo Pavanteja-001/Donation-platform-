@@ -159,7 +159,7 @@ dev behavior (D-015) untouched; `.env` stays untracked.
   `PENDING_CONFIRMATION` contribution per (donor, need) — closes the BLOOD/GOODS double-tap gap.
   Frontend: disabled/"already responded" button state; shared API-error wrapper (401/403/409/
   network blips) with friendly messages everywhere; real inline form validation.
-- [ ] **Chunk 7 — Screen-by-screen visual polish.** Bring every screen to the Appendix A bar
+- [x] **Chunk 7 — Screen-by-screen visual polish.** Bring every screen to the Appendix A bar
   (skeletons, empty/error states, professional cards, accessible tap targets, motion) — mobile
   first, one surface at a time, updating PROGRESS.md between surfaces.
 
