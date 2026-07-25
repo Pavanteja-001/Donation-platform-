@@ -1,9 +1,18 @@
 import { useState, type FormEvent } from "react";
 import { requestOtp, verifyOtp, updateMe, signUpload, uploadToSignedUrl, type InstitutionType, type KycStatus } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { Button } from "../components/ui";
+import { Button, Input } from "../components/ui";
 
 type Step = "phone" | "otp" | "profile" | "documents";
+
+// Normalise to 10 digits — strips leading +91/91 prefix if the user pastes a full number.
+function normalise(raw: string): string {
+  let s = raw.trim();
+  if (s.startsWith("+91")) s = s.slice(3);
+  else if (s.startsWith("91") && s.length > 10) s = s.slice(2);
+  return s.replace(/\D/g, "").slice(0, 10);
+}
+
 
 export function LoginPage() {
   const { signIn } = useAuth();
@@ -31,10 +40,13 @@ export function LoginPage() {
 
   async function handleRequestOtp(e: FormEvent) {
     e.preventDefault();
+    if (phone.length !== 10) {
+      return setError("Enter a valid 10-digit mobile number");
+    }
     setError(null);
     setIsSubmitting(true);
     try {
-      await requestOtp(phone);
+      await requestOtp("+91" + phone);
       setStep("otp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -45,10 +57,13 @@ export function LoginPage() {
 
   async function handleVerifyOtp(e: FormEvent) {
     e.preventDefault();
+    if (code.length !== 6) {
+      return setError("Enter a valid 6-digit code");
+    }
     setError(null);
     setIsSubmitting(true);
     try {
-      const { token, user } = await verifyOtp(phone, code, name || undefined);
+      const { token, user } = await verifyOtp("+91" + phone, code, name || undefined);
       
       // If the user hasn't submitted KYC, direct them to KYC steps first
       if (!user.kycStatus || user.kycStatus === "NOT_SUBMITTED") {
@@ -131,17 +146,17 @@ export function LoginPage() {
 
         {step === "phone" && (
           <form onSubmit={handleRequestOtp}>
-            <label>
-              Phone number
-              <input
-                type="tel"
-                placeholder="+919876543210"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
-            </label>
-            <label>
+            <Input
+              label="Phone number"
+              type="tel"
+              placeholder="98765 43210"
+              maxLength={10}
+              value={phone}
+              onChange={(e) => setPhone(normalise(e.target.value))}
+              prefix="+91"
+              required
+            />
+            <label style={{ display: "block", marginTop: "16px" }}>
               Institution contact name
               <input
                 type="text"
@@ -150,29 +165,32 @@ export function LoginPage() {
                 onChange={(e) => setName(e.target.value)}
               />
             </label>
-            {error && <p className="error">{error}</p>}
-            <Button type="submit" label="Send OTP" disabled={!phone} loading={isSubmitting} />
+            {error && <p className="error" style={{ marginTop: "16px" }}>{error}</p>}
+            <Button type="submit" label="Send OTP" disabled={phone.length < 10} loading={isSubmitting} style={{ width: "100%", marginTop: "16px" }} />
           </form>
         )}
 
         {step === "otp" && (
           <form onSubmit={handleVerifyOtp}>
-            <p className="hint">Enter the code sent to {phone}</p>
-            <label>
-              OTP code
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                required
-              />
-            </label>
-            {import.meta.env.DEV && <p className="dev-hint">Dev build: the OTP is always 123456 (D-015).</p>}
-            {error && <p className="error">{error}</p>}
-            <Button type="submit" label="Verify & continue" disabled={!code} loading={isSubmitting} />
-            <button type="button" className="link" onClick={() => setStep("phone")}>
+            <p className="hint" style={{ marginBottom: "16px" }}>Enter the code sent to +91 {phone}</p>
+            <Input
+              label="OTP code"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              required
+            />
+            {import.meta.env.DEV && <p className="dev-hint" style={{ marginTop: "8px", marginBottom: "16px" }}>Dev build: the OTP is always 123456 (D-015).</p>}
+            {error && <p className="error" style={{ marginBottom: "16px" }}>{error}</p>}
+            <Button type="submit" label="Verify & continue" disabled={code.length < 6} loading={isSubmitting} style={{ width: "100%" }} />
+            <button
+              type="button"
+              className="link"
+              onClick={() => setStep("phone")}
+              style={{ marginTop: "16px", display: "block", marginLeft: "auto", marginRight: "auto" }}
+            >
               Change phone number
             </button>
           </form>

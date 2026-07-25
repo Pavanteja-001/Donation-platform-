@@ -65,6 +65,10 @@ model User {
   name  String?
   role  Role    @default(USER)
 
+  // Profile photo — uploaded by the user via signed URL (D-021). Optional; falls back to initials avatar.
+  profilePhotoUrl String?
+
+
   // Permanent ("go-to") location captured at registration — basis for notifications (D-010).
   // No real-time GPS / live tracking.
   city String?

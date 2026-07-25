@@ -24,6 +24,7 @@ export interface AuthUser {
   role: Role;
   city: string | null;
   area: string | null;
+  profilePhotoUrl: string | null;
   // PRD §8.1 — blood donor profile, opt-in, all nullable until filled in.
   bloodGroup: BloodGroup | null;
   dateOfBirth: string | null;
@@ -237,6 +238,7 @@ export function updateMe(
     email: string | null;
     city: string;
     area: string;
+    profilePhotoUrl: string | null;
     bloodGroup: BloodGroup;
     dateOfBirth: string;
     gender: Gender;
@@ -427,7 +429,7 @@ export function bookMealSlot(
 
 // Object storage (CLAUDE.md §6 / D-011): the backend only signs a short-lived upload URL — the
 // client uploads the file bytes straight to the bucket, never through the backend.
-export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr") {
+export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr" | "kyc-docs" | "profile-photos") {
   return request<{ uploadUrl: string; publicUrl: string; key: string }>("/api/uploads/sign", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
@@ -555,4 +557,10 @@ export function rejectContribution(token: string, contributionId: string) {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
+}
+
+export async function uploadProfilePhoto(token: string, fileUri: string, contentType: string): Promise<string> {
+  const signed = await signUpload(token, contentType, "profile-photos");
+  await uploadToSignedUrl(signed.uploadUrl, fileUri, contentType);
+  return signed.publicUrl;
 }

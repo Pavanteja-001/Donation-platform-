@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { theme } from "../../lib/theme";
 
 function initialsFrom(name: string | null | undefined): string {
@@ -9,9 +9,24 @@ function initialsFrom(name: string | null | undefined): string {
   return (first + last).toUpperCase() || "?";
 }
 
-// PRD Appendix A.4 — a plain initials avatar. No photo-upload-for-profile feature exists yet, so
-// this is deliberately image-less rather than building an unused image slot.
-export function Avatar({ name, size = 40 }: { name: string | null | undefined; size?: number }) {
+// PRD Appendix A.4 — shows profile photo when available, falls back to initials circle.
+export function Avatar({
+  name,
+  photoUrl,
+  size = 40,
+}: {
+  name: string | null | undefined;
+  photoUrl?: string | null;
+  size?: number;
+}) {
+  if (photoUrl) {
+    return (
+      <Image
+        source={{ uri: photoUrl }}
+        style={[styles.circle, { width: size, height: size, borderRadius: size / 2 }]}
+      />
+    );
+  }
   return (
     <View style={[styles.circle, { width: size, height: size, borderRadius: size / 2 }]}>
       <Text style={[styles.initials, { fontSize: size * 0.4 }]}>{initialsFrom(name)}</Text>
@@ -24,6 +39,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.primary,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   initials: { color: theme.color.onPrimary, fontWeight: "700" },
 });

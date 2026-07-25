@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { Avatar, Badge, Button, Card } from "../components/ui";
-import { updateMe } from "../lib/api";
+import { updateMe, uploadProfilePhoto } from "../lib/api";
 import type { AppNavigationProp } from "../navigation/types";
 
 const TIER_LABEL: Record<string, string> = { BRONZE: "Bronze", SILVER: "Silver", GOLD: "Gold" };
@@ -13,6 +14,7 @@ export function ProfileScreen() {
   const { token, user, trustTierInfo, refreshUser, signOut } = useAuth();
   const navigation = useNavigation<AppNavigationProp>();
   const [isToggling, setIsToggling] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const handleToggleAvailability = async (value: boolean) => {
     if (!token) return;
@@ -24,6 +26,34 @@ export function ProfileScreen() {
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to update availability");
     } finally {
       setIsToggling(false);
+    }
+  };
+
+  const handlePickPhoto = async () => {
+    if (!token) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Allow photo library access to change your profile picture.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    const contentType = asset.mimeType ?? "image/jpeg";
+    setIsUploadingPhoto(true);
+    try {
+      const publicUrl = await uploadProfilePhoto(token, asset.uri, contentType);
+      await updateMe(token, { profilePhotoUrl: publicUrl });
+      await refreshUser();
+    } catch (err) {
+      Alert.alert("Upload failed", err instanceof Error ? err.message : "Could not upload photo");
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
@@ -41,7 +71,12 @@ export function ProfileScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card elevated style={styles.identityCard}>
         <View style={styles.identityRow}>
-          <Avatar name={user?.name} size={56} />
+          <Pressable onPress={handlePickPhoto} disabled={isUploadingPhoto} style={styles.avatarWrap}>
+            <Avatar name={user?.name} photoUrl={user?.profilePhotoUrl} size={64} />
+            <View style={styles.cameraOverlay}>
+              <Text style={styles.cameraIcon}>{isUploadingPhoto ? "…" : "✎"}</Text>
+            </View>
+          </Pressable>
           <View style={styles.identityText}>
             <Text style={styles.name}>{user?.name ?? "No name yet"}</Text>
             <Text style={styles.meta}>
@@ -126,6 +161,21 @@ const styles = StyleSheet.create({
   content: { padding: theme.spacing.lg },
   identityCard: { marginBottom: theme.spacing.md },
   identityRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md },
+  avatarWrap: { position: "relative" },
+  cameraOverlay: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: theme.color.primary,
+    borderWidth: 2,
+    borderColor: theme.color.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cameraIcon: { fontSize: 10, color: theme.color.onPrimary, fontWeight: "700" },
   identityText: { flex: 1 },
   name: { ...theme.typography.h2, color: theme.color.textPrimary },
   meta: { ...theme.typography.caption, color: theme.color.textSecondary, marginTop: 2 },

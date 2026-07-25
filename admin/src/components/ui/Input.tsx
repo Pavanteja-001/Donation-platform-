@@ -1,17 +1,29 @@
 import type { InputHTMLAttributes } from "react";
 
-// PRD Appendix A.4 — labeled input with an inline error slot, so real form validation (Chunk 6)
-// has one place to render into. Existing forms' plain `<label>text<input/></label>` pattern
-// keeps working (same CSS) — this just adds the error affordance nothing had before.
+// PRD Appendix A.4 — labeled input with prefix and error slot support.
 export function Input({
   label,
+  prefix,
   error,
   ...rest
-}: { label: string; error?: string } & Omit<InputHTMLAttributes<HTMLInputElement>, "children">) {
+}: { label: string; prefix?: string; error?: string } & Omit<InputHTMLAttributes<HTMLInputElement>, "children">) {
   return (
     <label>
       {label}
-      <input {...rest} />
+      <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
+        {prefix && (
+          <span style={{
+            fontSize: "15px",
+            fontWeight: 600,
+            color: "var(--color-text-secondary)",
+            marginRight: "8px",
+            userSelect: "none"
+          }}>
+            {prefix}
+          </span>
+        )}
+        <input {...rest} style={{ flex: 1, ...rest.style }} />
+      </div>
       {error && <p className="field-error">{error}</p>}
     </label>
   );

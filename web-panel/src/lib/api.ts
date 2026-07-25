@@ -12,6 +12,7 @@ export interface AuthUser {
   email?: string | null;
   city?: string | null;
   area?: string | null;
+  profilePhotoUrl?: string | null;
   institutionType?: InstitutionType | null;
   legalName?: string | null;
   registrationNumber?: string | null;
@@ -198,6 +199,7 @@ export function updateMe(
     email: string | null;
     city: string;
     area: string;
+    profilePhotoUrl: string | null;
     institutionType: InstitutionType;
     legalName: string;
     registrationNumber: string;
@@ -403,7 +405,7 @@ export function setNeedUrgency(token: string, needId: string, urgency: Urgency) 
 
 // Object storage (CLAUDE.md §6 / D-021): the backend only signs a short-lived upload URL — the
 // client uploads the file bytes straight to the bucket, never through the backend.
-export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr" | "kyc-docs") {
+export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr" | "kyc-docs" | "profile-photos") {
   return request<{ uploadUrl: string; publicUrl: string; key: string }>("/api/uploads/sign", {
     method: "POST",
     headers: authHeaders(token),
@@ -416,6 +418,13 @@ export async function uploadToSignedUrl(uploadUrl: string, file: File): Promise<
   if (!res.ok) {
     throw new Error(`Upload failed (${res.status})`);
   }
+}
+
+// Upload a single profile photo and return its public URL.
+export async function uploadProfilePhoto(token: string, file: File): Promise<string> {
+  const signed = await signUpload(token, file.type, "profile-photos");
+  await uploadToSignedUrl(signed.uploadUrl, file);
+  return signed.publicUrl;
 }
 
 // Signs + uploads each file in sequence and returns their public URLs, ready to pass as

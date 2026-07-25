@@ -103,6 +103,9 @@ const updateMeSchema = z.object({
   kycDocumentUrl: z.string().url("Enter a valid URL").optional(),
   kycPhotos: z.array(z.string()).optional(),
   kycStatus: z.nativeEnum(KycStatus).optional(),
+
+  // Profile photo (any role)
+  profilePhotoUrl: z.string().url("Enter a valid URL").optional().nullable(),
 });
 
 router.patch("/me", requireAuth, async (req, res) => {
