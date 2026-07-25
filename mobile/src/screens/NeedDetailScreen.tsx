@@ -35,9 +35,12 @@ import {
 } from "../lib/api";
 import { buildUpiDeepLink } from "../lib/upi";
 import { useAuth } from "../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
+import { isProfileComplete } from "../lib/profile";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "../components/ProgressBar";
 import { ErrorState } from "../components/ui";
+
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -82,6 +85,7 @@ const FUNDABLE: Need["status"][] = ["LIVE", "PARTIALLY_FULFILLED"];
 
 export function NeedDetailScreen({ needId }: { needId: string }) {
   const { token, user, bloodEligibility } = useAuth();
+  const navigation = useNavigation<any>();
   const [need, setNeed] = useState<Need | null>(null);
   const [contributions, setContributions] = useState<Contribution[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -284,10 +288,19 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
     }
   }
 
-  // PRD §8.5.1 — "I can donate." A pledge, not a payment; responding is itself the donor's
-  // consent to share their response with the beneficiary/institution.
   async function handleRespond() {
     if (!token) return;
+    if (!isProfileComplete(user)) {
+      Alert.alert(
+        "Complete Profile",
+        "Responding to blood requests requires a completed profile (Full name, DOB, gender, blood group, city and area).",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Complete Profile", onPress: () => navigation.navigate("Register", { isSkippable: true }) },
+        ]
+      );
+      return;
+    }
     setIsResponding(true);
     try {
       await respondToBloodNeed(token, needId);

@@ -1,4 +1,4 @@
-import { StyleSheet, TouchableOpacity } from "react-native";
+import { Alert, StyleSheet, TouchableOpacity } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,8 @@ import { MyNeedsScreen } from "../screens/MyNeedsScreen";
 import { MyContributionsScreen } from "../screens/MyContributionsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { theme } from "../lib/theme";
+import { useAuth } from "../context/AuthContext";
+import { isProfileComplete } from "../lib/profile";
 import type { AppNavigationProp, TabParamList } from "./types";
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -23,9 +25,26 @@ const TAB_ICON: Record<keyof TabParamList, keyof typeof Ionicons.glyphMap> = {
 // searching up to the parent root stack, same as every other cross-navigator navigate() call in
 // this file (React Navigation's normal route-resolution behavior, not a hack specific to this).
 function CreateNeedButton() {
+  const { user } = useAuth();
   const navigation = useNavigation<AppNavigationProp>();
+
+  const handlePress = () => {
+    if (!isProfileComplete(user)) {
+      Alert.alert(
+        "Complete Profile",
+        "Posting a need requires a completed profile details (Full name, DOB, gender, blood group, city and area).",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Complete Profile", onPress: () => navigation.navigate("Register", { isSkippable: true }) },
+        ]
+      );
+    } else {
+      navigation.navigate("CreateNeedChooser");
+    }
+  };
+
   return (
-    <TouchableOpacity onPress={() => navigation.navigate("CreateNeedChooser")} style={styles.headerButton}>
+    <TouchableOpacity onPress={handlePress} style={styles.headerButton}>
       <Ionicons name="add-circle" size={26} color={theme.color.primary} />
     </TouchableOpacity>
   );

@@ -22,6 +22,7 @@ export type RootStackParamList = {
   CreateGoods: undefined;
   Certificate: { contributionId: string };
   BloodProfile: undefined;
+  Register: { isSkippable?: boolean } | undefined;
 };
 
 // Tab screens need to push root-stack screens (e.g. Home -> NeedDetail) — NeedDetail isn't a tab

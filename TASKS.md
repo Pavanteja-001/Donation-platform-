@@ -146,7 +146,7 @@ dev behavior (D-015) untouched; `.env` stays untracked.
 - [x] **Chunk 2 — Navigation.** Mobile: React Navigation (native-stack + bottom-tabs), replacing
   HomeScreen's local view-switching. Web-panel: `react-router-dom` + sidebar layout. Admin:
   `react-router-dom` + sidebar (incl. a new Institutions nav item for Chunk 5).
-- [ ] **Chunk 3 — Donor registration & profile (mobile).** Post-OTP registration step
+- [x] **Chunk 3 — Donor registration & profile (mobile).** Post-OTP registration step
   (name/email/DOB/gender/blood group/permanent city+area, D-010); Profile tab; gate need-posting
   and blood-respond on a completed profile.
 - [ ] **Chunk 4 — Institution registration + KYC (web-panel), D-007.** Multi-step registration

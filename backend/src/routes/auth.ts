@@ -84,6 +84,7 @@ router.get("/me", requireAuth, async (req, res) => {
 // for urgency. It's only ever set by the backend when a BLOOD contribution is confirmed (§8.5).
 const updateMeSchema = z.object({
   name: z.string().min(1).optional(),
+  email: z.string().email("Enter a valid email address").optional().nullable(),
   city: z.string().min(1).optional(),
   area: z.string().min(1).optional(),
   bloodGroup: z.nativeEnum(BloodGroup).optional(),

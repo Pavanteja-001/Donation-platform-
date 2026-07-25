@@ -19,8 +19,11 @@ export type Gender = "MALE" | "FEMALE" | "OTHER";
 export interface AuthUser {
   id: string;
   phone: string;
+  email: string | null;
   name: string | null;
   role: Role;
+  city: string | null;
+  area: string | null;
   // PRD §8.1 — blood donor profile, opt-in, all nullable until filled in.
   bloodGroup: BloodGroup | null;
   dateOfBirth: string | null;
@@ -213,6 +216,7 @@ export function updateMe(
   token: string,
   data: Partial<{
     name: string;
+    email: string | null;
     city: string;
     area: string;
     bloodGroup: BloodGroup;

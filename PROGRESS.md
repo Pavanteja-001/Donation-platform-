@@ -5,6 +5,35 @@
 
 ---
 
+### Session 23 — Milestone 9 Chunk 3: Donor registration & profile (mobile)
+This session implemented Chunk 3 - Donor registration & profile details on the mobile client. We added a full profile setup onboarding screen, updated the profile display tab, and integrated completeness gates for need posting and blood responses.
+
+**What was done:**
+1. **Backend Enhancements:**
+   - Modified `backend/prisma/schema.prisma` to add an optional `email` field to the `User` model, and successfully synced the database via `npx prisma db push`.
+   - Updated the `updateMeSchema` validation in `backend/src/routes/auth.ts` to support optional email inputs, verifying it compiles cleanly.
+
+2. **Mobile Client - API & Navigation:**
+   - Updated `AuthUser` interface in `mobile/src/lib/api.ts` to include `email`, `city`, and `area` fields.
+   - Updated `updateMe` type definitions to accept the `email` field.
+   - Declared `Register` screen in `RootStackParamList` in `mobile/src/navigation/types.ts`.
+   - Configured `RootNavigator.tsx` stack with a conditional `initialRouteName` which routes users immediately to the `Register` onboarding step if their profile is incomplete.
+
+3. **Mobile Client - Onboarding Form & Profile Tab:**
+   - Implemented `isProfileComplete` helper in `mobile/src/lib/profile.ts` which asserts that Name, DOB, Gender, Blood group, City, and Area are non-empty.
+   - Created the onboarding registration screen `mobile/src/screens/RegisterScreen.tsx` collecting Name, Email (optional), DOB (with YYYY-MM-DD validation), permanent City and Area, Gender, and Blood group (reusing custom Chip components for consistency with the design system).
+   - Fully refactored `mobile/src/screens/ProfileScreen.tsx` to display all profile details, a live Switch toggle for `availableToDonate` availability, a button navigating to edit mode on the registration form, and a link routing to contributions history.
+
+4. **Action Gating:**
+   - Gated "Post a Need" (CreateNeedButton in `TabNavigator.tsx`) behind `isProfileComplete`. Tapping it while incomplete alerts the user and guides them to the registration screen.
+   - Gated "I can donate" blood responses in `NeedDetailScreen.tsx` behind the same completeness check, preventing incomplete users from pledging blood.
+
+5. **Build Verification:**
+   - Verified that `npx tsc --noEmit` and `npx expo export` bundle cleanly for Android and iOS on `mobile` (1084 modules, 0 compilation issues).
+   - Re-verified web-panel, admin, and backend builds remain fully green.
+
+**Next:** Milestone 9 Chunk 4 — Institution registration & KYC (web-panel), replacing self-registration with a multi-step org profile + document upload verification flow.
+
 ### Session 22 — Milestone 9 Chunk 2: Navigation (Web-panel & Admin)
 This session focused on Chunk 2 - routing and navigation. We migrated both the Web Panel and the Admin Console from state-switching to real path-based routing via `react-router-dom`, standing up a persistent sidebar layout for both.
 

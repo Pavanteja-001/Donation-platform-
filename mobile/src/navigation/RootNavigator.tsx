@@ -9,7 +9,10 @@ import { CreateMealSlotNeedScreen } from "../screens/CreateMealSlotNeedScreen";
 import { CreateGoodsNeedScreen } from "../screens/CreateGoodsNeedScreen";
 import { CertificateScreen } from "../screens/CertificateScreen";
 import { BloodProfileScreen } from "../screens/BloodProfileScreen";
+import { RegisterScreen } from "../screens/RegisterScreen";
 import { theme } from "../lib/theme";
+import { useAuth } from "../context/AuthContext";
+import { isProfileComplete } from "../lib/profile";
 import type { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -43,13 +46,23 @@ function CertificateRoute({ route }: Props<"Certificate">) {
 function BloodProfileRoute({ navigation }: Props<"BloodProfile">) {
   return <BloodProfileScreen onBack={() => navigation.goBack()} />;
 }
+function RegisterRoute({ navigation, route }: Props<"Register">) {
+  const isSkippable = route.params?.isSkippable ?? true;
+  return <RegisterScreen isSkippable={isSkippable} onDone={() => navigation.navigate("Tabs")} />;
+}
 
-// Chunk 2 (Milestone 9) — the root stack: the tab navigator as one entry, every "pushed" screen
-// (detail/create/certificate/blood-profile) as siblings so they slide over the tabs with a real
-// native header + back button no matter which tab they were opened from.
+// Chunk 2 & 3 (Milestone 9) — the root stack: conditional initialRouteName based on profile completeness,
+// containing the TabNavigator, detail/create/certificate/blood-profile/Register screens.
 export function RootNavigator() {
+  const { user } = useAuth();
+  const profileComplete = isProfileComplete(user);
+
   return (
-    <Stack.Navigator screenOptions={{ headerTitleStyle: theme.typography.h2, headerTintColor: theme.color.primary }}>
+    <Stack.Navigator
+      initialRouteName={profileComplete ? "Tabs" : "Register"}
+      screenOptions={{ headerTitleStyle: theme.typography.h2, headerTintColor: theme.color.primary }}
+    >
+      <Stack.Screen name="Register" component={RegisterRoute} options={{ title: "Register Profile", headerShown: false }} />
       <Stack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="NeedDetail" component={NeedDetailRoute} options={{ title: "Need" }} />
       <Stack.Screen name="CreateNeedChooser" component={CreateNeedChooserScreen} options={{ title: "Post a need" }} />
