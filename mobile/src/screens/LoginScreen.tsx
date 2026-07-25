@@ -41,8 +41,8 @@ export function LoginScreen() {
     setError(null);
     setIsSubmitting(true);
     try {
-      const { token, user } = await verifyOtp(phone, code, name || undefined);
-      await signIn(token, user);
+      const { token, user, bloodEligibility } = await verifyOtp(phone, code, name || undefined);
+      await signIn(token, user, bloodEligibility);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Incorrect or expired OTP");
     } finally {

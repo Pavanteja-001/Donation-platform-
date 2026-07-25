@@ -5,6 +5,239 @@
 
 ---
 
+### Session 17 — Milestone 4: Blood module (backend + all three frontends)
+User asked for full kickoff of Milestone 4 per TASKS.md: PRD §8 first, then backend, then wire
+all three frontends. Also folded in a mid-session ask ("admin can also post require kits...
+blood like this also") by making sure Admin's posting UI covers Blood too, not just Money/Kit.
+
+**PRD:** Wrote §8 (donor blood profile, eligibility computation, BLOOD Need payload/urgency/
+linked-institution reuse, matching+notifications, respond→connect→confirm, privacy). Caught and
+fixed my own wording bug before implementing: first draft said institution+admin verification
+were both required, which contradicts D-008's actual fast-track intent (either alone is
+sufficient) — corrected in the PRD before writing code against it.
+
+**Backend (full Blood module):**
+- Schema: `BloodGroup`/`Gender` enums, User blood fields (`bloodGroup`, `dateOfBirth`, `gender`,
+  `lastDonationDate`, `availableToDonate`, `expoPushToken`), `Contribution.units`,
+  `ContributionKind.BLOOD`.
+- `bloodEligibility.ts` (age 18–65, 90/120-day gap rules), `bloodNeed.ts` (payload schema),
+  `pushNotifications.ts` (Expo push, best-effort/non-blocking), `bloodMatching.ts` (coarse DB
+  query + eligibility filter + push, triggered on institution/admin verify and EMERGENCY
+  escalation).
+- New endpoints: `PATCH /api/auth/me` (profile self-edit, deliberately excludes
+  `lastDonationDate` — anti-gaming), `POST /api/needs/:id/institution-verify` (D-008 fast-track),
+  `POST /api/needs/:id/urgency` (closed a real gap — **no endpoint existed anywhere** to set
+  urgency, so every need was permanently stuck at NORMAL despite D-012 correctly blocking
+  self-declaration in create/update).
+- Two robustness fixes found while testing, not requested but real: (1) `/otp/verify` returned
+  only 4 hand-picked fields while `/me` returned the full user — meant `bloodGroup` etc. were
+  `undefined` right after login despite being typed as nullable-not-undefined; made both return
+  the full user object. (2) A dropped DB connection during a request crashed the **entire**
+  process, not just that request, because Express 4 doesn't catch async handler rejections —
+  added `express-async-errors` + a global error middleware.
+- Infra fix: `prisma migrate dev` was reliably failing with P1001 against Railway's proxy
+  specifically during **shadow-database creation** (isolated by comparing `migrate status`,
+  which doesn't need a shadow DB and always worked, against `migrate dev`, which always failed).
+  Fixed by pointing `shadowDatabaseUrl` at a local Postgres db — now permanent architecture,
+  documented in `schema.prisma` and `.env.example`.
+- Curl-tested the full loop end-to-end after all frontend wiring was done too (not just once
+  early): donor profile → institution posts+self-verifies BLOOD need (fast-track, LIVE) → donor
+  responds (units) → institution confirms → need reaches `PARTIALLY_FULFILLED` with correct
+  `units_fulfilled` → donor's `lastDonationDate` resets transactionally on confirm.
+
+**Mobile:** `BloodProfileScreen`, `CreateBloodNeedScreen` (blood-group chips deliberately use
+`theme.color.primary`, not `danger` — caught myself reusing red for a plain selection state,
+which violates PRD Appendix A's "red reserved for urgency/emergency only" rule), respond flow in
+`NeedDetailScreen` (shows `bloodEligibility` reasons if the donor isn't eligible), Expo push
+registration wired into `HomeScreen`. Fixed a real display bug along the way: the old amount
+ternary in `NeedDetailScreen` only handled KIT vs MONEY, so a BLOOD contribution would've
+rendered "₹undefined" — added a proper kind-aware formatter.
+
+**Web-panel:** `CreateBloodNeedPage.tsx` (auto-links the posting institution as
+`linkedInstitutionId`, since it's the natural fast-track-verify candidate), institution-verify
+button in `NeedDetailPage.tsx` (shown only when the logged-in institution's id matches
+`linkedInstitutionId` and the need is still `PENDING_VERIFICATION`), blood progress display,
+same kind-aware contribution-amount fix as mobile applied here too.
+
+**Admin:** blood-aware `NeedsPage`/`NeedDetailPage` (progress column, kind-aware contribution
+amounts), a new urgency control on `NeedDetailPage` (admin/staff can set NORMAL/URGENT/EMERGENCY
+on any non-terminal need — this is the UI for the urgency-gap fix above), and Blood added as a
+third option in `PostNeedPage`/`CreateBloodNeedPage` per the user's explicit "blood like this
+also" — admin-posted blood needs don't set `linkedInstitutionId` (that's only meaningful for an
+institution's own self-verify fast-track, doesn't apply to an admin posting on someone's behalf).
+
+**Verified:** `tsc -b`/`vite build` clean on both web-panel and admin; `tsc --noEmit` clean +
+`expo export` clean on mobile; backend `tsc` clean; full end-to-end curl smoke test (above)
+re-run fresh *after* all frontend changes to confirm nothing broke. `.env` confirmed untracked
+in git (standing check, done every session).
+
+**Not done:** post-donation certificates (Milestone 7's job, not blood-specific) and a proper
+consent gate before sharing donor contact details with a beneficiary (today it's the same
+"confirm reveals donor info" behavior as every other contribution kind — flagged in TASKS.md,
+not built, wasn't asked for this session). TASKS.md Milestone 4 checkboxes updated to match.
+
+**Next:** Milestone 5 — Meal-slot booking (PRD §10 first), per TASKS.md, unless the user directs
+otherwise.
+
+---
+
+### Session 16 — Admin "Post a need" (money + kit + photos)
+Direct follow-on from Session 15's finding: "admin can technically post via the API but there's
+no UI for it — flagged, not built." User explicitly asked for that UI this session.
+
+**Done:**
+- **Verified first, built second**: before touching the UI, curl-confirmed an admin-posted KIT
+  need submits, **self-verifies** (same admin verifying their own posting — no restriction
+  against that), goes `LIVE` with `postedBy.role: ADMIN`, appears in the exact public-feed query
+  mobile uses, and accepts a real donor contribution — the whole loop, not just "the POST call
+  succeeds" (which was as far as Session 15's check went).
+- Admin gained the same object-storage client + `postMoneyNeed`/`postKitNeed` + `PhotoPicker`
+  web-panel already had (copied/adapted, same pattern).
+- New **`PostNeedPage`** (chooser → `CreateMoneyNeedPage`/`CreateKitNeedPage`, both new to admin,
+  near-identical to web-panel's) wired as a new **"Post a need" tab** in `App.tsx`.
+- **Deliberate scoping decision**: restricted the tab to `ADMIN`, not `ADMIN`+`STAFF` — D-018
+  already draws a clean line (Staff = verify/accept + list users only), and posting on behalf of
+  someone is a new capability, not a variant of an existing Staff one, so it stays on the Admin
+  side of that line. The backend itself enforces nothing here (`POST /api/needs` has no role
+  check at all) — confirmed with a direct curl call using a Staff token, which succeeded (201).
+  This is a **UI-layer** scoping choice, documented as such in both `admin/README.md` and the
+  code comment, not a backend restriction that was added.
+- Full UI-flow simulation via curl (sign → upload → create-with-photo → submit → appears in
+  queue → verify): all steps matched what the new `CreateMoneyNeedPage` component actually calls.
+- `tsc -b`/`vite build` clean (27 modules, up from 23 at the start of Session 15).
+
+**Not done / caveat:** No simulator/browser to see the actual tab render — same standing caveat.
+The "self-verification" pattern (admin verifying their own posting) works but has no UI nudge or
+warning about it — not asked for, not added. Blood (Milestone 4) will reuse this exact same
+"admin can post on behalf of" mechanism for free once it's built, since it rides the same
+`POST /api/needs` endpoint — no extra work needed there when that milestone starts.
+
+**Next:** Milestone 4 — Blood module (PRD §8 first, still not written) per TASKS.md, unless
+further UI-parity gaps keep surfacing (has been the dominant thread for three sessions running).
+
+---
+
+### Session 15 — Verification pass + two gaps closed: need-creation photos, web-panel kit parity
+Not a TASKS.md milestone — the user asked me to verify a batch of claims about how fully wired
+Kits actually were. Rather than guess, verified each one directly (curl + fresh test accounts),
+found two real gaps, and closed both (user picked "both, photo upload first" when asked to
+prioritize).
+
+**Verification findings (all confirmed via live curl tests, not assumed):**
+- Title/description: already present for every need type (shared `Need` fields) — no gap.
+- **Gap found:** no way to attach a photo of the kit/situation **at need-creation time** — the
+  `Need` object had no image field at all (checked the raw API response), only
+  `Contribution.proofUrl` existed (donation-time proof).
+- Admin *can* technically post a need via the API (no role check on `POST /api/needs`) — not by
+  design (admin verifies, doesn't post, per PRD §4), but not blocked either. Flagged, not changed
+  — an admin-console "post a need" UI was never asked for or built.
+- Institution → admin → live-in-feed: confirmed working end-to-end (already true before this
+  session, re-verified with a fresh INSTITUTION account posting a KIT need).
+- **Gap found:** web-panel had no kit-**posting** UI at all — only `CreateMoneyNeedPage`. An
+  orphanage/NGO could only post MONEY needs from their own panel; KIT needs required hitting the
+  API directly (or using the mobile app under a `USER` account, which isn't really their role).
+
+**Done (closing both gaps):**
+- **`Need.photos String[] @default([])`** — new Prisma field, shared across every type (not
+  per-type payload), migrated against the Railway DB. `POST`/`PATCH /api/needs` accept
+  `photos: string[]` (capped at 5 server-side via Zod). This is literally the `proof_documents[]`
+  field sketched in PRD v0.1 and never built — realized now, scoped to images.
+- Added a third upload folder, `"need-photos"` (alongside `"contribution-proofs"`/`"need-qr"`),
+  to `POST /api/uploads/sign`.
+- **Mobile**: new `PhotoPicker` component (`expo-image-picker`, multi-select up to 5, thumbnail
+  grid with remove) wired into both `CreateMoneyNeedScreen` and `CreateKitNeedScreen`; a new
+  `uploadPhotos()` helper in `lib/api.ts` signs+uploads each file sequentially. Also installed
+  **`expo-image`** (CLAUDE.md's performance rules called for it since Session 9 — never actually
+  used until now) for `NeedCard`'s cover photo and `NeedDetailScreen`'s photo gallery, both with
+  disk+memory caching. Re-ran `expo prebuild` twice (once for `expo-image-picker`'s permission
+  plugin back in Session 13, once now for `expo-image`).
+- **Web-panel**: built out the full object-storage client (`signUpload`/`uploadToSignedUrl`/
+  `uploadPhotos`) it never had, a matching `PhotoPicker` component (HTML file input + thumbnail
+  grid), and — the actual parity gap — `CreateKitNeedPage.tsx`, mirroring mobile's kit form
+  (contents/cost/kits-needed/mode picker/conditional UPI field) plus photos. `DashboardPage`/
+  `MyNeedsPage` now offer "+ Money need" and "+ Kit need" separately.
+- Photo galleries added to `NeedDetailPage` in both admin and web-panel (`.photo-gallery` CSS,
+  same pattern in both `index.css`s).
+- **Verified the entire closed loop live, in one continuous curl script**: institution uploads a
+  kit photo → posts a `KIT` need (deliver-mode) with that photo attached → submits → the photo is
+  visible to admin in the verification queue *before* verification → admin verifies → the need
+  (with photo, correct `postedBy.role: INSTITUTION`) appears in `GET /api/needs`, the exact
+  endpoint mobile's feed queries → the photo URL is publicly fetchable with correct bytes.
+- All three frontends: `tsc`/`vite build` (web-panel: 25 modules now, up from 23; admin) and
+  `tsc --noEmit` + `expo export --platform ios` (mobile, up to 672 modules across two exports)
+  all clean.
+
+**Not done / caveat:** Admin console still has no "post a need" UI (confirmed the backend would
+technically allow it, but this wasn't asked for and isn't the intended workflow — flagged as a
+finding, not built). KYC-document upload (as opposed to situational photos) still isn't wired —
+`photos[]` is scoped to images per PRD v0.8's changelog note; PDF/ID docs for institution KYC
+(D-007) would reuse the same signed-URL mechanism but aren't built. No simulator/browser to
+visually confirm any of this renders correctly — same standing caveat as every session since
+Milestone 0, now covering photo thumbnails/galleries specifically too.
+
+**Next:** Resume Milestone 4 (Blood module, PRD §8 first) per TASKS.md — or continue closing
+UI-parity/polish gaps across surfaces if the user keeps finding them, which has been the more
+active thread the last two sessions.
+
+---
+
+### Session 14 — Milestone 3: Kits (both funding modes)
+**Done:**
+- Wrote **PRD §9** (Kit flow): payload fields, both modes (D-004), confirmation/fulfilment
+  reusing the Money pattern, progress display. Later added a `upi_id` field mid-build (see
+  below) — v0.7 changelog covers it as part of the same section.
+- `backend/prisma/schema.prisma`: `Contribution.amount`/`.utr` are now **nullable** (a
+  DELIVER-mode kit pledge has neither — no payment happens), added `.kits Int?`, and
+  `ContributionKind` gained `KIT` alongside `MONEY`. `utr` stays `@unique` — Postgres allows
+  multiple NULLs while still enforcing uniqueness on the ones that exist, so D-019 holds yfor both
+  types without a workaround. Migrated against the same Railway DB as every prior session.
+- `backend/src/lib/kitNeed.ts`: KIT payload validation. **Caught and fixed a real gap while
+  writing the mobile UI**, not before — a money-per-kit need needs a `upi_id` for donors to
+  actually pay, exactly like a MONEY need's `upi_id`, and the initial payload schema didn't have
+  one. Added it as required-when-`mode:MONEY` via a Zod `.refine()`, updated PRD §9.1's table,
+  and re-verified the submit-gating end-to-end.
+- `backend/src/routes/needs.ts`: `normalizePayload` extended to strip client-supplied
+  `kits_funded` (mirrors the `raised_amount` tamper-guard); donate route now branches per
+  `need.type` — MONEY keeps its existing shape, KIT requires `utr` when `mode:MONEY` and
+  **rejects** a `utr` when `mode:DELIVER` (400 either way if violated).
+- `backend/src/routes/contributions.ts`: confirm handler refactored into a shared
+  `computeFulfilment()` that branches on `need.type` — same clamp-at-target +
+  `LIVE→PARTIALLY_FULFILLED→FULFILLED` logic as Money, just against `kits_funded`/`kits_needed`
+  instead of `raised_amount`/`target_amount`.
+- **Verified extensively against the live Railway DB with curl**: money-mode kit flow
+  (submit-gating incl. the upi_id fix, tamper-guard on `kits_funded`, donate without UTR → 400,
+  confirm/RBAC, overshoot clamps to exactly `kits_needed`, FULFILLED lockout, UTR uniqueness);
+  deliver-mode flow (sending a UTR → 400, pledge without one succeeds with `amount`/`utr` both
+  null, confirm advances `kits_funded`, reject leaves it untouched); `?type=KIT` feed filter.
+- Mobile: `CreateKitNeedScreen` (contents/cost/kits-needed/mode picker, conditional UPI field),
+  `NeedCard`/`ProgressBar` generalized to show kit progress (`ProgressBar` gained an optional
+  `label` override), `NeedDetailScreen` got a full second donate section for kits (mode-aware:
+  UPI+UTR form for money-mode, a no-payment pledge form for deliver-mode, both with optional
+  photo attachment via the same signed-upload flow from Session 13). `HomeScreen`'s single
+  "Post a money need" button became two ("+ Money need" / "+ Kit need").
+- **Caught and fixed a real latent bug in admin + web-panel before it shipped**: both apps'
+  `Contribution` type still declared `amount`/`utr` as always-present strings/numbers; once KIT
+  contributions could have them `null`, `NeedDetailPage`'s `c.amount.toLocaleString()` would have
+  thrown at runtime the first time anyone viewed a kit need's contributions there. Fixed both
+  apps' types (nullable + `kind`/`kits`) and made the rendering kind-aware, same pattern as
+  mobile. Admin's `NeedsPage` progress column also generalized (`moneyProgress` → `progressLabel`)
+  to show kit progress in the queue/browse table, not just money.
+- All three frontends: `tsc`/`vite build` (web-panel, admin) and `tsc --noEmit` + `expo export
+  --platform ios` (mobile, 660 modules) all clean, run **after** the admin/web-panel bug fix too.
+
+**Not done / caveat:** Web-panel still has no kit-**posting** UI (only mobile does) — the
+type/rendering fix there is defensive (so it won't crash if a kit need's contributions are ever
+viewed from web-panel), not a new feature; TASKS.md's institution-web-panel line already tracks
+this as partial. No simulator/browser to see any of this render, same standing caveat as every
+session since Milestone 0.
+
+**Next:** Milestone 4 — Blood module (write PRD §8 first, out of the numeric gap left since
+Session 14 jumped to §9 ahead of §8): donor blood profile, India eligibility gap rules,
+geo+eligibility-matched notifications, response flow. This is the first genuinely custom module
+(CLAUDE.md §3) — it does *not* reuse the Money/Kit donate-and-confirm pattern the same way.
+
+---
+
 ### Session 13 — Object storage: real proof-of-payment upload (D-021)
 Closes the "proof-doc upload" TODO flagged in every session since Milestone 2 (Session 11).
 
@@ -38,19 +271,25 @@ Closes the "proof-doc upload" TODO flagged in every session since Milestone 2 (S
   `proofUrl` alongside the UTR). `tsc --noEmit` clean; `expo export --platform ios` bundled clean
   (659 modules).
 
-**Not done / caveat:** The bucket's public-read isn't confirmed working yet — waiting on the user
-to flip "Public bucket" in the Supabase dashboard (Storage → `uploads` → Edit bucket). Everything
-else in the pipeline (signing, upload, DB storage, retrieval via the API) is confirmed working.
-QR-code upload for a `MONEY` need's `upi_qr` field is *not* wired into `CreateMoneyNeedScreen` —
-only the donate-proof upload got built; typing a UPI ID still works without it. Web-panel doesn't
-have image upload UI either (it only confirms/rejects contributions, doesn't donate). No
-simulator/browser to see any of this render, same standing caveat as every prior session.
+**Update (same session):** the user flipped "Public bucket" on in the Supabase dashboard
+(Storage → `uploads` → Edit bucket). Re-ran a completely fresh sign → PUT → unsigned-GET cycle
+and got a clean 200 with byte-for-byte matching content — **the full object-storage pipeline is
+now confirmed working end to end**, not just diagnosed. (An old diagnostic test object from
+before the fix now 404s with `"Object not found"` instead of `"Bucket not found"` — expected,
+just garbage-collected test data, not a problem.)
 
-**Next:** Confirm the bucket is public (ask the user, or just re-test `curl` on a `publicUrl`),
-then resume Milestone 3 (Kits, PRD §9 first) per TASKS.md's build order — or, per the user's
-broader ask this session, push to GitHub + get the backend itself deployed (only its Postgres is
-on Railway right now; the Express server isn't deployed anywhere, so the Vercel-hosted admin/
-web-panel currently have nothing real to talk to except localhost).
+**Not done / caveat:** QR-code upload for a `MONEY` need's `upi_qr` field is *not* wired into
+`CreateMoneyNeedScreen` — only the donate-proof upload got built; typing a UPI ID still works
+without it. Web-panel doesn't have image upload UI either (it only confirms/rejects
+contributions, doesn't donate). No simulator/browser to see any of this render, same standing
+caveat as every prior session.
+
+**Next:** storage is done — resume Milestone 3 (Kits, PRD §9 first) per TASKS.md's build order, or
+push to GitHub + get the backend itself deployed (only its Postgres is on Railway right now; the
+Express server isn't deployed anywhere, so the Vercel-hosted admin/web-panel currently have
+nothing real to talk to except localhost). User chose to pause on both at the end of the prior
+turn specifically to nail down storage first — worth explicitly asking which to pick up now
+rather than assuming.
 
 ---
 

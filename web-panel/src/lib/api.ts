@@ -29,6 +29,33 @@ export interface MoneyPayload {
   upi_qr?: string;
 }
 
+// PRD §9.1 — only meaningful when type === "KIT". `upi_id` present only when mode === "MONEY".
+export interface KitPayload {
+  contents: string;
+  cost_per_kit: number;
+  kits_needed: number;
+  kits_funded: number;
+  mode: "MONEY" | "DELIVER";
+  upi_id?: string;
+}
+
+export type BloodGroup =
+  | "A_POSITIVE"
+  | "A_NEGATIVE"
+  | "B_POSITIVE"
+  | "B_NEGATIVE"
+  | "AB_POSITIVE"
+  | "AB_NEGATIVE"
+  | "O_POSITIVE"
+  | "O_NEGATIVE";
+
+// PRD §8.3 — only meaningful when type === "BLOOD".
+export interface BloodPayload {
+  blood_group: BloodGroup;
+  units_needed: number;
+  units_fulfilled: number;
+}
+
 export interface Need {
   id: string;
   type: NeedType;
@@ -40,18 +67,26 @@ export interface Need {
   area: string | null;
   deadline: string | null;
   rejectionReason: string | null;
-  payload: MoneyPayload | Record<string, unknown> | null;
+  photos: string[];
+  linkedInstitutionId: string | null;
+  institutionVerified: boolean;
+  adminVerified: boolean;
+  payload: MoneyPayload | KitPayload | BloodPayload | Record<string, unknown> | null;
   postedBy: { id: string; name: string | null; role: Role };
   createdAt: string;
 }
 
+export type ContributionKind = "MONEY" | "KIT" | "BLOOD";
 export type ContributionStatus = "PENDING_CONFIRMATION" | "CONFIRMED" | "REJECTED";
 
 export interface Contribution {
   id: string;
-  amount: number;
+  kind: ContributionKind;
+  amount: number | null;
+  kits: number | null;
+  units: number | null;
   status: ContributionStatus;
-  utr: string;
+  utr: string | null;
   donor: { id: string; name: string | null; phone: string };
   createdAt: string;
 }
@@ -104,7 +139,7 @@ export function fetchNeed(token: string, id: string) {
 // the backend still supports a separate save-as-draft, just no UI for it here yet either).
 export async function postMoneyNeed(
   token: string,
-  data: { title: string; description: string; targetAmount: number; upiId: string }
+  data: { title: string; description: string; targetAmount: number; upiId: string; photos?: string[] }
 ) {
   const { need } = await request<{ need: Need }>("/api/needs", {
     method: "POST",
@@ -113,6 +148,7 @@ export async function postMoneyNeed(
       type: "MONEY",
       title: data.title,
       description: data.description,
+      photos: data.photos,
       payload: { target_amount: data.targetAmount, upi_id: data.upiId },
     }),
   });
@@ -120,6 +156,124 @@ export async function postMoneyNeed(
     method: "POST",
     headers: authHeaders(token),
   });
+}
+
+// PRD §9.1 — creates a DRAFT KIT need, then immediately submits it (mirrors postMoneyNeed).
+export async function postKitNeed(
+  token: string,
+  data: {
+    title: string;
+    description: string;
+    contents: string;
+    costPerKit: number;
+    kitsNeeded: number;
+    mode: "MONEY" | "DELIVER";
+    upiId?: string;
+    photos?: string[];
+  }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      type: "KIT",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      payload: {
+        contents: data.contents,
+        cost_per_kit: data.costPerKit,
+        kits_needed: data.kitsNeeded,
+        mode: data.mode,
+        ...(data.mode === "MONEY" ? { upi_id: data.upiId } : {}),
+      },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// PRD §8.3 — creates a DRAFT BLOOD need, then immediately submits it (mirrors postMoneyNeed).
+// An institution posting its own request typically links itself (see `linkedInstitutionId`
+// param) so it can fast-track-verify via institutionVerifyNeed below (D-008) rather than
+// waiting on admin.
+export async function postBloodNeed(
+  token: string,
+  data: {
+    title: string;
+    description: string;
+    bloodGroup: BloodGroup;
+    unitsNeeded: number;
+    linkedInstitutionId?: string;
+    photos?: string[];
+  }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      type: "BLOOD",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      linkedInstitutionId: data.linkedInstitutionId,
+      payload: { blood_group: data.bloodGroup, units_needed: data.unitsNeeded },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// D-008 — the linked institution verifies a need independently of admin; either path alone is
+// enough to reach LIVE ("fast-track"). 403s if the caller isn't that need's linkedInstitutionId.
+export function institutionVerifyNeed(token: string, needId: string) {
+  return request<{ need: Need }>(`/api/needs/${needId}/institution-verify`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// D-012 — urgency is admin/institution-verified, never self-declared; this is the only way to
+// set it. Admin/Staff can set it on anything; an institution only on needs linked to it.
+export function setNeedUrgency(token: string, needId: string, urgency: Urgency) {
+  return request<{ need: Need }>(`/api/needs/${needId}/urgency`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ urgency }),
+  });
+}
+
+// Object storage (CLAUDE.md §6 / D-021): the backend only signs a short-lived upload URL — the
+// client uploads the file bytes straight to the bucket, never through the backend.
+export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr") {
+  return request<{ uploadUrl: string; publicUrl: string; key: string }>("/api/uploads/sign", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ contentType, folder }),
+  });
+}
+
+export async function uploadToSignedUrl(uploadUrl: string, file: File): Promise<void> {
+  const res = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+  if (!res.ok) {
+    throw new Error(`Upload failed (${res.status})`);
+  }
+}
+
+// Signs + uploads each file in sequence and returns their public URLs, ready to pass as
+// Need.photos.
+export async function uploadPhotos(token: string, files: File[], folder: "need-photos"): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const signed = await signUpload(token, file.type, folder);
+    await uploadToSignedUrl(signed.uploadUrl, file);
+    urls.push(signed.publicUrl);
+  }
+  return urls;
 }
 
 export function fetchContributions(token: string, needId: string) {

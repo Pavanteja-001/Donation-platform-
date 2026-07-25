@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import type { MoneyPayload, Need, Urgency } from "../lib/api";
+import { Image } from "expo-image";
+import type { BloodPayload, KitPayload, MoneyPayload, Need, Urgency } from "../lib/api";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "./ProgressBar";
 
@@ -14,13 +15,30 @@ function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
 }
 
+function isKitPayload(payload: Need["payload"]): payload is KitPayload {
+  return !!payload && typeof (payload as KitPayload).kits_needed === "number";
+}
+
+function isBloodPayload(payload: Need["payload"]): payload is BloodPayload {
+  return !!payload && typeof (payload as BloodPayload).units_needed === "number";
+}
+
+function formatBloodGroup(g: string) {
+  return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
+}
+
 export function NeedCard({ need, onPress }: { need: Need; onPress?: () => void }) {
   const urgency = URGENCY_STYLE[need.urgency];
   const location = [need.area, need.city].filter(Boolean).join(", ");
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
+  const kit = need.type === "KIT" && isKitPayload(need.payload) ? need.payload : null;
+  const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} disabled={!onPress} activeOpacity={0.7}>
+      {need.photos.length > 0 && (
+        <Image source={{ uri: need.photos[0] }} style={styles.cover} contentFit="cover" cachePolicy="memory-disk" />
+      )}
       <View style={styles.headerRow}>
         <View style={[styles.badge, { backgroundColor: urgency.background }]}>
           <Text style={[styles.badgeText, { color: urgency.color }]}>{urgency.label}</Text>
@@ -36,6 +54,25 @@ export function NeedCard({ need, onPress }: { need: Need; onPress?: () => void }
           <ProgressBar raised={money.raised_amount} target={money.target_amount} />
         </View>
       )}
+      {kit && (
+        <View style={styles.progress}>
+          <ProgressBar
+            raised={kit.kits_funded}
+            target={kit.kits_needed}
+            label={`${kit.kits_funded} of ${kit.kits_needed} kits funded`}
+          />
+        </View>
+      )}
+      {blood && (
+        <View style={styles.progress}>
+          <Text style={styles.bloodGroup}>{formatBloodGroup(blood.blood_group)}</Text>
+          <ProgressBar
+            raised={blood.units_fulfilled}
+            target={blood.units_needed}
+            label={`${blood.units_fulfilled} of ${blood.units_needed} units`}
+          />
+        </View>
+      )}
       {location ? <Text style={styles.meta}>{location}</Text> : null}
     </TouchableOpacity>
   );
@@ -49,6 +86,14 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.md,
+    overflow: "hidden",
+  },
+  cover: {
+    height: 140,
+    marginHorizontal: -theme.spacing.lg,
+    marginTop: -theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+    backgroundColor: theme.color.border,
   },
   headerRow: {
     flexDirection: "row",
@@ -66,5 +111,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
   description: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.xs },
   progress: { marginBottom: theme.spacing.xs },
+  bloodGroup: { fontSize: 13, fontWeight: "700", color: theme.color.danger, marginBottom: 2 },
   meta: { fontSize: 12, color: theme.color.textSecondary },
 });

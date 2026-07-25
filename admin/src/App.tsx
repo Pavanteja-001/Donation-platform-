@@ -5,8 +5,9 @@ import { UsersPage } from "./pages/UsersPage";
 import { StaffPage } from "./pages/StaffPage";
 import { NeedsPage } from "./pages/NeedsPage";
 import { NeedDetailPage } from "./pages/NeedDetailPage";
+import { PostNeedPage } from "./pages/PostNeedPage";
 
-type Tab = "needs" | "users" | "staff";
+type Tab = "needs" | "post" | "users" | "staff";
 
 function Console() {
   const { user, isAdmin, signOut } = useAuth();
@@ -36,6 +37,14 @@ function Console() {
         <button type="button" className={tab === "needs" ? "tab active" : "tab"} onClick={() => goToTab("needs")}>
           Needs
         </button>
+        {/* Posting on behalf of a beneficiary/org without their own account is Admin-only
+            (D-018) — kept consistent with Staff's limited feature set (verify/accept + list
+            users only), not a new capability opened up to them. */}
+        {isAdmin && (
+          <button type="button" className={tab === "post" ? "tab active" : "tab"} onClick={() => goToTab("post")}>
+            Post a need
+          </button>
+        )}
         <button type="button" className={tab === "users" ? "tab active" : "tab"} onClick={() => goToTab("users")}>
           All users
         </button>
@@ -54,6 +63,7 @@ function Console() {
           ) : (
             <NeedsPage onSelectNeed={setSelectedNeedId} />
           ))}
+        {tab === "post" && isAdmin && <PostNeedPage />}
         {tab === "users" && <UsersPage />}
         {tab === "staff" && isAdmin && <StaffPage />}
       </main>

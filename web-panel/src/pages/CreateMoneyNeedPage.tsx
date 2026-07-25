@@ -1,15 +1,16 @@
 import { useState, type FormEvent } from "react";
-import { postMoneyNeed } from "../lib/api";
+import { postMoneyNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { PhotoPicker } from "../components/PhotoPicker";
 
-// PRD §7.1/§7.2 — post a MONEY need. Proof-doc/QR upload deferred — no object-storage pipeline
-// yet (see backend/README.md's cross-cutting TODO); same gap as the mobile app.
+// PRD §7.1/§7.2 — post a MONEY need with optional photos (D-021).
 export function CreateMoneyNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [upiId, setUpiId] = useState("");
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -22,7 +23,8 @@ export function CreateMoneyNeedPage({ onDone, onBack }: { onDone: () => void; on
     setError(null);
     setIsSubmitting(true);
     try {
-      await postMoneyNeed(token, { title, description, targetAmount: amount, upiId });
+      const photos = photoFiles.length > 0 ? await uploadPhotos(token, photoFiles, "need-photos") : undefined;
+      await postMoneyNeed(token, { title, description, targetAmount: amount, upiId, photos });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post this need");
@@ -55,6 +57,7 @@ export function CreateMoneyNeedPage({ onDone, onBack }: { onDone: () => void; on
           UPI ID
           <input type="text" value={upiId} onChange={(e) => setUpiId(e.target.value)} required />
         </label>
+        <PhotoPicker files={photoFiles} onChange={setPhotoFiles} />
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Submitting…" : "Submit for verification"}

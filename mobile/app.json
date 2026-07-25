@@ -30,6 +30,14 @@
         {
           "photosPermission": "Let DonationPlatform access your photos so you can attach a payment screenshot as proof."
         }
+      ],
+      "expo-image",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0E7C66"
+        }
       ]
     ]
   }

@@ -107,10 +107,13 @@ real bucket URL now, not a client-typed string.
 file even for its free tier). The backend never touches image bytes:
 
 1. `POST /api/uploads/sign { contentType, folder }` (auth required) — `folder` is
-   `"contribution-proofs"` or `"need-qr"`; `contentType` is `image/jpeg`\|`image/png`\|`image/webp`.
-   Returns `{ uploadUrl, publicUrl, key }` — `uploadUrl` is a **5-minute presigned PUT URL**.
+   `"contribution-proofs"`, `"need-photos"`, or `"need-qr"`; `contentType` is
+   `image/jpeg`\|`image/png`\|`image/webp`. Returns `{ uploadUrl, publicUrl, key }` —
+   `uploadUrl` is a **5-minute presigned PUT URL**.
 2. The client `PUT`s the file bytes straight to `uploadUrl` (never through this backend).
-3. The client then sends `publicUrl` as e.g. `proofUrl` on `POST /api/needs/:id/contributions`.
+3. The client then sends `publicUrl`(s) as e.g. `Contribution.proofUrl` on
+   `POST /api/needs/:id/contributions`, or `Need.photos[]` (folder `"need-photos"`, capped at 5,
+   any need type) on `POST`/`PATCH /api/needs`.
 
 Requires `SUPABASE_S3_ENDPOINT`/`_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY`/`_BUCKET`/`_REGION` in
 `.env` (see `.env.example`) — **reads lazily**, so a missing/incomplete config only breaks
@@ -119,3 +122,25 @@ must be set **Public** in the Supabase dashboard (Storage → bucket → Edit bu
 to actually resolve; the S3 API itself (signing, PUT, and even a signed GET) works regardless of
 that toggle — only the public read path depends on it. See D-021 for the gotcha on how the public
 URL's hostname is derived from the S3 endpoint.
+
+## Kit flow (PRD §9, `src/lib/kitNeed.ts` + `src/routes/needs.ts` + `src/routes/contributions.ts`)
+
+Reuses the Money flow's engine end to end — same routes, same `computeFulfilment` pattern in
+`contributions.ts` — just a different payload shape and two funding modes (D-004).
+
+- A `KIT` need's `payload` is `{ contents, cost_per_kit, kits_needed, kits_funded, mode, upi_id? }`.
+  **`kits_funded` is always server-computed**, same tamper-guard as MONEY's `raised_amount`.
+  `mode` is `"MONEY"` or `"DELIVER"`, fixed once submitted. `upi_id` is **required when
+  `mode: "MONEY"`** (enforced via a Zod `.refine()`, not a plain optional field) — a money-per-kit
+  need still needs somewhere for the donor to actually pay; irrelevant for `"DELIVER"`.
+- `POST /api/needs/:id/contributions` — same endpoint as Money, branches on `need.type`:
+  - `mode: "MONEY"` contribution: `{ kits, utr, proofUrl? }` — `utr` **required**; `amount` is
+    server-computed as `kits × cost_per_kit` (same audit-worthy principle as Money).
+  - `mode: "DELIVER"` contribution: `{ kits, proofUrl? }` — sending a `utr` here 400s (no payment
+    happens for a physical delivery pledge); `amount` stays `null`.
+- Confirm/reject/override permissions are identical to Money (D-002/D-018). Confirm clamps
+  `kits_funded` at `kits_needed` and advances the lifecycle the same way, just against kit counts
+  instead of ₹.
+- `Contribution.amount`/`.utr` are **nullable** at the schema level to support `DELIVER`-mode
+  pledges — `utr` stays a DB-unique constraint (D-019) since Postgres allows multiple `NULL`s
+  while still enforcing uniqueness on the values that exist.

@@ -46,6 +46,32 @@ export interface MoneyPayload {
   upi_qr?: string;
 }
 
+export interface KitPayload {
+  contents: string;
+  cost_per_kit: number;
+  kits_needed: number;
+  kits_funded: number;
+  mode: "MONEY" | "DELIVER";
+  upi_id?: string;
+}
+
+export type BloodGroup =
+  | "A_POSITIVE"
+  | "A_NEGATIVE"
+  | "B_POSITIVE"
+  | "B_NEGATIVE"
+  | "AB_POSITIVE"
+  | "AB_NEGATIVE"
+  | "O_POSITIVE"
+  | "O_NEGATIVE";
+
+// PRD §8.3 — only meaningful when type === "BLOOD".
+export interface BloodPayload {
+  blood_group: BloodGroup;
+  units_needed: number;
+  units_fulfilled: number;
+}
+
 export interface Need {
   id: string;
   type: NeedType;
@@ -57,18 +83,29 @@ export interface Need {
   area: string | null;
   deadline: string | null;
   rejectionReason: string | null;
-  payload: MoneyPayload | Record<string, unknown> | null;
+  photos: string[];
+  linkedInstitutionId: string | null;
+  institutionVerified: boolean;
+  adminVerified: boolean;
+  payload: MoneyPayload | KitPayload | BloodPayload | Record<string, unknown> | null;
   postedBy: { id: string; name: string | null; phone?: string; role: Role };
   createdAt: string;
 }
 
+export type ContributionKind = "MONEY" | "KIT" | "BLOOD";
 export type ContributionStatus = "PENDING_CONFIRMATION" | "CONFIRMED" | "REJECTED";
 
 export interface Contribution {
   id: string;
-  amount: number;
+  kind: ContributionKind;
+  // MONEY: amount always set. KIT mode=MONEY: amount+kits set. KIT mode=DELIVER: amount/utr
+  // null, kits set — no payment for a physical delivery pledge (PRD §9.2). BLOOD: units set,
+  // amount/kits/utr null.
+  amount: number | null;
+  kits: number | null;
+  units: number | null;
   status: ContributionStatus;
-  utr: string;
+  utr: string | null;
   donor: { id: string; name: string | null; phone: string };
   createdAt: string;
 }
@@ -144,6 +181,127 @@ export function deleteStaff(token: string, id: string) {
 
 export function fetchNeed(token: string, id: string) {
   return request<{ need: Need }>(`/api/needs/${id}`, { headers: authHeaders(token) });
+}
+
+// ADMIN can post a need too (D-018 — Staff can verify/accept + list users, but posting on
+// behalf of a partner org without a web-panel account of their own is Admin-only here, kept
+// consistent with the rest of D-018's admin-vs-staff split rather than opening a new capability
+// to Staff). Backend has no role restriction on POST /api/needs; this UI is what's scoped.
+export async function postMoneyNeed(
+  token: string,
+  data: { title: string; description: string; targetAmount: number; upiId: string; photos?: string[] }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      type: "MONEY",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      payload: { target_amount: data.targetAmount, upi_id: data.upiId },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export async function postKitNeed(
+  token: string,
+  data: {
+    title: string;
+    description: string;
+    contents: string;
+    costPerKit: number;
+    kitsNeeded: number;
+    mode: "MONEY" | "DELIVER";
+    upiId?: string;
+    photos?: string[];
+  }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      type: "KIT",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      payload: {
+        contents: data.contents,
+        cost_per_kit: data.costPerKit,
+        kits_needed: data.kitsNeeded,
+        mode: data.mode,
+        ...(data.mode === "MONEY" ? { upi_id: data.upiId } : {}),
+      },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// PRD §8.3 — Admin posting a blood need on behalf of a beneficiary/partner org without their
+// own account (D-018, mirrors postMoneyNeed/postKitNeed). No linkedInstitutionId — that's only
+// for an institution's own self-verify fast-track (D-008), which doesn't apply to admin posts.
+export async function postBloodNeed(
+  token: string,
+  data: { title: string; description: string; bloodGroup: BloodGroup; unitsNeeded: number; photos?: string[] }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      type: "BLOOD",
+      title: data.title,
+      description: data.description,
+      photos: data.photos,
+      payload: { blood_group: data.bloodGroup, units_needed: data.unitsNeeded },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// D-012 — urgency is admin/institution-verified, never self-declared; this is the only way to
+// set it. Admin/Staff can set it on any need.
+export function setNeedUrgency(token: string, needId: string, urgency: Urgency) {
+  return request<{ need: Need }>(`/api/needs/${needId}/urgency`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ urgency }),
+  });
+}
+
+// Object storage (CLAUDE.md §6 / D-021) — same pattern as web-panel/mobile.
+export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr") {
+  return request<{ uploadUrl: string; publicUrl: string; key: string }>("/api/uploads/sign", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ contentType, folder }),
+  });
+}
+
+export async function uploadToSignedUrl(uploadUrl: string, file: File): Promise<void> {
+  const res = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+  if (!res.ok) {
+    throw new Error(`Upload failed (${res.status})`);
+  }
+}
+
+export async function uploadPhotos(token: string, files: File[], folder: "need-photos"): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const signed = await signUpload(token, file.type, folder);
+    await uploadToSignedUrl(signed.uploadUrl, file);
+    urls.push(signed.publicUrl);
+  }
+  return urls;
 }
 
 // `status` omitted = the verification queue (PENDING_VERIFICATION only); "ALL" or a specific

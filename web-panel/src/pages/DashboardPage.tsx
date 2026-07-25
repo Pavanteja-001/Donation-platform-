@@ -2,9 +2,16 @@ import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { MyNeedsPage } from "./MyNeedsPage";
 import { CreateMoneyNeedPage } from "./CreateMoneyNeedPage";
+import { CreateKitNeedPage } from "./CreateKitNeedPage";
+import { CreateBloodNeedPage } from "./CreateBloodNeedPage";
 import { NeedDetailPage } from "./NeedDetailPage";
 
-type Screen = { name: "list" } | { name: "create" } | { name: "detail"; needId: string };
+type Screen =
+  | { name: "list" }
+  | { name: "create-money" }
+  | { name: "create-kit" }
+  | { name: "create-blood" }
+  | { name: "detail"; needId: string };
 
 export function DashboardPage() {
   const { user, signOut } = useAuth();
@@ -27,11 +34,19 @@ export function DashboardPage() {
         {screen.name === "list" && (
           <MyNeedsPage
             onSelectNeed={(needId) => setScreen({ name: "detail", needId })}
-            onCreate={() => setScreen({ name: "create" })}
+            onCreateMoney={() => setScreen({ name: "create-money" })}
+            onCreateKit={() => setScreen({ name: "create-kit" })}
+            onCreateBlood={() => setScreen({ name: "create-blood" })}
           />
         )}
-        {screen.name === "create" && (
+        {screen.name === "create-money" && (
           <CreateMoneyNeedPage onBack={() => setScreen({ name: "list" })} onDone={() => setScreen({ name: "list" })} />
+        )}
+        {screen.name === "create-kit" && (
+          <CreateKitNeedPage onBack={() => setScreen({ name: "list" })} onDone={() => setScreen({ name: "list" })} />
+        )}
+        {screen.name === "create-blood" && (
+          <CreateBloodNeedPage onBack={() => setScreen({ name: "list" })} onDone={() => setScreen({ name: "list" })} />
         )}
         {screen.name === "detail" && (
           <NeedDetailPage needId={screen.needId} onBack={() => setScreen({ name: "list" })} />

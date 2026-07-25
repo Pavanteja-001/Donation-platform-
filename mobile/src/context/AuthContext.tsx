@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import * as SecureStore from "expo-secure-store";
-import { fetchMe, type AuthUser } from "../lib/api";
+import { fetchMe, type AuthUser, type BloodEligibility } from "../lib/api";
 
 const TOKEN_KEY = "donationplatform_auth_token";
 
@@ -8,8 +8,13 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
-  signIn: (token: string, user: AuthUser) => Promise<void>;
+  // PRD §8.2 — computed server-side, refreshed alongside `user`.
+  bloodEligibility: BloodEligibility | null;
+  signIn: (token: string, user: AuthUser, bloodEligibility: BloodEligibility) => Promise<void>;
   signOut: () => Promise<void>;
+  // Re-fetches /me — used after a profile edit (e.g. the blood profile) so the rest of the app
+  // sees the change without requiring a full app restart.
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -17,6 +22,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [bloodEligibility, setBloodEligibility] = useState<BloodEligibility | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -24,9 +30,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const stored = await SecureStore.getItemAsync(TOKEN_KEY);
       if (stored) {
         try {
-          const { user: me } = await fetchMe(stored);
+          const { user: me, bloodEligibility } = await fetchMe(stored);
           setToken(stored);
           setUser(me);
+          setBloodEligibility(bloodEligibility);
         } catch {
           await SecureStore.deleteItemAsync(TOKEN_KEY);
         }
@@ -40,18 +47,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       token,
       isLoading,
-      signIn: async (newToken, newUser) => {
+      bloodEligibility,
+      signIn: async (newToken, newUser, newEligibility) => {
         await SecureStore.setItemAsync(TOKEN_KEY, newToken);
         setToken(newToken);
         setUser(newUser);
+        setBloodEligibility(newEligibility);
       },
       signOut: async () => {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         setToken(null);
         setUser(null);
+        setBloodEligibility(null);
+      },
+      refreshUser: async () => {
+        if (!token) return;
+        const { user: me, bloodEligibility } = await fetchMe(token);
+        setUser(me);
+        setBloodEligibility(bloodEligibility);
       },
     }),
-    [user, token, isLoading]
+    [user, token, isLoading, bloodEligibility]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

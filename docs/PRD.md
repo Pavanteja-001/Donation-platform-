@@ -1,10 +1,10 @@
 # Product Requirements Document — DonationPlatform
 
-**Status:** Living document · **Version:** 0.6 · **Region:** India (Andhra Pradesh first)
+**Status:** Living document · **Version:** 0.9 · **Region:** India (Andhra Pradesh first)
 
-> Living document. Sections 1–7 and Appendix A (design system) are drafted. Sections 8+ are mapped
-> in the ToC and written just before their build milestone. Update the version and changelog whenever
-> a section changes.
+> Living document. Sections 1–9 and Appendix A (design system) are drafted. Sections 10+ are
+> mapped in the ToC and written just before their build milestone. Update the version and
+> changelog whenever a section changes.
 
 ---
 
@@ -19,8 +19,8 @@
 | 5 | Scope & Build Order | ✅ drafted |
 | 6 | Core "Need" Engine (shared lifecycle) | ✅ drafted |
 | 7 | Money Need flow | ✅ drafted |
-| 8 | Blood module (eligibility + geo-matching) | ⬜ to write |
-| 9 | Kit flow (grocery / education) | ⬜ to write |
+| 8 | Blood module (eligibility + geo-matching) | ✅ drafted |
+| 9 | Kit flow (grocery / education) | ✅ drafted |
 | 10 | Meal-slot booking (orphanages) | ⬜ to write |
 | 11 | Goods / unused-items flow | ⬜ to write |
 | 12 | Community Q&A forum | ⬜ to write |
@@ -150,7 +150,7 @@ type-specific fields and rules. This engine is the spine of the whole system —
 | `urgency` | Normal / Urgent / Emergency — **admin/institution-verified, not self-declared**; drives feed priority & notifications (D-012) |
 | `location` | city + area (baseline from poster); optional precise geo; for BLOOD, usually the linked institution's location |
 | `linked_institution` | optional — hospital / blood bank / NGO / orphanage that can co-verify (D-008) |
-| `proof_documents[]` | uploaded evidence (bills, IDs, etc.) |
+| `photos[]` | up to 5 images of the situation/kit/item, uploaded via the signed-URL object-storage pipeline (D-021) — implements the `proof_documents[]` concept sketched in v0.1, scoped to images for now (bill/ID document upload is a later extension of the same mechanism) |
 | `admin_verified` | boolean — set by admin |
 | `institution_verified` | boolean — set by the linked institution (D-008) |
 | `payload` | type-specific object (6.4) |
@@ -301,6 +301,156 @@ A `MONEY` need cannot move DRAFT → PENDING_VERIFICATION (submit) without `targ
 
 ---
 
+## 8. Blood module (eligibility + geo-matching)
+
+The one genuinely custom module (CLAUDE.md §3) — everything else rides the shared `Need`/
+`Contribution` engine almost unchanged; Blood adds a donor health profile, an eligibility
+computation, geo+eligibility-matched push notifications, and a respond-and-confirm flow instead
+of a donate-and-confirm one (no money or kits involved).
+
+### 8.1 Donor blood profile (D-005)
+
+New fields on `User` — **opt-in**, not part of general registration; a `USER` only fills these in
+if they want to appear as a blood donor:
+
+| Field | Notes |
+|---|---|
+| `bloodGroup` | one of the 8 standard groups (A/B/AB/O × +/−) |
+| `dateOfBirth` | needed for the 18–65 age eligibility rule |
+| `gender` | needed because the India gap rule differs by gender (D-005: ~90d men / ~120d women) — not itself decided in D-005, added here to make that rule computable; treated as sensitive as blood group (CLAUDE.md §7) |
+| `lastDonationDate` | nullable — no prior donation recorded means no gap-rule block |
+| `availableToDonate` | boolean toggle, defaults true once a profile exists — a donor can pause without deleting their profile |
+| `expoPushToken` | for the notification match below (D-016); set when the app registers for push |
+
+A `User` with no `bloodGroup` set has no blood profile and is never matched — filling in the
+profile is what "becoming a blood donor" means here.
+
+### 8.2 Eligibility computation (India gap rules, D-005)
+
+Computed server-side, on demand (not stored) from the fields above:
+
+- **Age**: `18 ≤ age ≤ 65`, from `dateOfBirth`.
+- **Gap**: no `lastDonationDate`, **or** at least `90` days (men) / `120` days (women) since it.
+- **Availability**: `availableToDonate = true`.
+- A donor missing `bloodGroup`/`dateOfBirth`/`gender` (no profile) is simply never a match
+  candidate — not "ineligible," just not in the pool.
+
+Eligibility is a pure function of these fields at request time — it is **not** cached on the
+`Need` or the `User`, since it changes independent of any action on the request (a donor becomes
+eligible again purely by the calendar).
+
+### 8.3 The BLOOD `Need` (D-008, D-010, D-012)
+
+Payload (extends §6.4): `{ blood_group, units_needed, units_fulfilled }` —
+`units_fulfilled` is server-computed, same tamper-guard pattern as `raised_amount`/`kits_funded`.
+Fulfilment rule: `units_fulfilled ≥ units_needed`.
+
+Reuses shared `Need` fields rather than inventing blood-specific ones:
+
+- **Urgency** (§6.8, D-012) is the existing shared field — Emergency blood requests pin to the
+  top of the feed and are what triggers notifications (§8.4), same mechanism as any other
+  Emergency need, not a parallel system.
+- **`linkedInstitution`** (D-008) — a hospital/blood bank can be linked to a BLOOD need and
+  **verify it directly**; that alone moves it to `LIVE` — **this is what "fast-track" means**:
+  the institution doesn't have to wait for admin. Admin verification remains available as an
+  independent, parallel path (either one is sufficient); `institutionVerified` and
+  `adminVerified` are recorded separately (§6.3) so which path a given need took stays visible,
+  and admin retains the reject/override power regardless of which path got it live.
+- **Location** (`city`/`area`, D-010) — the linked institution's location if set, else the
+  poster's. The donor sees the **exact** donation location (hospital/pickup point) once they
+  respond (§8.5) — before that, the public feed shows only the area, same rule as an individual
+  Money/Kit need.
+
+### 8.4 Matching & notifications (D-005, D-010, D-016)
+
+When a BLOOD need goes `LIVE` (admin or institution verification, §6.3): find every `User` with a
+matching `bloodGroup`, computed-eligible (§8.2), permanent location in the need's city (D-010 —
+no radius/GPS), and a stored `expoPushToken`. Send each an **Expo push notification**; Emergency
+urgency uses the high-priority channel (D-016) so it stands out. No SMS/email fallback in v1.
+This is a **one-time push on verification**, not a live subscription — re-notifying on later
+changes (e.g. urgency escalation) is a v2 concern, not built here.
+
+### 8.5 Respond → connect → confirm (replaces donate → confirm for this type)
+
+No money or kit count — a `Contribution` with `kind: BLOOD` and a `units` count (usually 1) is a
+donor's **pledge to donate**, not a payment:
+
+1. **Respond** — an eligible donor taps "I can donate." Creates a `PENDING_CONFIRMATION`
+   `Contribution`. This *is* the donor's consent to share their response with the
+   beneficiary/institution (CLAUDE.md §7 — no separate consent step; the action itself is the
+   opt-in, same pattern as choosing to fill in a blood profile in the first place).
+2. **Connect** — once responded, the donor already has the exact donation location (§8.3); the
+   beneficiary/institution can see the donor's contact info to coordinate. No in-app messaging
+   built here — coordination happens by phone, same as the rest of v1.
+3. **Confirm** — after the actual donation, the beneficiary/institution/admin confirms
+   (D-002/D-018, same permission model as Money/Kit). On confirm: `units_fulfilled += units`
+   (clamped at `units_needed`, same pattern as §7.3/§9.3), **and** the donor's
+   `lastDonationDate` resets to now — this is the "eligibility reset" that takes them out of the
+   matching pool for the next 90/120 days.
+4. **Certificate** — a confirmed blood `Contribution` is exactly the record Trust tiers &
+   certificates (§14, Milestone 7) will read from later; no certificate generation is built in
+   this milestone, matching the existing build order (D-006: platform record, not an official
+   document, whenever it is built).
+
+### 8.6 Privacy (CLAUDE.md §7)
+
+Blood group + location are sensitive health data. A donor's identity/contact info is only ever
+shown to the beneficiary/institution **after** that donor has responded (§8.5.1) — never as part
+of browsing or the notification itself. `gender`/`dateOfBirth` (§8.1) are collected solely to
+compute eligibility and are never shown to anyone but the donor themselves.
+
+---
+
+## 9. Kit flow (grocery / education)
+
+Grocery and education kits — both funding modes committed in D-004. Reuses the same `Need`/
+`Contribution` engine as Money (§6, §7); a `KIT` need just carries different payload fields and a
+different fulfilment unit (kits, not currency).
+
+### 9.1 Payload fields (extends §6.4)
+
+| Field | Notes |
+|---|---|
+| `contents` | free text — what's in one kit (e.g. "rice, dal, oil, soap — 1 month's groceries") |
+| `cost_per_kit` | required at submission; positive integer (₹) |
+| `kits_needed` | required at submission; positive integer |
+| `kits_funded` | **server-computed only**, like `raised_amount` in §7.1 — never accepted from the client; starts at 0 |
+| `mode` | required at submission — `MONEY` or `DELIVER` (D-004); fixed for the need's lifetime, not editable after submission |
+| `upi_id` | required at submission **when `mode: MONEY`** — same role as MONEY's `upi_id` (§7.1), the donor has to pay it somewhere. Irrelevant (and not required) when `mode: DELIVER`. |
+
+`deadline` (shared `Need` field, §7.1) applies here too — an unfulfilled KIT need past its
+deadline auto-**EXPIRES**, same as Money (D-013), same lazy-check-on-read mechanism.
+
+### 9.2 The two modes (D-004)
+
+- **`mode: MONEY`** — a donor funds N kits at `cost_per_kit` each (total = `N × cost_per_kit`),
+  paid via UPI deep-link same as Money (§7.2, D-009), then submits the UTR as proof. Same
+  UTR-uniqueness rule as Money (D-019).
+- **`mode: DELIVER`** — a donor pledges to physically buy and deliver N kits themselves. No money
+  moves through the platform at all — no UPI, no UTR. The pledge itself is the `Contribution`;
+  confirmation happens on **physical handover**, not payment.
+
+Both modes produce a `Contribution` with `kind: KIT` and a `kits` count. Only `MONEY`-mode
+contributions carry an `amount` (server-computed as `kits × cost_per_kit`, same audit-worthy
+principle as Money — CLAUDE.md §7) and a `utr`; `DELIVER`-mode contributions have neither.
+
+### 9.3 Confirmation & fulfilment
+
+Same shared pattern as Money (§7.3): the beneficiary (need's `postedBy`) confirms or rejects a
+`PENDING_CONFIRMATION` contribution; Admin can override (not Staff — D-018). On confirm:
+`kits_funded += kits`, clamped at `kits_needed`. The need moves `LIVE → PARTIALLY_FULFILLED` on
+the first confirmed contribution, `→ FULFILLED` once `kits_funded` reaches `kits_needed` — the
+same `assertTransition`-driven lifecycle as every other type (§6.2). A need stops accepting new
+contributions once `FULFILLED`, same as Money (D-013).
+
+### 9.4 Progress display
+
+Same principle as Money's progress bar (§7.4), different unit: **"X of Y kits funded/delivered"**
+instead of a ₹ amount. `DELIVER`-mode kits still count toward the same `kits_funded` total as
+`MONEY`-mode ones — the beneficiary doesn't care how a kit got funded, only that it did.
+
+---
+
 ## Appendix A — Design System (one shared theme, all surfaces)
 
 **Principle (D-014):** the donor mobile app, institution/hospital web panel, and admin console all use
@@ -339,6 +489,17 @@ Loading (skeletons) · Empty · Error · Success.
 
 ## Changelog
 
+- v0.9 — Added Section 8 (Blood module): donor blood profile (incl. `gender` — new field, needed
+  to compute D-005's gender-differentiated gap rule, not itself previously decided), eligibility
+  computation, BLOOD `Need` payload, geo+eligibility-matched Expo push on verification (D-016),
+  respond→connect→confirm flow replacing donate→confirm for this type, eligibility reset on
+  confirm, privacy notes (CLAUDE.md §7).
+- v0.8 — §6.1: `proof_documents[]` (sketched since v0.1, never implemented) realized as
+  `photos[]` — up to 5 images, any need type, via the D-021 signed-URL pipeline. Wired into need
+  creation (not just donation-time proof) on mobile and web-panel, viewable everywhere.
+- v0.7 — Added Section 9 (Kit flow, out of numeric order ahead of §8): payload fields incl. the
+  server-computed `kits_funded`, both funding modes (D-004 — money-per-kit vs buy-&-deliver),
+  confirmation/fulfilment reusing the Money pattern, progress display in kit units.
 - v0.6 — Added Section 7 (Money Need flow): payload fields (incl. shared `deadline`), donate step
   (UPI deep-link, UTR uniqueness), confirmation + admin override, progress bar, auto-close/expiry/
   resubmit.

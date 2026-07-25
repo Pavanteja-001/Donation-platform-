@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
-import { NeedStatus, Role } from "@prisma/client";
+import { NeedStatus, NeedType, Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
+import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 
 // Admin console RBAC (D-018):
 //   ADMIN — full access, including creating/removing STAFF and editing users.
@@ -55,6 +56,16 @@ router.post("/needs/:id/verify", async (req, res) => {
     where: { id: need.id },
     data: { status: NeedStatus.LIVE, adminVerified: true },
   });
+
+  // PRD §8.4 — one-time push to eligible donors the moment a BLOOD need goes LIVE. Best-effort
+  // (see pushNotifications.ts) — never blocks the verify response either way.
+  if (updated.type === NeedType.BLOOD) {
+    notifyEligibleBloodDonors(updated).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("[blood] Failed to notify eligible donors:", err);
+    });
+  }
+
   res.json({ need: updated });
 });
 

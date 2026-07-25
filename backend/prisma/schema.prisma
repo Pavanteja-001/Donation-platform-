@@ -3,8 +3,13 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  // `migrate dev` creates a throwaway DB here to diff schema changes — pointed at local Postgres
+  // (not Railway) so it never depends on prod infra being reachable/writable for CREATEDB, and
+  // so a flaky Railway proxy (as seen this session — main-DB queries fine, shadow-DB creation
+  // consistently timing out) can't block local development. See backend/.env.example.
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 // Roles per CLAUDE.md §4 and D-018:
@@ -20,6 +25,25 @@ enum Role {
   STAFF
 }
 
+// PRD §8.1 — the 8 standard blood groups.
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
+// PRD §8.1 — needed only to compute the gender-differentiated India donation-gap rule (D-005).
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
 model User {
   id        String   @id @default(cuid())
   phone     String   @unique
@@ -30,6 +54,18 @@ model User {
   // No real-time GPS / live tracking.
   city      String?
   area      String?
+
+  // Blood donor profile (PRD §8.1) — all optional/opt-in; a USER only fills these in if they
+  // want to appear as a blood donor. Sensitive health data (CLAUDE.md §7): never exposed to
+  // anyone but the donor themselves except via the respond flow (§8.5), which is itself consent.
+  bloodGroup       BloodGroup?
+  dateOfBirth      DateTime?
+  gender           Gender?
+  lastDonationDate DateTime?
+  availableToDonate Boolean   @default(true)
+
+  // Set once the app registers for push (D-016) — used for the eligible-donor match (§8.4).
+  expoPushToken String?
 
   // Set only for STAFF accounts — which ADMIN created them (D-018).
   createdByAdminId String?
@@ -110,9 +146,15 @@ model Need {
   // Mandatory on REJECTED (D-017), shown live to the poster.
   rejectionReason String?
 
+  // Shared across every type (not per-type payload) — any need can carry photos of the
+  // situation/kit/item, not just GOODS (whose payload will still separately need `photos[]`
+  // once built, for handover-condition photos specifically). Uploaded via the same signed-URL
+  // pipeline as Contribution.proofUrl (D-021); capped at 5 server-side.
+  photos String[] @default([])
+
   // Shared (not per-type payload) because the lifecycle engine reads it generically to drive
   // the EXPIRED transition (D-013, PRD §7.1/7.4) without knowing type-specific payload shape.
-  // Only MONEY uses it for now; KIT will reuse it in Milestone 3. Null = no deadline.
+  // Used by MONEY and KIT (§9.1); null = no deadline.
   deadline DateTime?
 
   // Type-specific fields (PRD §6.4) — target_amount/upi_id/upi_qr for MONEY (§7.1;
@@ -130,11 +172,12 @@ model Need {
   @@index([postedById])
 }
 
-// PRD §6.5 / §7.2-7.3 — a donor acting on a Need. Money-only in Milestone 2 (`kind` is always
-// MONEY today); `kind` exists so BLOOD/KIT/GOODS contributions in later milestones reuse this
-// table instead of inventing a parallel one per type.
+// PRD §6.5 / §7.2-7.3 / §9.2 / §8.5 — a donor acting on a Need. `kind` exists so every type's
+// contributions (GOODS/… later) reuse this table instead of inventing a parallel one.
 enum ContributionKind {
   MONEY
+  KIT
+  BLOOD
 }
 
 enum ContributionStatus {
@@ -153,13 +196,22 @@ model Contribution {
   donor   User   @relation("ContributionsMade", fields: [donorId], references: [id])
 
   kind   ContributionKind   @default(MONEY)
-  amount Int
   status ContributionStatus @default(PENDING_CONFIRMATION)
 
-  // Proof of payment (§7.2). Real signed-upload support (object storage + CDN) is a
-  // cross-cutting TODO — proofUrl is a plain client-supplied string until that pipeline exists.
-  // UTR uniqueness is a hard DB constraint (D-019), not just an app-level flag.
-  utr      String @unique
+  // MONEY: the ₹ amount (required). KIT mode=MONEY: server-computed as kits × cost_per_kit,
+  // same audit-worthy principle as Money (CLAUDE.md §7). KIT mode=DELIVER: null — no money
+  // moves through the platform for a physical delivery pledge (§9.2).
+  amount Int?
+  // KIT only — how many kits this contribution covers (§9.2). Null for MONEY/BLOOD.
+  kits   Int?
+  // BLOOD only — units pledged, usually 1 (§8.5). Null for MONEY/KIT.
+  units  Int?
+
+  // Proof of payment (§7.2/§9.2). Required for MONEY and KIT mode=MONEY contributions; null for
+  // KIT mode=DELIVER and BLOOD (neither ever involves payment). UTR uniqueness is a hard DB
+  // constraint (D-019) — nullable + @unique lets Postgres allow multiple NULLs while still
+  // enforcing uniqueness among the UTRs that do exist.
+  utr      String? @unique
   proofUrl String?
 
   // Beneficiary (default) or Admin (override) — D-002, D-018. Never Staff — confirming/

@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { postMoneyNeed } from "../lib/api";
+import { postMoneyNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { PhotoPicker, type PickedPhoto } from "../components/PhotoPicker";
 
-// PRD §7.1/§7.2 — post a MONEY need (target + UPI). Proof-doc upload isn't wired up yet — no
-// object-storage pipeline exists (see backend/README.md's cross-cutting TODO).
+// PRD §7.1/§7.2 — post a MONEY need (target + UPI + optional photos, D-021).
 export function CreateMoneyNeedScreen({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [upiId, setUpiId] = useState("");
+  const [photos, setPhotos] = useState<PickedPhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -25,7 +26,14 @@ export function CreateMoneyNeedScreen({ onDone, onBack }: { onDone: () => void; 
     setError(null);
     setIsSubmitting(true);
     try {
-      await postMoneyNeed(token, { title: title.trim(), description: description.trim(), targetAmount: amount, upiId: upiId.trim() });
+      const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
+      await postMoneyNeed(token, {
+        title: title.trim(),
+        description: description.trim(),
+        targetAmount: amount,
+        upiId: upiId.trim(),
+        photos: photoUrls,
+      });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post this need");
@@ -73,6 +81,9 @@ export function CreateMoneyNeedScreen({ onDone, onBack }: { onDone: () => void; 
         value={upiId}
         onChangeText={setUpiId}
       />
+
+      <PhotoPicker photos={photos} onChange={setPhotos} />
+
       {error && <Text style={styles.errorText}>{error}</Text>}
       <TouchableOpacity style={[styles.button, isSubmitting && styles.buttonDisabled]} onPress={handleSubmit} disabled={isSubmitting}>
         {isSubmitting ? <ActivityIndicator color={theme.color.onPrimary} /> : <Text style={styles.buttonText}>Submit for verification</Text>}

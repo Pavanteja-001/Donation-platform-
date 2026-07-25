@@ -1,9 +1,9 @@
-import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { theme } from "../lib/theme";
 
-// PRD §7.4 — every MONEY need shows a public progress bar (raised ÷ target).
-export function ProgressBar({ raised, target }: { raised: number; target: number }) {
+// PRD §7.4/§9.4 — every MONEY/KIT need shows a public progress bar (raised/funded ÷ target).
+// `label` overrides the default ₹-formatted one — used for kit needs ("X of Y kits").
+export function ProgressBar({ raised, target, label }: { raised: number; target: number; label?: string }) {
   const pct = target > 0 ? Math.min(raised / target, 1) : 0;
   return (
     <View>
@@ -11,7 +11,7 @@ export function ProgressBar({ raised, target }: { raised: number; target: number
         <View style={[styles.fill, { width: `${pct * 100}%` }]} />
       </View>
       <Text style={styles.label}>
-        ₹{raised.toLocaleString("en-IN")} raised of ₹{target.toLocaleString("en-IN")}
+        {label ?? `₹${raised.toLocaleString("en-IN")} raised of ₹${target.toLocaleString("en-IN")}`}
       </Text>
     </View>
   );

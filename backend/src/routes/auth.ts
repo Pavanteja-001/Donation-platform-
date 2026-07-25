@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { BloodGroup, Gender, Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requestOtp, verifyOtp } from "../lib/otp";
 import { signAuthToken } from "../lib/jwt";
 import { requireAuth } from "../middleware/auth";
+import { computeEligibility } from "../lib/bloodEligibility";
 
 const router = Router();
 
@@ -49,12 +50,44 @@ router.post("/otp/verify", async (req, res) => {
   }
 
   const token = signAuthToken({ sub: user.id, role: user.role, phone: user.phone });
-  res.json({ token, user: { id: user.id, phone: user.phone, name: user.name, role: user.role } });
+  // Full user object, same shape as GET /me — a hand-picked subset here previously meant a
+  // client trusting this response right after login (rather than re-fetching /me) would see
+  // fields like the blood profile as missing/undefined instead of null until their next fetch.
+  res.json({ token, user, bloodEligibility: computeEligibility(user) });
 });
 
 router.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
   if (!user) return res.status(404).json({ error: "User not found" });
+  // PRD §8.2 — computed fresh on every read, never stored (see the lib for why).
+  res.json({ user, bloodEligibility: computeEligibility(user) });
+});
+
+// Self-service profile edits — name/location (any role) and the blood donor profile (PRD §8.1,
+// opt-in). `expoPushToken` is registered here too rather than a separate endpoint since it's
+// the same "update my own profile" action from the client's point of view.
+//
+// Deliberately excluded: `lastDonationDate` is NOT client-settable — letting a donor freely set
+// it would be a straightforward way to always appear eligible (set it to the distant past, or
+// never set it), which is exactly the self-declared-signal gaming problem D-012 already rejected
+// for urgency. It's only ever set by the backend when a BLOOD contribution is confirmed (§8.5).
+const updateMeSchema = z.object({
+  name: z.string().min(1).optional(),
+  city: z.string().min(1).optional(),
+  area: z.string().min(1).optional(),
+  bloodGroup: z.nativeEnum(BloodGroup).optional(),
+  dateOfBirth: z.coerce.date().optional(),
+  gender: z.nativeEnum(Gender).optional(),
+  availableToDonate: z.boolean().optional(),
+  expoPushToken: z.string().min(1).optional(),
+});
+
+router.patch("/me", requireAuth, async (req, res) => {
+  const parsed = updateMeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+  const user = await prisma.user.update({ where: { id: req.user!.sub }, data: parsed.data });
   res.json({ user });
 });
 

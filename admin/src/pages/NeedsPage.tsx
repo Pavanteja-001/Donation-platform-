@@ -12,11 +12,24 @@ const STATUS_FILTERS: { label: string; value: NeedStatus | "ALL" | undefined }[]
   { label: "All", value: "ALL" },
 ];
 
-function moneyProgress(need: Need): string | null {
-  if (need.type !== "MONEY" || !need.payload) return null;
-  const p = need.payload as { raised_amount?: number; target_amount?: number };
-  if (typeof p.raised_amount !== "number" || typeof p.target_amount !== "number") return null;
-  return `₹${p.raised_amount.toLocaleString("en-IN")} / ₹${p.target_amount.toLocaleString("en-IN")}`;
+function progressLabel(need: Need): string | null {
+  if (!need.payload) return null;
+  if (need.type === "MONEY") {
+    const p = need.payload as { raised_amount?: number; target_amount?: number };
+    if (typeof p.raised_amount !== "number" || typeof p.target_amount !== "number") return null;
+    return `₹${p.raised_amount.toLocaleString("en-IN")} / ₹${p.target_amount.toLocaleString("en-IN")}`;
+  }
+  if (need.type === "KIT") {
+    const p = need.payload as { kits_funded?: number; kits_needed?: number };
+    if (typeof p.kits_funded !== "number" || typeof p.kits_needed !== "number") return null;
+    return `${p.kits_funded} / ${p.kits_needed} kits`;
+  }
+  if (need.type === "BLOOD") {
+    const p = need.payload as { units_fulfilled?: number; units_needed?: number };
+    if (typeof p.units_fulfilled !== "number" || typeof p.units_needed !== "number") return null;
+    return `${p.units_fulfilled} / ${p.units_needed} units`;
+  }
+  return null;
 }
 
 export function NeedsPage({ onSelectNeed }: { onSelectNeed: (id: string) => void }) {
@@ -108,7 +121,7 @@ export function NeedsPage({ onSelectNeed }: { onSelectNeed: (id: string) => void
                 <span className={`badge status-${n.status.toLowerCase()}`}>{n.status.replace("_", " ")}</span>
               </td>
               <td>{n.postedBy.name ?? n.postedBy.phone ?? "—"}</td>
-              <td>{moneyProgress(n) ?? "—"}</td>
+              <td>{progressLabel(n) ?? "—"}</td>
               <td>
                 {n.status === "PENDING_VERIFICATION" && (
                   <div className="row-actions">

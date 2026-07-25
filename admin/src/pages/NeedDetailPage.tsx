@@ -5,16 +5,42 @@ import {
   fetchNeed,
   rejectContribution,
   rejectNeed,
+  setNeedUrgency,
   verifyNeed,
+  type BloodPayload,
   type Contribution,
+  type KitPayload,
   type MoneyPayload,
   type Need,
+  type Urgency,
 } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
 }
+
+function isKitPayload(payload: Need["payload"]): payload is KitPayload {
+  return !!payload && typeof (payload as KitPayload).kits_needed === "number";
+}
+
+function isBloodPayload(payload: Need["payload"]): payload is BloodPayload {
+  return !!payload && typeof (payload as BloodPayload).units_needed === "number";
+}
+
+function formatGroup(g: BloodPayload["blood_group"]) {
+  return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
+}
+
+// Kind-aware — a BLOOD contribution has neither `amount` nor `kits`, only `units`.
+function formatContributionAmount(c: Contribution): string {
+  if (c.kind === "KIT") return `${c.kits} kits`;
+  if (c.kind === "BLOOD") return `${c.units} units`;
+  return `₹${c.amount?.toLocaleString("en-IN")}`;
+}
+
+const NON_TERMINAL: Need["status"][] = ["PENDING_VERIFICATION", "LIVE", "PARTIALLY_FULFILLED"];
+const URGENCIES: Urgency[] = ["NORMAL", "URGENT", "EMERGENCY"];
 
 export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () => void }) {
   const { token, isAdmin } = useAuth();
@@ -76,10 +102,25 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
     }
   }
 
+  async function handleUrgencyChange(urgency: Urgency) {
+    if (!token) return;
+    setBusy(true);
+    try {
+      await setNeedUrgency(token, needId, urgency);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update urgency");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (error && !need) return <p className="error">{error}</p>;
   if (!need) return <p className="hint">Loading…</p>;
 
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
+  const kit = need.type === "KIT" && isKitPayload(need.payload) ? need.payload : null;
+  const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
 
   return (
     <div>
@@ -93,14 +134,52 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
       </p>
       <p>{need.description}</p>
 
+      {need.photos.length > 0 && (
+        <div className="photo-gallery">
+          {need.photos.map((url) => (
+            <img key={url} src={url} alt="" />
+          ))}
+        </div>
+      )}
+
       {money && (
         <p className="hint">
           Progress: ₹{money.raised_amount.toLocaleString("en-IN")} / ₹{money.target_amount.toLocaleString("en-IN")} ·
           UPI: {money.upi_id}
         </p>
       )}
+      {kit && (
+        <p className="hint">
+          Progress: {kit.kits_funded} / {kit.kits_needed} kits · {kit.contents} · mode: {kit.mode}
+          {kit.upi_id ? ` · UPI: ${kit.upi_id}` : ""}
+        </p>
+      )}
+      {blood && (
+        <p className="hint">
+          Progress: {blood.units_fulfilled} / {blood.units_needed} units · blood group: {formatGroup(blood.blood_group)}
+          {need.linkedInstitutionId ? ` · institution-verified: ${need.institutionVerified ? "yes" : "no"}` : ""}
+        </p>
+      )}
       {need.status === "REJECTED" && need.rejectionReason && <p className="error">Rejected: {need.rejectionReason}</p>}
       {error && <p className="error">{error}</p>}
+
+      {NON_TERMINAL.includes(need.status) && (
+        <p className="hint">
+          Urgency (D-012 — never self-declared):{" "}
+          {URGENCIES.map((u) => (
+            <button
+              key={u}
+              type="button"
+              className={need.urgency === u ? "chip active" : "chip"}
+              onClick={() => handleUrgencyChange(u)}
+              disabled={busy || need.urgency === u}
+              style={{ marginLeft: 4 }}
+            >
+              {u}
+            </button>
+          ))}
+        </p>
+      )}
 
       {need.status === "PENDING_VERIFICATION" && (
         <div className="row-actions">
@@ -130,8 +209,8 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
               {contributions.map((c) => (
                 <tr key={c.id}>
                   <td>{c.donor.name ?? c.donor.phone}</td>
-                  <td>₹{c.amount.toLocaleString("en-IN")}</td>
-                  <td>{c.utr}</td>
+                  <td>{formatContributionAmount(c)}</td>
+                  <td>{c.utr ?? "—"}</td>
                   <td>{c.status.replace("_", " ")}</td>
                   {isAdmin && (
                     <td>
