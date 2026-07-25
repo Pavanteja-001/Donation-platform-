@@ -149,11 +149,11 @@ dev behavior (D-015) untouched; `.env` stays untracked.
 - [x] **Chunk 3 — Donor registration & profile (mobile).** Post-OTP registration step
   (name/email/DOB/gender/blood group/permanent city+area, D-010); Profile tab; gate need-posting
   and blood-respond on a completed profile.
-- [ ] **Chunk 4 — Institution registration + KYC (web-panel), D-007.** Multi-step registration
+- [x] **Chunk 4 — Institution registration + KYC (web-panel), D-007.** Multi-step registration
   (org type/legal name/reg. no/Darpan ID where applicable/address/bank account + document
   upload via the existing signed-URL flow); backend `kycStatus`; block need-creation for
   non-APPROVED institutions; a "Verification status" screen.
-- [ ] **Chunk 5 — Admin approval of institutions, D-007.** Institutions queue (approve/reject-
+- [x] **Chunk 5 — Admin approval of institutions, D-007.** Institutions queue (approve/reject-
   with-reason, D-017 pattern); Admin-vs-Staff permission call documented when made.
 - [ ] **Chunk 6 — Duplicate-response fix + global error handling.** Backend: at most one active
   `PENDING_CONFIRMATION` contribution per (donor, need) — closes the BLOOD/GOODS double-tap gap.

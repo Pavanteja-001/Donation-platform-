@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { NeedStatus, NeedType, Prisma, Role, Urgency } from "@prisma/client";
+import { KycStatus, NeedStatus, NeedType, Prisma, Role, Urgency } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
@@ -96,6 +96,15 @@ const createSchema = z.object({
 // Any authenticated USER (donor/beneficiary) or INSTITUTION can post a need (PRD §4).
 // Starts as DRAFT (PRD §6.2) — not visible to anyone else until POST /:id/submit.
 router.post("/", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  if (user.role === Role.INSTITUTION && user.kycStatus !== KycStatus.APPROVED) {
+    return res.status(403).json({
+      error: `Your organization must be approved by an administrator before you can submit needs. Current status: ${user.kycStatus}.`,
+    });
+  }
+
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
@@ -183,6 +192,13 @@ router.patch("/:id", async (req, res) => {
 // PRD §6.2: post -> PENDING_VERIFICATION, awaiting admin (and/or linked-institution) review.
 // PRD §7.1/§9.1: MONEY/KIT needs need their required payload fields set before submission.
 router.post("/:id/submit", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
+  if (user && user.role === Role.INSTITUTION && user.kycStatus !== KycStatus.APPROVED) {
+    return res.status(403).json({
+      error: `Your organization must be approved by an administrator before you can submit needs. Current status: ${user.kycStatus}.`,
+    });
+  }
+
   const need = await loadOwnedDraft(req.params.id, req.user!.sub);
   if (!need) return res.status(404).json({ error: "Need not found" });
   try {

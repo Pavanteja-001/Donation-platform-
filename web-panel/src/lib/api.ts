@@ -1,12 +1,27 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
 export type Role = "USER" | "INSTITUTION" | "ADMIN" | "STAFF";
+export type InstitutionType = "NGO" | "HOSPITAL" | "BLOOD_BANK" | "ORPHANAGE";
+export type KycStatus = "NOT_SUBMITTED" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
 
 export interface AuthUser {
   id: string;
   phone: string;
   name: string | null;
   role: Role;
+  email?: string | null;
+  city?: string | null;
+  area?: string | null;
+  institutionType?: InstitutionType | null;
+  legalName?: string | null;
+  registrationNumber?: string | null;
+  darpanId?: string | null;
+  address?: string | null;
+  bankAccount?: string | null;
+  kycDocumentUrl?: string | null;
+  kycPhotos?: string[];
+  kycStatus?: KycStatus;
+  kycRejectionReason?: string | null;
 }
 
 export type NeedType = "MONEY" | "BLOOD" | "KIT" | "GOODS" | "MEAL_SLOT" | "SKILL_REQUEST" | "QUESTION";
@@ -156,6 +171,31 @@ export function verifyOtp(phone: string, code: string, name?: string) {
 
 export function fetchMe(token: string) {
   return request<{ user: AuthUser }>("/api/auth/me", { headers: authHeaders(token) });
+}
+
+export function updateMe(
+  token: string,
+  data: Partial<{
+    name: string;
+    email: string | null;
+    city: string;
+    area: string;
+    institutionType: InstitutionType;
+    legalName: string;
+    registrationNumber: string;
+    darpanId: string | null;
+    address: string;
+    bankAccount: string;
+    kycDocumentUrl: string;
+    kycPhotos: string[];
+    kycStatus: KycStatus;
+  }>
+) {
+  return request<{ user: AuthUser }>("/api/auth/me", {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
 }
 
 // Every need this institution posted, any status — how they track verification progress.
@@ -345,7 +385,7 @@ export function setNeedUrgency(token: string, needId: string, urgency: Urgency) 
 
 // Object storage (CLAUDE.md §6 / D-021): the backend only signs a short-lived upload URL — the
 // client uploads the file bytes straight to the bucket, never through the backend.
-export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr") {
+export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr" | "kyc-docs") {
   return request<{ uploadUrl: string; publicUrl: string; key: string }>("/api/uploads/sign", {
     method: "POST",
     headers: authHeaders(token),

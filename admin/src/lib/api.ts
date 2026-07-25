@@ -1,12 +1,15 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
 export type Role = "USER" | "INSTITUTION" | "ADMIN" | "STAFF";
+export type InstitutionType = "NGO" | "HOSPITAL" | "BLOOD_BANK" | "ORPHANAGE";
+export type KycStatus = "NOT_SUBMITTED" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
 
 export interface AuthUser {
   id: string;
   phone: string;
   name: string | null;
   role: Role;
+  kycStatus?: KycStatus;
 }
 
 export type TrustTier = "BRONZE" | "SILVER" | "GOLD";
@@ -19,9 +22,19 @@ export interface AdminUser {
   city: string | null;
   area: string | null;
   createdAt: string;
-  // PRD §14.1 — computed server-side, never stored.
   trustTier: TrustTier;
   confirmedContributionsCount: number;
+
+  institutionType?: InstitutionType | null;
+  legalName?: string | null;
+  registrationNumber?: string | null;
+  darpanId?: string | null;
+  address?: string | null;
+  bankAccount?: string | null;
+  kycDocumentUrl?: string | null;
+  kycPhotos?: string[];
+  kycStatus?: KycStatus;
+  kycRejectionReason?: string | null;
 }
 
 export interface StaffAccount {
@@ -400,6 +413,19 @@ export async function uploadPhotos(token: string, files: File[], folder: "need-p
     urls.push(signed.publicUrl);
   }
   return urls;
+}
+
+export function fetchKycQueue(token: string, status?: KycStatus | "ALL") {
+  const query = status ? `?status=${status}` : "";
+  return request<{ queue: AdminUser[] }>(`/api/admin/kyc/queue${query}`, { headers: authHeaders(token) });
+}
+
+export function updateKycStatus(token: string, userId: string, status: KycStatus, reason?: string) {
+  return request<{ user: AdminUser }>(`/api/admin/users/${userId}/kyc`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ status, reason }),
+  });
 }
 
 // `status` omitted = the verification queue (PENDING_VERIFICATION only); "ALL" or a specific

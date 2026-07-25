@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { NeedStatus, NeedType, Role } from "@prisma/client";
+import { NeedStatus, NeedType, Role, KycStatus, InstitutionType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
@@ -110,6 +110,56 @@ router.post("/needs/:id/reject", async (req, res) => {
     data: { status: NeedStatus.REJECTED, rejectionReason: parsed.data.reason },
   });
   res.json({ need: updated });
+});
+
+const kycQueryStatusSchema = z.union([z.nativeEnum(KycStatus), z.literal("ALL")]).optional();
+
+router.get("/kyc/queue", async (req, res) => {
+  const parsed = kycQueryStatusSchema.safeParse(req.query.status);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid status filter" });
+  }
+  const status = parsed.data ?? KycStatus.PENDING_APPROVAL;
+  const queue = await prisma.user.findMany({
+    where: {
+      role: Role.INSTITUTION,
+      ...(status === "ALL" ? {} : { kycStatus: status }),
+    },
+    orderBy: { updatedAt: "asc" },
+  });
+  res.json({ queue });
+});
+
+const kycUpdateSchema = z.object({
+  status: z.nativeEnum(KycStatus),
+  reason: z.string().optional(),
+});
+
+router.post("/users/:id/kyc", async (req, res) => {
+  const parsed = kycUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+
+  const { status, reason } = parsed.data;
+  if (status === KycStatus.REJECTED && (!reason || !reason.trim())) {
+    return res.status(400).json({ error: "A rejection reason is required" });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user || user.role !== Role.INSTITUTION) {
+    return res.status(404).json({ error: "Institution user not found" });
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      kycStatus: status,
+      kycRejectionReason: status === KycStatus.REJECTED ? reason : null,
+    },
+  });
+
+  res.json({ user: updated });
 });
 
 // Everything below is ADMIN-only — editing users/settings, managing staff, overriding.

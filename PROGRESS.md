@@ -5,6 +5,60 @@
 
 ---
 
+### Session 25 — Milestone 9 Chunk 5: Admin approval of institutions (admin)
+This session implemented Chunk 5 - building the institution verification queue console and KYC status management (Approve / Reject-with-reason) in both the Backend and the Admin Console.
+
+**What was done:**
+1. **Backend Routing & Gating:**
+   - Exposed `GET /api/admin/kyc/queue` to fetch institutions pending review (or matching status queries like `ALL/APPROVED/REJECTED`), sorted oldest first.
+   - Exposed `POST /api/admin/users/:id/kyc` to approve or reject a user's KYC profile.
+   - Enforced that both routes are gated to users carrying the `ADMIN` or `STAFF` roles.
+   - Documented role division: both roles share user-verification/need-approval tasks, while staff is restricted from mutating staff logins, overriding transactions, or settings.
+
+2. **Admin Console API & Types:**
+   - Extended `AuthUser` and `AdminUser` interfaces in `admin/src/lib/api.ts` to match backend KYC fields.
+   - Added `fetchKycQueue` and `updateKycStatus` client helpers.
+
+3. **Admin Queue Dashboard Interface:**
+   - Replaced the institutions placeholder screen `admin/src/pages/InstitutionsPage.tsx` with a split-pane dashboard.
+   - Added filter tabs ("Pending Review", "Approved", "Rejected", "All") listing institutions in a search-friendly table.
+   - Integrated a detail panel opening on selection, showing complete details (Legal name, Type, Reg number, Darpan ID, Address, Bank account, clickable certificate link, and photo image thumbnails).
+   - Added **Approve** action, and **Reject** action showing inline input box enforcing a rejection reason.
+
+4. **Build & Automated Verification:**
+   - Wrote a typescript verification script testing all admin endpoints: queue fetching, role gating (non-admin 403 blocks), rejection validation (reject without reason blocks), rejection success, and approval success.
+   - Verified that `backend`, `web-panel`, `admin`, and `mobile` compile cleanly without errors.
+
+**Next:** Milestone 9 Chunk 6 — Duplicate-response fix + global error/validation handling, closing the concurrent responses/double-pledge gaps and adding shared error wrappers.
+
+### Session 24 — Milestone 9 Chunk 4: Institution registration & KYC (web-panel)
+This session implemented Chunk 4 - replacing direct OTP self-registration of institution accounts with a robust multi-step profile submission and document upload flow on the Web Panel, alongside implementing backend KYC gates and verification status screens.
+
+**What was done:**
+1. **Database Schema Enhancements:**
+   - Added `InstitutionType` and `KycStatus` enums to `backend/prisma/schema.prisma`.
+   - Added new KYC fields to the `User` model (`institutionType`, `legalName`, `registrationNumber`, `darpanId`, `address`, `bankAccount`, `kycDocumentUrl`, `kycPhotos`, `kycStatus`, `kycRejectionReason`).
+   - Synced database schema updates to Railway PostgreSQL using `npx prisma db push`.
+
+2. **Backend API Enhancements:**
+   - Extended `updateMeSchema` validation and path logic in `PATCH /api/auth/me` to process and validate KYC inputs, requiring `darpanId` only for NGOs when submitting for approval (`kycStatus: "PENDING_APPROVAL"`).
+   - Added `GET /api/auth/kyc` to allow institutions to retrieve their KYC verification status.
+   - Gated need creation and submit endpoints (`POST /api/needs` and `POST /api/needs/:id/submit`) to return a **403 Forbidden** error if the poster is an institution and is not yet `APPROVED`.
+   - Extended `/api/uploads/sign` to allow `application/pdf` contentType and organize uploads under a new `"kyc-docs"` folder.
+
+3. **Web Panel Onboarding & Profile Sync:**
+   - Extended `AuthUser` types and folder signatures in `web-panel/src/lib/api.ts`.
+   - Added `refreshUser` inside `web-panel/src/context/AuthContext.tsx` to handle live user updates.
+   - Implemented a multi-step registration workflow in `web-panel/src/pages/LoginPage.tsx` (Step 1: OTP, Step 2: Org profile inputs, Step 3: PDF certificate + photos upload using signed-URL flow) before logging in.
+   - Refactored `web-panel/src/pages/VerificationStatusPage.tsx` to showcase real-time KYC status (Pending, Approved, Rejected) and details, enabling full editing and re-submission of rejected/unsubmitted KYC profiles.
+   - Blocked the publish features in `web-panel/src/pages/PostNeedPage.tsx` for unapproved institution users.
+
+4. **Build & Automated Verification:**
+   - Wrote a typescript verification script confirming that unapproved institutions get blocked with `403` on need post, while approved ones successfully create drafts with `201`.
+   - Verified that `backend`, `web-panel`, `admin`, and `mobile` compile cleanly without errors.
+
+**Next:** Milestone 9 Chunk 5 — Admin approval of institutions (admin), implementing an approvals queue console for administrators/staff to approve or reject submitted institution registrations.
+
 ### Session 23 — Milestone 9 Chunk 3: Donor registration & profile (mobile)
 This session implemented Chunk 3 - Donor registration & profile details on the mobile client. We added a full profile setup onboarding screen, updated the profile display tab, and integrated completeness gates for need posting and blood responses.
 

@@ -1,8 +1,44 @@
 import { useNavigate } from "react-router-dom";
-import { Card } from "../components/ui";
+import { useAuth } from "../context/AuthContext";
+import { Card, Button } from "../components/ui";
 
 export function PostNeedPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const isApproved = user?.kycStatus === "APPROVED";
+
+  if (!isApproved) {
+    const statusLabels: Record<string, string> = {
+      PENDING_APPROVAL: "Pending Review",
+      REJECTED: "Rejected",
+      NOT_SUBMITTED: "Not Submitted",
+    };
+    const currentStatus = user?.kycStatus ?? "NOT_SUBMITTED";
+
+    return (
+      <div style={{ maxWidth: "560px", marginTop: "24px" }}>
+        <h2>Post a need</h2>
+        <p className="subtitle">Publish request needs for your organization.</p>
+        
+        <div style={{ marginTop: "24px" }}>
+          <Card>
+            <h3 style={{ marginTop: 0, color: "var(--color-danger)" }}>Verification Required</h3>
+            <p className="hint" style={{ marginBottom: "20px" }}>
+              Your organization must be approved by an administrator before you can publish needs to the public feed.
+            </p>
+            <div style={{ marginBottom: "20px" }}>
+              <span className="hint" style={{ display: "block", fontSize: "12px" }}>Current KYC Status</span>
+              <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>
+                {statusLabels[currentStatus]}
+              </span>
+            </div>
+            <Button label="Check Verification Status" onClick={() => navigate("/verification-status")} />
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

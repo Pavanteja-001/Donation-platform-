@@ -25,6 +25,20 @@ enum Role {
   STAFF
 }
 
+enum InstitutionType {
+  NGO
+  HOSPITAL
+  BLOOD_BANK
+  ORPHANAGE
+}
+
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
 // PRD §8.1 — the 8 standard blood groups.
 enum BloodGroup {
   A_POSITIVE
@@ -67,6 +81,18 @@ model User {
 
   // Set once the app registers for push (D-016) — used for the eligible-donor match (§8.4).
   expoPushToken String?
+
+  // KYC details (Chunk 4) — NGO / hospital / blood bank / orphanage onboarding.
+  institutionType    InstitutionType?
+  legalName          String?
+  registrationNumber String?
+  darpanId           String?
+  address            String?
+  bankAccount        String?
+  kycDocumentUrl     String?
+  kycPhotos          String[]          @default([])
+  kycStatus          KycStatus         @default(NOT_SUBMITTED)
+  kycRejectionReason String?
 
   // Set only for STAFF accounts — which ADMIN created them (D-018).
   createdByAdminId String?

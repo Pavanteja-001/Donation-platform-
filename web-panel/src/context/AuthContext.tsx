@@ -9,6 +9,7 @@ interface AuthContextValue {
   isLoading: boolean;
   signIn: (token: string, user: AuthUser) => void;
   signOut: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -17,6 +18,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const refreshUser = async () => {
+    const stored = token || localStorage.getItem(TOKEN_KEY);
+    if (!stored) return;
+    try {
+      const { user: me } = await fetchMe(stored);
+      setUser(me);
+    } catch (err) {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
@@ -48,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(null);
         setUser(null);
       },
+      refreshUser,
     }),
     [user, token, isLoading]
   );

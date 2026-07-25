@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { BloodGroup, Gender, Role } from "@prisma/client";
+import { BloodGroup, Gender, Role, InstitutionType, KycStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requestOtp, verifyOtp } from "../lib/otp";
 import { signAuthToken } from "../lib/jwt";
@@ -92,6 +92,17 @@ const updateMeSchema = z.object({
   gender: z.nativeEnum(Gender).optional(),
   availableToDonate: z.boolean().optional(),
   expoPushToken: z.string().min(1).optional(),
+
+  // KYC fields (Chunk 4)
+  institutionType: z.nativeEnum(InstitutionType).optional(),
+  legalName: z.string().min(1).optional(),
+  registrationNumber: z.string().min(1).optional(),
+  darpanId: z.string().optional().nullable(),
+  address: z.string().min(1).optional(),
+  bankAccount: z.string().min(1).optional(),
+  kycDocumentUrl: z.string().url("Enter a valid URL").optional(),
+  kycPhotos: z.array(z.string()).optional(),
+  kycStatus: z.nativeEnum(KycStatus).optional(),
 });
 
 router.patch("/me", requireAuth, async (req, res) => {
@@ -99,8 +110,56 @@ router.patch("/me", requireAuth, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
   }
+
+  const data = parsed.data;
+
+  // Validate KYC details if the institution is submitting for approval
+  if (data.kycStatus === KycStatus.PENDING_APPROVAL) {
+    const current = await prisma.user.findUnique({ where: { id: req.user!.sub } });
+    if (!current) return res.status(404).json({ error: "User not found" });
+
+    const type = data.institutionType ?? current.institutionType;
+    const legalName = data.legalName ?? current.legalName;
+    const regNo = data.registrationNumber ?? current.registrationNumber;
+    const address = data.address ?? current.address;
+    const bankAccount = data.bankAccount ?? current.bankAccount;
+    const kycDoc = data.kycDocumentUrl ?? current.kycDocumentUrl;
+    const darpanId = data.darpanId !== undefined ? data.darpanId : current.darpanId;
+
+    if (!type) return res.status(400).json({ error: "Institution type is required for KYC approval" });
+    if (!legalName) return res.status(400).json({ error: "Legal organization name is required" });
+    if (!regNo) return res.status(400).json({ error: "Registration number is required" });
+    if (!address) return res.status(400).json({ error: "Organization address is required" });
+    if (!bankAccount) return res.status(400).json({ error: "Bank account is required" });
+    if (!kycDoc) return res.status(400).json({ error: "KYC document certificate is required" });
+
+    if (type === InstitutionType.NGO && !darpanId) {
+      return res.status(400).json({ error: "NGOs must provide a valid Darpan ID" });
+    }
+  }
+
   const user = await prisma.user.update({ where: { id: req.user!.sub }, data: parsed.data });
   res.json({ user });
+});
+
+router.get("/kyc", requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.sub },
+    select: {
+      kycStatus: true,
+      kycRejectionReason: true,
+      institutionType: true,
+      legalName: true,
+      registrationNumber: true,
+      darpanId: true,
+      address: true,
+      bankAccount: true,
+      kycDocumentUrl: true,
+      kycPhotos: true,
+    },
+  });
+  if (!user) return res.status(404).json({ error: "User not found" });
+  res.json(user);
 });
 
 export default router;
