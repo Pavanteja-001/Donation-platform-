@@ -16,10 +16,10 @@
 - [x] Auth + role model (Donor, Beneficiary, Institution, Admin) — phone-OTP (static dev code) + Admin/Staff RBAC (D-018); see D-020
 
 ## Milestone 1 — Core "Need" engine  *(write PRD §6 first)*
-- [ ] Data model for `Need` + shared lifecycle (states, transitions)
-- [ ] Admin verification flow (PENDING_VERIFICATION → LIVE / REJECTED)
-- [ ] Generic "browse live needs" list (donor mobile)
-- [ ] Test the full lifecycle end-to-end
+- [x] Data model for `Need` + shared lifecycle (states, transitions) — `backend/prisma/schema.prisma`, transitions enforced in `src/lib/needLifecycle.ts`
+- [x] Admin verification flow (PENDING_VERIFICATION → LIVE / REJECTED) — `POST /api/admin/needs/:id/verify|reject` (Admin+Staff, D-018); reject requires a reason (D-017)
+- [x] Generic "browse live needs" list (donor mobile) — `mobile/src/screens/NeedsFeedScreen.tsx` (FlashList), backed by `GET /api/needs`
+- [x] Test the full lifecycle end-to-end — curl-tested against the real (Railway) Postgres DB: draft isolation, submit, RBAC on verify/reject, mandatory rejection reason, visibility rules, staff-vs-admin permission split
 
 ## Milestone 2 — Money needs  *(write PRD §7 first)*
 - [ ] Post a money need (target, UPI/QR, proof docs)

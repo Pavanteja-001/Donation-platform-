@@ -36,8 +36,85 @@ model User {
   createdByAdmin   User?   @relation("StaffCreatedBy", fields: [createdByAdminId], references: [id])
   staffCreated     User[]  @relation("StaffCreatedBy")
 
+  postedNeeds            Need[] @relation("NeedsPosted")
+  linkedInstitutionNeeds Need[] @relation("NeedsLinkedInstitution")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([role])
+}
+
+// PRD §6.1 — Need types. Only BLOOD and MEAL_SLOT need custom modules (CLAUDE.md §3);
+// everything else rides the shared engine below with a type-specific `payload`.
+enum NeedType {
+  MONEY
+  BLOOD
+  KIT
+  GOODS
+  MEAL_SLOT
+  SKILL_REQUEST
+  QUESTION
+}
+
+// PRD §6.8 / D-012 — admin/institution-verified, never self-declared.
+enum Urgency {
+  NORMAL
+  URGENT
+  EMERGENCY
+}
+
+// PRD §6.2 — shared lifecycle for every Need type.
+//   DRAFT -> PENDING_VERIFICATION -> LIVE -> PARTIALLY_FULFILLED -> FULFILLED
+//                        \-> REJECTED         \-> EXPIRED / CANCELLED (terminal)
+// Transitions are enforced in src/lib/needLifecycle.ts, not just documented here.
+enum NeedStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  LIVE
+  PARTIALLY_FULFILLED
+  FULFILLED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model Need {
+  id          String   @id @default(cuid())
+  type        NeedType
+  title       String
+  description String
+
+  postedById String
+  postedBy   User   @relation("NeedsPosted", fields: [postedById], references: [id])
+
+  status  NeedStatus @default(DRAFT)
+  urgency Urgency    @default(NORMAL)
+
+  // Baseline location from the poster (PRD §6.7). Precise geo / exact-location reveal
+  // on approval is a later milestone.
+  city String?
+  area String?
+
+  // Optional hospital/blood bank/NGO that can co-verify (D-008) — full institution-assisted
+  // verification flow (fast-track, BLOOD-specific) lands with the Blood module (Milestone 4).
+  linkedInstitutionId String?
+  linkedInstitution   User?   @relation("NeedsLinkedInstitution", fields: [linkedInstitutionId], references: [id])
+
+  adminVerified       Boolean @default(false)
+  institutionVerified Boolean @default(false)
+
+  // Mandatory on REJECTED (D-017), shown live to the poster.
+  rejectionReason String?
+
+  // Type-specific fields (PRD §6.4) — target_amount/upi_id for MONEY, blood_group/units for
+  // BLOOD, etc. Validated per-type at the API layer once each flow is built (Milestone 2+);
+  // stored as JSON here so the shared engine doesn't need a schema change per type.
+  payload Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, urgency])
+  @@index([postedById])
 }

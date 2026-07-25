@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Role } from "@prisma/client";
+import { NeedStatus, Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
 
 // Admin console RBAC (D-018):
 //   ADMIN — full access, including creating/removing STAFF and editing users.
@@ -19,6 +20,57 @@ router.get("/users", async (_req, res) => {
     select: { id: true, phone: true, name: true, role: true, city: true, area: true, createdAt: true },
   });
   res.json({ users });
+});
+
+// Admin + Staff: the verification queue and verify/reject actions (D-018 — "verify/accept").
+router.get("/needs", async (_req, res) => {
+  const needs = await prisma.need.findMany({
+    where: { status: NeedStatus.PENDING_VERIFICATION },
+    orderBy: { createdAt: "asc" },
+    include: { postedBy: { select: { id: true, name: true, phone: true, role: true } } },
+  });
+  res.json({ needs });
+});
+
+router.post("/needs/:id/verify", async (req, res) => {
+  const need = await prisma.need.findUnique({ where: { id: req.params.id } });
+  if (!need) return res.status(404).json({ error: "Need not found" });
+  try {
+    assertTransition(need.status, NeedStatus.LIVE);
+  } catch (err) {
+    if (err instanceof InvalidTransitionError) return res.status(409).json({ error: err.message });
+    throw err;
+  }
+  const updated = await prisma.need.update({
+    where: { id: need.id },
+    data: { status: NeedStatus.LIVE, adminVerified: true },
+  });
+  res.json({ need: updated });
+});
+
+const rejectSchema = z.object({
+  // D-017: rejection always requires a reason, shown live to the poster.
+  reason: z.string().min(1, "A rejection reason is required"),
+});
+
+router.post("/needs/:id/reject", async (req, res) => {
+  const parsed = rejectSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+  const need = await prisma.need.findUnique({ where: { id: req.params.id } });
+  if (!need) return res.status(404).json({ error: "Need not found" });
+  try {
+    assertTransition(need.status, NeedStatus.REJECTED);
+  } catch (err) {
+    if (err instanceof InvalidTransitionError) return res.status(409).json({ error: err.message });
+    throw err;
+  }
+  const updated = await prisma.need.update({
+    where: { id: need.id },
+    data: { status: NeedStatus.REJECTED, rejectionReason: parsed.data.reason },
+  });
+  res.json({ need: updated });
 });
 
 // Everything below is ADMIN-only — editing users/settings, managing staff, overriding.

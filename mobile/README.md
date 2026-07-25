@@ -10,7 +10,8 @@ Native `ios/` and `android/` projects are checked in (generated via `npx expo pr
    `localhost` for your machine's LAN IP.
 2. `npm install`
 3. Backend running (`../backend`, see its README) with at least one seeded admin.
-4. `npm run ios` / `npm run android` / `npm run web`.
+4. `npm run ios` / `npm run android`. (No web target — this app is iOS/Android only per D-011;
+   `web-panel`/`admin` are the React web surfaces.)
 
 ## Auth flow (D-015)
 
@@ -20,5 +21,11 @@ dev-only warning in `backend/src/lib/otp.ts`. Mobile self-registration is always
 (donor/beneficiary — same account does both, PRD §4); `INSTITUTION` accounts register from the
 web panel.
 
-`HomeScreen` is a placeholder confirming auth + role load correctly — the live needs feed is
-Milestone 1.
+## Needs feed (PRD §6.8, Milestone 1)
+
+`HomeScreen` is a header (greeting/role/logout) over `src/screens/NeedsFeedScreen.tsx`, which lists
+`LIVE`/`PARTIALLY_FULFILLED` needs from `GET /api/needs` via `@shopify/flash-list` (CLAUDE.md's
+performance rules call for FlashList over long feeds). `src/components/NeedCard.tsx` renders the
+urgency badge — red is reserved for Emergency only (PRD Appendix A). Posting a need from the app
+(Money/Blood/etc. specific UI) is a later milestone; for now needs are created via the backend API
+directly (see `backend/README.md`).

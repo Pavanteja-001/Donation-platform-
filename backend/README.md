@@ -41,5 +41,27 @@ Admin-console permission split (`src/routes/admin.ts`):
 | `PATCH /api/admin/users/:id` (edit a user) | ✅ | ❌ |
 | `GET/POST/DELETE /api/admin/staff` (manage staff) | ✅ | ❌ |
 
-Need verify/accept endpoints land in Milestone 1 alongside the `Need` model, gated the same way
-(`requireRole(Role.ADMIN, Role.STAFF)`).
+Need verify/accept endpoints (below) are gated the same way (`requireRole(Role.ADMIN, Role.STAFF)`).
+
+## The Need engine (PRD §6, `src/routes/needs.ts` + `src/routes/admin.ts`)
+
+Shared lifecycle for every need type — `DRAFT → PENDING_VERIFICATION → LIVE → PARTIALLY_FULFILLED
+→ FULFILLED`, with `REJECTED`/`EXPIRED`/`CANCELLED` branches. Transitions are enforced centrally in
+`src/lib/needLifecycle.ts` (`assertTransition`) — every route goes through it rather than writing
+`status` directly.
+
+- `POST /api/needs` — create (any `USER`/`INSTITUTION`), starts as `DRAFT`.
+- `PATCH /api/needs/:id` — owner-only, `DRAFT`-only.
+- `POST /api/needs/:id/submit` — owner-only, `DRAFT → PENDING_VERIFICATION`.
+- `POST /api/needs/:id/cancel` — owner or Admin/Staff, any non-terminal status → `CANCELLED`.
+- `GET /api/needs` — the public feed: `LIVE`/`PARTIALLY_FULFILLED` only, ranked Emergency → Urgent
+  → Normal (D-012) then recency.
+- `GET /api/needs/:id` — owner, Admin/Staff, or anyone once it's publicly visible (`LIVE`+);
+  404s otherwise (doesn't leak existence of private/rejected needs).
+- `GET /api/admin/needs` — the verification queue (`PENDING_VERIFICATION`), Admin + Staff.
+- `POST /api/admin/needs/:id/verify` — Admin + Staff, `PENDING_VERIFICATION → LIVE`.
+- `POST /api/admin/needs/:id/reject { reason }` — Admin + Staff; `reason` is mandatory (D-017) and
+  shown to the poster via `GET /api/needs/:id`.
+
+Type-specific fields (target amount/UPI for `MONEY`, blood group/units for `BLOOD`, …) live in the
+untyped `payload` JSON column for now — validated per type as each flow gets built (Milestone 2+).

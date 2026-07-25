@@ -5,6 +5,54 @@
 
 ---
 
+### Session 10 — Milestone 1: the Need engine (data model, verification, browse feed)
+**Done:**
+- `backend/prisma/schema.prisma`: added `Need` model + `NeedType`/`Urgency`/`NeedStatus` enums
+  (PRD §6.1–6.2). Migration `add_need_engine` applied — **against the real Railway Postgres DB**
+  now configured in `backend/.env` (the user swapped in the actual `DATABASE_URL`; local Homebrew
+  Postgres from Session 9 is no longer what's in use). Re-ran `npm run prisma:seed` against Railway
+  too, since it's a separate database from the local one seeded in Session 9.
+- `backend/src/lib/needLifecycle.ts`: explicit transition table enforcing PRD §6.2's lifecycle
+  graph (`DRAFT → PENDING_VERIFICATION → LIVE → PARTIALLY_FULFILLED → FULFILLED`, with
+  `REJECTED`/`EXPIRED`/`CANCELLED` as branches) — every status change goes through
+  `assertTransition`, not just an unchecked field write.
+- `backend/src/routes/needs.ts`: owner-facing endpoints — create (DRAFT), edit (DRAFT-only),
+  submit (→ PENDING_VERIFICATION), cancel, get-one (visibility: owner, admin/staff, or public once
+  LIVE+), and the public feed (`GET /api/needs`, LIVE + PARTIALLY_FULFILLED only, ranked Emergency →
+  Urgent → Normal then recency per §6.8 — the ranking logic is live and tested even though nothing
+  sets urgency away from NORMAL yet, since urgency-setting is admin/institution-verified per D-012
+  and lands with the Blood module in Milestone 4).
+- `backend/src/routes/admin.ts`: added the verification queue (`GET /admin/needs`, PENDING only)
+  and `POST /admin/needs/:id/verify|reject` — both Admin **and** Staff per D-018 ("verify/accept"),
+  reusing the same `requireRole(ADMIN, STAFF)` gate already on the router. Reject requires a
+  `reason` (D-017, 400 without one).
+- **Verified end-to-end against the live Railway DB with curl** (not just typecheck): draft needs
+  invisible everywhere but to their owner; submit locks editing; donor gets 403 trying to
+  verify/reject their own need; PENDING needs stay off the public feed until verified; verified
+  needs appear on the feed; double-verify/double-submit correctly 409 (invalid transition);
+  reject without a reason 400s, with a reason 200s and the reason is visible to the owner but the
+  need 404s for an unrelated stranger; staff can verify but still can't touch `/admin/staff`.
+- Mobile: `src/lib/api.ts` got `Need`/`fetchNeeds`; new `src/components/NeedCard.tsx` (urgency
+  badge — red reserved for Emergency per Appendix A) and `src/screens/NeedsFeedScreen.tsx`
+  (`@shopify/flash-list`, per CLAUDE.md's performance rules, with loading/empty/error states,
+  pull-to-refresh). `HomeScreen` is now a header (greeting/role/logout) over the feed.
+  `npx tsc --noEmit` clean; `npx expo export --platform ios` bundled successfully (650 modules).
+- Cleaned up leftover unused default `React` imports across mobile files (automatic JSX runtime
+  doesn't need them) that the IDE flagged as hints.
+
+**Not done / caveat:** No simulator/device or browser tool was available to actually see the feed
+render — verification is `tsc` + a successful Metro bundle export + the backend endpoints it calls
+being curl-verified, not a real render. Worth running `npm run ios` and eyeballing it. Web-panel
+and admin don't have a Need-related UI yet (not in Milestone 1's scope — Money-need posting/UPI/
+progress-bar UI is Milestone 2).
+
+**Next:** Milestone 2 — Money needs (PRD §7, not yet written — write it first): post a money need
+(target, UPI/QR, proof docs), donor donates → upload screenshot/UTR, beneficiary confirms receipt
++ admin override, public progress bar, partial fulfilment. This is also where the `Contribution`
+entity (PRD §6.5) and UTR-uniqueness constraint (D-019) get built.
+
+---
+
 ### Session 9 — Milestone 0: repo scaffold, backend auth + RBAC, three app shells
 **Done:**
 - Reorganised the flat doc dump into the real repo layout (root: CLAUDE.md/TASKS.md/PROGRESS.md/
