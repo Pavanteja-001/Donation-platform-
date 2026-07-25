@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { fetchMyContributions, type Contribution } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
@@ -53,9 +54,12 @@ export function MyContributionsScreen({
     [token]
   );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Chunk 2 (Milestone 9) — refetch on focus instead of the old refreshKey-remount trick.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   async function handleRefresh() {
     setIsRefreshing(true);

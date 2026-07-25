@@ -5,6 +5,38 @@
 
 ---
 
+### Session 22 — Milestone 9 Chunk 2: Navigation (Web-panel & Admin)
+This session focused on Chunk 2 - routing and navigation. We migrated both the Web Panel and the Admin Console from state-switching to real path-based routing via `react-router-dom`, standing up a persistent sidebar layout for both.
+
+**What was done:**
+1. **Web-panel Routing:**
+   - App is wrapped with `BrowserRouter` and routes are configured in `web-panel/src/App.tsx`.
+   - Built a persistent left sidebar layout in `web-panel/src/components/DashboardLayout.tsx` matching Appendix A styles.
+   - Added dashboard overview landing page `web-panel/src/pages/DashboardOverviewPage.tsx` displaying statistics of active/pending/completed needs.
+   - Created need-type chooser page `web-panel/src/pages/PostNeedPage.tsx` and routed all five type creation screens to sub-routes.
+   - Created `web-panel/src/pages/VerificationStatusPage.tsx` (KYC status placeholder) and `web-panel/src/pages/ProfilePage.tsx` (profile details with log out).
+   - Created `web-panel/src/pages/NeedDetailRouteWrapper.tsx` to cleanly resolve `needId` params and render `NeedDetailPage`.
+   - Cleaned up unused imports/variables causing compile errors in `MyNeedsPage.tsx` and `NeedDetailPage.tsx`.
+   
+2. **Admin Routing:**
+   - Installed `react-router-dom` in `admin/package.json`.
+   - Built a persistent left sidebar layout in `admin/src/components/ConsoleLayout.tsx`.
+   - Configured path-based routes in `admin/src/App.tsx` matching sidebar options.
+   - Configured `AdminRoute` wrapper to restrict Admin-only routes (`/post` and `/staff`) client-side.
+   - Created `admin/src/pages/InstitutionsPage.tsx` as a placeholder KYC approval queue (Chunk 5).
+   - Created `admin/src/pages/NeedDetailRouteWrapper.tsx` to cleanly resolve parameters.
+   - Updated `admin/src/pages/NeedsPage.tsx` table click actions to route via router navigation instead of props callback.
+   
+3. **Styles & Build Verification:**
+   - Added flex-based persistent sidebar CSS layout rules at the bottom of both `web-panel/src/index.css` and `admin/src/index.css`.
+   - Swapped out some props on pages (like `onClick` for `onPress` on Button, wrapping `Card` to avoid style conflicts) to pass TypeScript type-checking.
+   - Verified web-panel builds successfully (`tsc -b && vite build` clean).
+   - Verified admin builds successfully (`tsc -b && vite build` clean).
+   - Verified mobile compiles and bundles cleanly (`tsc --noEmit` and `expo export` clean).
+   - Verified backend compiles cleanly (`tsc` clean).
+
+**Next:** Milestone 9 Chunk 3 — Donor registration & profile (mobile), introducing the post-OTP registration step and Profile tab gating.
+
 ### Session 21 — Milestone 9 Chunk 1: Design-system foundation (all three frontends)
 User handed over a full, user-authored Milestone 9 spec ("Professional UX, Registration &
 Hardening") with 7 chunks and an explicit instruction: work them **one chunk per session**, build

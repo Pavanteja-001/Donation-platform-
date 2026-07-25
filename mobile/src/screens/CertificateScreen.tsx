@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchCertificate, type Certificate } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
@@ -7,7 +7,7 @@ import { theme } from "../lib/theme";
 // PRD §14.2 — a derived view over a confirmed contribution. The disclaimer (D-006) is always
 // shown, same weight as the rest of the certificate — never a fine-print afterthought, since the
 // whole point is not letting this be mistaken for an official document.
-export function CertificateScreen({ contributionId, onBack }: { contributionId: string; onBack: () => void }) {
+export function CertificateScreen({ contributionId }: { contributionId: string }) {
   const { token } = useAuth();
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,10 +21,6 @@ export function CertificateScreen({ contributionId, onBack }: { contributionId: 
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backLink}>‹ Back</Text>
-      </TouchableOpacity>
-
       {error && <Text style={styles.errorText}>{error}</Text>}
       {!certificate && !error && (
         <View style={styles.centered}>
@@ -57,7 +53,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg },
   centered: { alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
-  backLink: { color: theme.color.primary, fontSize: 14, fontWeight: "600", marginBottom: theme.spacing.md },
   errorText: { color: theme.color.danger, fontSize: 14 },
   card: {
     backgroundColor: theme.color.surface,

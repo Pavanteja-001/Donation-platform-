@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import { fetchNeeds, type Need } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -27,9 +28,15 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
     [token]
   );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Chunk 2 (Milestone 9) — refetch whenever this tab regains focus (e.g. popping back from a
+  // create/detail screen), same "don't show stale data" goal the old refreshKey-remount trick
+  // served, but the idiomatic React Navigation way now that this is a persistent tab screen
+  // rather than something remounted by a parent's key change.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   async function handleRefresh() {
     setIsRefreshing(true);

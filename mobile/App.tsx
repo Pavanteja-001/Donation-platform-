@@ -1,14 +1,25 @@
+import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { NavigationContainer } from "@react-navigation/native";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
-import { HomeScreen } from "./src/screens/HomeScreen";
+import { RootNavigator } from "./src/navigation/RootNavigator";
 import { theme } from "./src/lib/theme";
 import { ToastProvider } from "./src/components/ui";
+import { registerForPushNotificationsAsync } from "./src/lib/pushNotifications";
 
 function Root() {
-  const { user, isLoading } = useAuth();
+  const { user, token, isLoading } = useAuth();
+
+  // D-016 — register this device for push once per login session (best-effort; see
+  // lib/pushNotifications.ts for why it can silently no-op in this dev setup). Previously lived
+  // in HomeScreen (now replaced by RootNavigator, Chunk 2) — moved here since this is the
+  // equivalent "user is logged in" gate now.
+  useEffect(() => {
+    if (token) registerForPushNotificationsAsync(token);
+  }, [token]);
 
   if (isLoading) {
     return (
@@ -18,7 +29,23 @@ function Root() {
     );
   }
 
-  return <SafeAreaView style={styles.flex}>{user ? <HomeScreen /> : <LoginScreen />}</SafeAreaView>;
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.flex}>
+        <LoginScreen />
+      </SafeAreaView>
+    );
+  }
+
+  // Chunk 2 (Milestone 9) — NativeStack's headers already handle top safe-area insets
+  // themselves, so the navigator is deliberately not wrapped in another SafeAreaView (that would
+  // double up the inset padding); SafeAreaProvider at the app root is what react-native-screens
+  // actually needs to be present.
+  return (
+    <NavigationContainer>
+      <RootNavigator />
+    </NavigationContainer>
+  );
 }
 
 export default function App() {

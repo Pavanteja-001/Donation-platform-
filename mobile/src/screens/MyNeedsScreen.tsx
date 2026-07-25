@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { fetchMyNeeds, type MoneyPayload, type Need } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
@@ -41,9 +42,13 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
     [token]
   );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Chunk 2 (Milestone 9) — refetch on focus (e.g. after posting a need or returning from a
+  // detail screen) instead of the old refreshKey-remount trick.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   async function handleRefresh() {
     setIsRefreshing(true);

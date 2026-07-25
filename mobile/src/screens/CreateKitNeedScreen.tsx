@@ -9,7 +9,7 @@ type Mode = "MONEY" | "DELIVER";
 
 // PRD §9.1/§9.2 — post a KIT need (contents, cost/kit, kits needed, funding mode). Reuses the
 // same admin-verification flow as Money (PRD §6.3).
-export function CreateKitNeedScreen({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
+export function CreateKitNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -56,9 +56,6 @@ export function CreateKitNeedScreen({ onDone, onBack }: { onDone: () => void; on
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backLink}>‹ Back</Text>
-      </TouchableOpacity>
       <Text style={styles.title}>Post a kit need</Text>
       <Text style={styles.hint}>An admin verifies every need before it goes live (PRD §6.3).</Text>
 
@@ -150,7 +147,6 @@ export function CreateKitNeedScreen({ onDone, onBack }: { onDone: () => void; on
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg },
-  backLink: { color: theme.color.primary, fontSize: 14, fontWeight: "600", marginBottom: theme.spacing.md },
   title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
   hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },

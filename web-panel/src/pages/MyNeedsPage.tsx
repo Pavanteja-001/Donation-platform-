@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   fetchMyNeeds,
   type BloodPayload,
@@ -9,6 +10,7 @@ import {
   type Need,
 } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -49,94 +51,73 @@ function progressLabel(need: Need): string | null {
   return null;
 }
 
-export function MyNeedsPage({
-  onSelectNeed,
-  onCreateMoney,
-  onCreateKit,
-  onCreateBlood,
-  onCreateMealSlot,
-  onCreateGoods,
-}: {
-  onSelectNeed: (id: string) => void;
-  onCreateMoney: () => void;
-  onCreateKit: () => void;
-  onCreateBlood: () => void;
-  onCreateMealSlot: () => void;
-  onCreateGoods: () => void;
-}) {
+// Chunk 2 (Milestone 9) — no longer owns the "+ X need" buttons (moved to the new /post chooser
+// page, reached via the sidebar's "Post a Need" item); this is just the list + row navigation now.
+export function MyNeedsPage() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [needs, setNeeds] = useState<Need[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!token) return;
+    setError(null);
     fetchMyNeeds(token)
       .then(({ needs }) => setNeeds(needs))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load your needs"));
   }, [token]);
 
+  useEffect(load, [load]);
+
   return (
     <div>
       <div className="page-header-row">
         <h2>Your needs</h2>
-        <div className="row-actions">
-          <button type="button" className="btn" onClick={onCreateMoney}>
-            + Money need
-          </button>
-          <button type="button" className="btn" onClick={onCreateKit}>
-            + Kit need
-          </button>
-          <button type="button" className="btn" onClick={onCreateBlood}>
-            + Blood need
-          </button>
-          <button type="button" className="btn" onClick={onCreateMealSlot}>
-            + Meal-slot need
-          </button>
-          <button type="button" className="btn" onClick={onCreateGoods}>
-            + Goods need
-          </button>
-        </div>
       </div>
       <p className="hint">Every need is admin-verified before donors can see it (PRD §6.3).</p>
 
-      {error && <p className="error">{error}</p>}
-      {!needs && !error && <p className="hint">Loading…</p>}
+      {error && <ErrorState message={error} onRetry={load} />}
+      {!needs && !error && (
+        <>
+          <Skeleton height={40} style={{ marginBottom: 8 }} />
+          <Skeleton height={40} style={{ marginBottom: 8 }} />
+          <Skeleton height={40} />
+        </>
+      )}
+      {needs && needs.length === 0 && (
+        <EmptyState title="You haven't posted anything yet" actionLabel="Post a need" onAction={() => navigate("/post")} />
+      )}
 
-      <table>
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Progress</th>
-            <th>Posted</th>
-          </tr>
-        </thead>
-        <tbody>
-          {needs?.map((n) => (
-            <tr key={n.id}>
-              <td>
-                <button type="button" className="link-cell" onClick={() => onSelectNeed(n.id)}>
-                  {n.title}
-                </button>
-              </td>
-              <td>{n.type}</td>
-              <td>
-                <span className={`badge status-${n.status.toLowerCase()}`}>{n.status.replace("_", " ")}</span>
-              </td>
-              <td>{progressLabel(n) ?? "—"}</td>
-              <td>{new Date(n.createdAt).toLocaleDateString()}</td>
-            </tr>
-          ))}
-          {needs && needs.length === 0 && (
+      {needs && needs.length > 0 && (
+        <table>
+          <thead>
             <tr>
-              <td colSpan={5} className="hint">
-                You haven't posted anything yet.
-              </td>
+              <th>Title</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Progress</th>
+              <th>Posted</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {needs.map((n) => (
+              <tr key={n.id}>
+                <td>
+                  <button type="button" className="link-cell" onClick={() => navigate(`/needs/${n.id}`)}>
+                    {n.title}
+                  </button>
+                </td>
+                <td>{n.type}</td>
+                <td>
+                  <span className={`badge status-${n.status.toLowerCase()}`}>{n.status.replace("_", " ")}</span>
+                </td>
+                <td>{progressLabel(n) ?? "—"}</td>
+                <td>{new Date(n.createdAt).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

@@ -37,6 +37,7 @@ import { buildUpiDeepLink } from "../lib/upi";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "../components/ProgressBar";
+import { ErrorState } from "../components/ui";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -79,7 +80,7 @@ function formatContributionAmount(c: Contribution): string {
 
 const FUNDABLE: Need["status"][] = ["LIVE", "PARTIALLY_FULFILLED"];
 
-export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: () => void }) {
+export function NeedDetailScreen({ needId }: { needId: string }) {
   const { token, user, bloodEligibility } = useAuth();
   const [need, setNeed] = useState<Need | null>(null);
   const [contributions, setContributions] = useState<Contribution[] | null>(null);
@@ -345,10 +346,7 @@ export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: (
   if (error && !need) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity onPress={onBack}>
-          <Text style={styles.backLink}>Back</Text>
-        </TouchableOpacity>
+        <ErrorState message={error} onRetry={load} />
       </View>
     );
   }
@@ -376,9 +374,6 @@ export function NeedDetailScreen({ needId, onBack }: { needId: string; onBack: (
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backLink}>‹ Back</Text>
-      </TouchableOpacity>
 
       <Text style={styles.title}>{need.title}</Text>
       <Text style={styles.status}>
@@ -741,7 +736,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
-  backLink: { color: theme.color.primary, fontSize: 14, fontWeight: "600", marginBottom: theme.spacing.md },
   title: { fontSize: 22, fontWeight: "700", color: theme.color.textPrimary },
   status: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2, marginBottom: theme.spacing.md },
   description: { fontSize: 15, color: theme.color.textPrimary, lineHeight: 22 },

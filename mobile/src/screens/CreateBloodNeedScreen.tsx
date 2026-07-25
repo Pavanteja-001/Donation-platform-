@@ -23,7 +23,7 @@ function formatGroup(g: BloodGroup) {
 // PRD §8.3 — post a BLOOD need (group + units). No funding mode, no UPI — a respond-and-confirm
 // flow, not a donate-and-confirm one (§8.5). Institution linking (D-008) isn't exposed here yet
 // — see lib/api.ts's postBloodNeed comment.
-export function CreateBloodNeedScreen({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
+export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -61,9 +61,6 @@ export function CreateBloodNeedScreen({ onDone, onBack }: { onDone: () => void; 
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backLink}>‹ Back</Text>
-      </TouchableOpacity>
       <Text style={styles.title}>Post a blood request</Text>
       <Text style={styles.hint}>
         An admin (or a linked hospital/blood bank) verifies this before it goes live and eligible
@@ -121,7 +118,6 @@ export function CreateBloodNeedScreen({ onDone, onBack }: { onDone: () => void; 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg },
-  backLink: { color: theme.color.primary, fontSize: 14, fontWeight: "600", marginBottom: theme.spacing.md },
   title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
   hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },

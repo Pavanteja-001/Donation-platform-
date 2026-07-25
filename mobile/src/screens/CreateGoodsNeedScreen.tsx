@@ -8,7 +8,7 @@ import { PhotoPicker, type PickedPhoto } from "../components/PhotoPicker";
 // PRD §11.1/§11.2 — post a GOODS need (a specific physical item, plus acceptable condition). No
 // custom module — rides the shared engine exactly like Money/Kit, just with a fulfilment target
 // of 1 (§11.3).
-export function CreateGoodsNeedScreen({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
+export function CreateGoodsNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -45,9 +45,6 @@ export function CreateGoodsNeedScreen({ onDone, onBack }: { onDone: () => void; 
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backLink}>‹ Back</Text>
-      </TouchableOpacity>
       <Text style={styles.title}>Post a goods need</Text>
       <Text style={styles.hint}>An admin verifies every need before it goes live (PRD §6.3).</Text>
 
@@ -94,7 +91,6 @@ export function CreateGoodsNeedScreen({ onDone, onBack }: { onDone: () => void; 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg },
-  backLink: { color: theme.color.primary, fontSize: 14, fontWeight: "600", marginBottom: theme.spacing.md },
   title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
   hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
   input: {

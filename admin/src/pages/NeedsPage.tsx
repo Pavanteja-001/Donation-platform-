@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchAdminNeeds, rejectNeed, verifyNeed, type Need, type NeedStatus } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
@@ -42,7 +43,8 @@ function progressLabel(need: Need): string | null {
   return null;
 }
 
-export function NeedsPage({ onSelectNeed }: { onSelectNeed: (id: string) => void }) {
+export function NeedsPage() {
+  const navigate = useNavigate();
   const { token } = useAuth();
   const [filter, setFilter] = useState<NeedStatus | "ALL" | undefined>(undefined);
   const [needs, setNeeds] = useState<Need[] | null>(null);
@@ -122,7 +124,7 @@ export function NeedsPage({ onSelectNeed }: { onSelectNeed: (id: string) => void
           {needs?.map((n) => (
             <tr key={n.id}>
               <td>
-                <button type="button" className="link-cell" onClick={() => onSelectNeed(n.id)}>
+                <button type="button" className="link-cell" onClick={() => navigate(`/needs/${n.id}`)}>
                   {n.title}
                 </button>
               </td>

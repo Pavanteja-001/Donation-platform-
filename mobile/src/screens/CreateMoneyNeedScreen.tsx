@@ -6,7 +6,7 @@ import { theme } from "../lib/theme";
 import { PhotoPicker, type PickedPhoto } from "../components/PhotoPicker";
 
 // PRD §7.1/§7.2 — post a MONEY need (target + UPI + optional photos, D-021).
-export function CreateMoneyNeedScreen({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
+export function CreateMoneyNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -44,9 +44,6 @@ export function CreateMoneyNeedScreen({ onDone, onBack }: { onDone: () => void; 
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backLink}>‹ Back</Text>
-      </TouchableOpacity>
       <Text style={styles.title}>Post a money need</Text>
       <Text style={styles.hint}>An admin verifies every need before it goes live (PRD §6.3).</Text>
 
@@ -95,7 +92,6 @@ export function CreateMoneyNeedScreen({ onDone, onBack }: { onDone: () => void; 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg },
-  backLink: { color: theme.color.primary, fontSize: 14, fontWeight: "600", marginBottom: theme.spacing.md },
   title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
   hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
   input: {

@@ -13,7 +13,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // calendar dates). No date-picker dependency yet — plain "YYYY-MM-DD" text entry, added one at a
 // time into a chip list, same "don't add a dependency until it's needed" call as elsewhere in
 // this app (e.g. no routing library).
-export function CreateMealSlotNeedScreen({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
+export function CreateMealSlotNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -74,9 +74,6 @@ export function CreateMealSlotNeedScreen({ onDone, onBack }: { onDone: () => voi
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backLink}>‹ Back</Text>
-      </TouchableOpacity>
       <Text style={styles.title}>Post a meal-slot need</Text>
       <Text style={styles.hint}>An admin verifies every need before it goes live (PRD §6.3).</Text>
 
@@ -183,7 +180,6 @@ export function CreateMealSlotNeedScreen({ onDone, onBack }: { onDone: () => voi
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg },
-  backLink: { color: theme.color.primary, fontSize: 14, fontWeight: "600", marginBottom: theme.spacing.md },
   title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
   hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },

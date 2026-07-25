@@ -57,9 +57,6 @@ export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.backLink}>‹ Back</Text>
-      </TouchableOpacity>
       <Text style={styles.title}>Blood donor profile</Text>
       <Text style={styles.hint}>
         Filling this in is what makes you a matchable blood donor (PRD §8.1). We only use it to
@@ -121,7 +118,6 @@ export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg },
-  backLink: { color: theme.color.primary, fontSize: 14, fontWeight: "600", marginBottom: theme.spacing.md },
   title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
   hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.md },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },

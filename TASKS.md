@@ -143,7 +143,7 @@ dev behavior (D-015) untouched; `.env` stays untracked.
   full screen-by-screen migration is Chunk 7, not this one. Builds green: `tsc -b`/`vite build`
   clean on web-panel + admin, `tsc --noEmit` + `expo export` clean on mobile; backend untouched
   (no backend work needed for this chunk) and confirmed still healthy.
-- [ ] **Chunk 2 — Navigation.** Mobile: React Navigation (native-stack + bottom-tabs), replacing
+- [x] **Chunk 2 — Navigation.** Mobile: React Navigation (native-stack + bottom-tabs), replacing
   HomeScreen's local view-switching. Web-panel: `react-router-dom` + sidebar layout. Admin:
   `react-router-dom` + sidebar (incl. a new Institutions nav item for Chunk 5).
 - [ ] **Chunk 3 — Donor registration & profile (mobile).** Post-OTP registration step
