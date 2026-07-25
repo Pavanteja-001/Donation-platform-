@@ -1,6 +1,6 @@
 # Product Requirements Document — DonationPlatform
 
-**Status:** Living document · **Version:** 0.11 · **Region:** India (Andhra Pradesh first)
+**Status:** Living document · **Version:** 0.12 · **Region:** India (Andhra Pradesh first)
 
 > Living document. Sections 1–9 and Appendix A (design system) are drafted. Sections 10+ are
 > mapped in the ToC and written just before their build milestone. Update the version and
@@ -25,7 +25,7 @@
 | 11 | Goods / unused-items flow | ✅ drafted |
 | 12 | Community Q&A forum | ⬜ to write |
 | 13 | Volunteering (scribes, career mentoring) | ⬜ to write |
-| 14 | Trust tiers & digital certificates | ⬜ to write |
+| 14 | Trust tiers & digital certificates | ✅ drafted |
 | 15 | Admin console | ⬜ to write |
 | 16 | Institution web panel | ⬜ to write |
 | 17 | Notifications | ⬜ to write |
@@ -581,6 +581,58 @@ No progress bar — a GOODS need's status badge alone communicates it (`LIVE` = 
 
 ---
 
+## 14. Trust tiers & digital certificates
+
+Both types built so far that deferred a "certificate" (Blood §8, Goods §11) point here — one
+generic mechanism covers every confirmed contribution, not a per-type one.
+
+### 14.1 Trust tiers
+
+**Computed, never stored** — same tamper-guard principle as every progress field in this
+document. A user's tier is a function of their **confirmed** contribution count across *every*
+kind (Money/Kit/Blood/Meal-slot/Goods combined — a donor who gives in different ways doesn't get
+punished for not specializing):
+
+| Tier | Confirmed contributions |
+|---|---|
+| Bronze | 0–4 |
+| Silver | 5–14 |
+| Gold | 15+ |
+
+These thresholds are a v1 placeholder (product can tune them without a schema change — they live
+in one constants file, not baked into the database). Any role can accumulate one — Institutions
+can also donate (PRD §4), so tiers aren't USER-only. Surfaced on `/auth/me` and
+`/auth/otp/verify` as `trustTier` + `confirmedContributionsCount`.
+
+### 14.2 Certificates
+
+A certificate is a **derived view over a confirmed Contribution**, not a stored record — no new
+table. Generated on read: `GET /api/contributions/:id/certificate`, viewable only by that
+contribution's donor or an admin/staff (D-018), 409 if the contribution isn't yet `CONFIRMED`.
+
+Contents: donor name, the need's title/type, a kind-aware summary of what was given (reusing the
+same formatting already built per-type across every frontend this build — "₹5,000", "3 kits",
+"1 unit O+", "meal slot on 12 Aug", "claimed: manual wheelchair"), the confirmation date, and a
+reference id (the contribution's own id — no separate certificate id/table needed).
+
+**Wording (D-006, non-negotiable):** every certificate, regardless of type or whether a linked
+institution verified the underlying need, states it is a **DonationPlatform record of a
+confirmed contribution** — never "official," "medical," "government," or "tax-deductible." A
+hospital/blood bank issuing its own real certificate is a separate, offline thing outside this
+app; institution-verification does **not** upgrade this wording, to avoid ever implying the
+platform grants something it can't.
+
+### 14.3 "My contributions"
+
+`GET /api/contributions/mine` — every contribution the caller has made, across every need they
+donated/claimed/booked/responded to, most recent first, with the need's title/type included. This
+is the list a donor browses to find a past contribution and open its certificate; it's also the
+first time contributions are queryable **from the donor's side** rather than only from the
+beneficiary's (every prior milestone's `GET /:id/contributions` only worked for the need's owner
+or admin/staff).
+
+---
+
 ## Appendix A — Design System (one shared theme, all surfaces)
 
 **Principle (D-014):** the donor mobile app, institution/hospital web panel, and admin console all use
@@ -619,6 +671,12 @@ Loading (skeletons) · Empty · Error · Success.
 
 ## Changelog
 
+- v0.12 — Added Section 14 (Trust tiers & digital certificates, out of numeric order ahead of
+  §12/§13, same precedent as §9 before §8): tiers computed (never stored) from confirmed-
+  contribution count across every type; certificates are a derived view over a confirmed
+  Contribution (no new table), wording locked to D-006's "platform record" language regardless
+  of type or institution-verification; new `GET /api/contributions/mine` — the first
+  donor-side (not beneficiary-side) contributions query.
 - v0.11 — Added Section 11 (Goods / unused-items flow): no custom module needed (unlike Blood/
   Meal-slot) — rides the shared engine with fulfilment target 1, jumps `LIVE → FULFILLED`
   directly (no `PARTIALLY_FULFILLED`), `claimed` boolean payload field, GOODS contributions are

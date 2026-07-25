@@ -9,9 +9,51 @@ import { parseKitPayload } from "../lib/kitNeed";
 import { parseBloodPayload } from "../lib/bloodNeed";
 import { parseMealSlotPayload } from "../lib/mealSlotNeed";
 import { parseGoodsPayload } from "../lib/goodsNeed";
+import { CERTIFICATE_DISCLAIMER, summarizeContribution } from "../lib/contributionSummary";
 
 const router = Router();
 router.use(requireAuth);
+
+// PRD §14.3 — every contribution the caller has made, across every need, most recent first.
+// The first contributions query from the donor's own side rather than the beneficiary's — every
+// prior GET /:id/contributions only worked for the need's owner or admin/staff.
+router.get("/mine", async (req, res) => {
+  const contributions = await prisma.contribution.findMany({
+    where: { donorId: req.user!.sub },
+    orderBy: { createdAt: "desc" },
+    include: { need: { select: { id: true, title: true, type: true } } },
+  });
+  res.json({ contributions });
+});
+
+// PRD §14.2 — a certificate is a derived view over a CONFIRMED contribution, not a stored
+// record. Only that contribution's donor, or admin/staff, can view it.
+router.get("/:id/certificate", async (req, res) => {
+  const contribution = await prisma.contribution.findUnique({
+    where: { id: req.params.id },
+    include: { need: { select: { title: true, type: true } }, donor: { select: { name: true, phone: true } } },
+  });
+  if (!contribution) return res.status(404).json({ error: "Contribution not found" });
+  const isDonor = contribution.donorId === req.user!.sub;
+  const isAdminOrStaff = req.user!.role === "ADMIN" || req.user!.role === "STAFF";
+  if (!isDonor && !isAdminOrStaff) {
+    return res.status(403).json({ error: "Not allowed to view this certificate" });
+  }
+  if (contribution.status !== "CONFIRMED") {
+    return res.status(409).json({ error: "This contribution hasn't been confirmed yet" });
+  }
+  res.json({
+    certificate: {
+      certificateId: contribution.id,
+      donorName: contribution.donor.name ?? contribution.donor.phone,
+      needTitle: contribution.need.title,
+      needType: contribution.need.type,
+      summary: summarizeContribution(contribution),
+      confirmedAt: contribution.updatedAt,
+      disclaimer: CERTIFICATE_DISCLAIMER,
+    },
+  });
+});
 
 async function loadPendingWithNeed(contributionId: string) {
   const contribution = await prisma.contribution.findUnique({

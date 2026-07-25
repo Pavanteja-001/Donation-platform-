@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import * as SecureStore from "expo-secure-store";
-import { fetchMe, type AuthUser, type BloodEligibility } from "../lib/api";
+import { fetchMe, type AuthUser, type BloodEligibility, type TrustTierInfo } from "../lib/api";
 
 const TOKEN_KEY = "donationplatform_auth_token";
 
@@ -10,7 +10,9 @@ interface AuthContextValue {
   isLoading: boolean;
   // PRD §8.2 — computed server-side, refreshed alongside `user`.
   bloodEligibility: BloodEligibility | null;
-  signIn: (token: string, user: AuthUser, bloodEligibility: BloodEligibility) => Promise<void>;
+  // PRD §14.1 — computed server-side, refreshed alongside `user`.
+  trustTierInfo: TrustTierInfo | null;
+  signIn: (token: string, user: AuthUser, bloodEligibility: BloodEligibility, trustTierInfo: TrustTierInfo) => Promise<void>;
   signOut: () => Promise<void>;
   // Re-fetches /me — used after a profile edit (e.g. the blood profile) so the rest of the app
   // sees the change without requiring a full app restart.
@@ -23,6 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [bloodEligibility, setBloodEligibility] = useState<BloodEligibility | null>(null);
+  const [trustTierInfo, setTrustTierInfo] = useState<TrustTierInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -30,10 +33,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const stored = await SecureStore.getItemAsync(TOKEN_KEY);
       if (stored) {
         try {
-          const { user: me, bloodEligibility } = await fetchMe(stored);
+          const { user: me, bloodEligibility, trustTier, confirmedContributionsCount } = await fetchMe(stored);
           setToken(stored);
           setUser(me);
           setBloodEligibility(bloodEligibility);
+          setTrustTierInfo({ trustTier, confirmedContributionsCount });
         } catch {
           await SecureStore.deleteItemAsync(TOKEN_KEY);
         }
@@ -48,26 +52,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       isLoading,
       bloodEligibility,
-      signIn: async (newToken, newUser, newEligibility) => {
+      trustTierInfo,
+      signIn: async (newToken, newUser, newEligibility, newTrustTierInfo) => {
         await SecureStore.setItemAsync(TOKEN_KEY, newToken);
         setToken(newToken);
         setUser(newUser);
         setBloodEligibility(newEligibility);
+        setTrustTierInfo(newTrustTierInfo);
       },
       signOut: async () => {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         setToken(null);
         setUser(null);
         setBloodEligibility(null);
+        setTrustTierInfo(null);
       },
       refreshUser: async () => {
         if (!token) return;
-        const { user: me, bloodEligibility } = await fetchMe(token);
+        const { user: me, bloodEligibility, trustTier, confirmedContributionsCount } = await fetchMe(token);
         setUser(me);
         setBloodEligibility(bloodEligibility);
+        setTrustTierInfo({ trustTier, confirmedContributionsCount });
       },
     }),
-    [user, token, isLoading, bloodEligibility]
+    [user, token, isLoading, bloodEligibility, trustTierInfo]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

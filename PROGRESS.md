@@ -5,6 +5,131 @@
 
 ---
 
+### Session 20 — Milestone 7: Trust tiers & certificates (backend + mobile + admin)
+User said "continue" after Session 19 wrapped Goods. Per TASKS.md/CLAUDE.md workflow, next up was
+Milestone 7 — and it's the first milestone that's purely additive across types rather than a new
+`Need` type: it reads *existing* confirmed-contribution history (across all five types built so
+far) rather than adding anything to the Need/Contribution lifecycle itself.
+
+**PRD:** Wrote §14 (out of numeric order ahead of §12/§13, same precedent as §9 before §8 —
+noted in the changelog). Two deliberate "don't over-build" calls: tiers are **computed, never
+stored** (same principle as raised_amount/kits_funded/etc.), and certificates are a **derived
+view over a confirmed Contribution, not a stored record** — no new table for either. This also
+closed the "later milestone" placeholder that's been sitting in a code comment since Money
+(`needs.ts`: "a donor sees their own contributions via a 'my contributions' endpoint, which is a
+later milestone") — this was that milestone.
+
+**Backend:**
+- `trustTier.ts` — pure function, thresholds (Bronze 0-4 / Silver 5-14 / Gold 15+) isolated so
+  product can tune them without touching the schema or any call site. Confirmed-contribution
+  count spans all five contribution kinds combined, not per-type.
+- `contributionSummary.ts` — a kind-aware, human-readable summary generator ("₹5,000", "3 kits",
+  "1 unit of blood", "a meal slot (₹500) on 2026-08-01", "a claimed item") plus the exact D-006
+  disclaimer text as one constant, so the wording can't drift between call sites.
+- `GET /api/contributions/mine` — every contribution the caller made, across every need, with
+  need title/type included. The first contributions query from the donor's side; every prior one
+  only worked for the need's owner or admin/staff.
+- `GET /api/contributions/:id/certificate` — 403 unless caller is that contribution's donor or
+  admin/staff; 409 if not yet `CONFIRMED`. Response is assembled fresh from the Contribution +
+  Need + donor on every call.
+- `trustTier`/`confirmedContributionsCount` added to `/auth/me`, `/auth/otp/verify`, and (via a
+  filtered `_count` on the `contributionsMade` relation, not an extra round-trip) admin's
+  `GET /api/admin/users`.
+- Curl-tested end-to-end: a donor with one prior confirmed BLOOD contribution correctly shows
+  `BRONZE`/`1`; `GET /mine` returns it with need context; certificate fetch succeeds for the
+  donor, 403s for an unrelated account, and 409s against a freshly-created pending (unconfirmed)
+  contribution; admin's user list shows the same computed tier.
+
+**Mobile:** trust tier badge under the greeting on `HomeScreen`; new **"My contributions"** tab
+(third tab alongside Live needs / My needs) via `MyContributionsScreen` — kind-aware summaries
+reused from the same logic pattern as `NeedDetailScreen`'s, confirmed ones link to a certificate;
+new `CertificateScreen` renders it as an actual certificate-styled card, with the D-006 disclaimer
+given equal visual weight to the rest of the content (not fine print) — the whole point is never
+letting it read as an official document.
+
+**Admin:** `UsersPage` gained a Trust tier column (tier + confirmed count), reusing the same
+backend computation.
+
+**Deliberately not wired:** web-panel. Institutions aren't really the "earns a tier, views
+certificates" persona this milestone targets — donors are — and nothing in scope needed it.
+Documented as a scope decision in TASKS.md rather than silently skipped, same treatment as every
+other deliberate omission this build.
+
+**Verified:** `tsc -b`/`vite build` clean on web-panel (untouched, confirmed still fine) and
+admin; `tsc --noEmit` clean + `expo export` clean on mobile; backend `tsc` clean throughout. Two
+more transient Railway blips in the dev log during testing, both caught cleanly by the existing
+crash-resilience middleware — not regressions, consistent with every prior session's experience
+with this Railway proxy. `.env` confirmed untracked. TASKS.md Milestone 7 checkboxes updated.
+
+**Next:** Milestone 8 — Community layer (Q&A forum + Volunteering, PRD §12–13 first), per
+TASKS.md — the last of the per-type milestones before the cross-cutting work (admin console
+polish, institution KYC, notifications, security pass) that TASKS.md has been accumulating
+partial-progress notes on throughout.
+
+---
+
+### Session 19 — Milestone 6: Goods / unused-items flow (backend + all three frontends)
+User said "continue" after Session 18 wrapped Meal-slot. Per TASKS.md/CLAUDE.md workflow, next up
+was Milestone 6 — and the notable thing about this one is it needed **no custom module at all**.
+CLAUDE.md §3 only calls out Blood and Meal-slot as breaking the shared pattern; Goods rides the
+same `Need`/`Contribution` engine as Money/Kit, just with a fulfilment target of 1.
+
+**PRD:** Wrote §11. Key design call: a GOODS need is the beneficiary posting "I need X" (same
+direction as every other type), a donor **claims** it (a pledge, same principle as Blood's
+respond and Kit's `DELIVER` mode — never a payment), and on confirm the need jumps straight
+`LIVE → FULFILLED` — there's no `PARTIALLY_FULFILLED` for "1 item, 1 claim." Deliberately **no
+claim-locking**: unlike Meal-slot's calendar (many fast-moving dates, D-022), this is one
+low-frequency manual action — multiple donors can submit competing pending claims and the
+beneficiary just picks one to confirm, same "over-committed pending contributions aren't
+auto-rejected" tolerance Money/Kit already carry.
+
+**Backend:**
+- `goodsNeed.ts` — payload schema (`item`, `condition`, server-computed-only `claimed`, same
+  tamper-guard principle as every other progress field).
+- Reused the **existing** generic `POST /:id/contributions` dispatcher for the claim (no
+  dedicated route needed, unlike Meal-slot's booking endpoint) — a claim is just
+  `{kind: GOODS}` with no amount/kits/units/utr at all, dispatched the same way Blood's
+  `{units}` pledge already is.
+- `computeFulfilment`'s GOODS branch is a one-shot: no clamping/partial math like every other
+  type, just straight to `FULFILLED` on first confirm.
+- Added `ContributionKind.GOODS` to the schema (small migration).
+- Curl-tested the full loop end-to-end: post → submit → admin-verify → LIVE → donor claims
+  (PENDING_CONFIRMATION) → beneficiary confirms → need jumps straight to FULFILLED with
+  `claimed: true`; then verified the edge cases that actually mattered for this design — a
+  FULFILLED need correctly 409s on a further claim attempt, and on a second need, rejecting a
+  claim correctly leaves the need `LIVE` with `claimed` still `false` (item stays open, matching
+  the "no locking, beneficiary manages competing claims manually" decision).
+
+**Mobile:** `CreateGoodsNeedScreen` (title/description/item/condition/photos — simplest create
+form yet, no mode toggle, no dates); `NeedCard` shows item + condition instead of a progress bar
+(nothing meaningful to bar-chart for a boolean); `NeedDetailScreen` gained a "Claim this item"
+section mirroring Blood's respond UI almost exactly (pledge framing, consent-via-claiming
+language), plus a kind-aware `formatContributionAmount` branch (GOODS just shows "Claim").
+
+**Web-panel & Admin:** `CreateGoodsNeedPage` on both (web-panel auto-links the posting
+institution for fast-track self-verify, same as Blood/Meal-slot; Admin's version doesn't, same
+established reasoning as its other Create*Page siblings); `NeedsPage`/`NeedDetailPage` on both
+show claimed/not-claimed status and kind-aware contribution formatting. Claiming itself is
+mobile-only (donors are the mobile side), same division as Meal-slot booking.
+
+**Verified:** `tsc -b`/`vite build` clean on web-panel and admin; `tsc --noEmit` clean + `expo
+export` clean on mobile; backend `tsc` clean throughout. Two more transient Railway
+`PrismaClientInitializationError`/`Can't reach database server` blips showed up in the dev log
+during this session's testing — both caught cleanly by the `express-async-errors` fix from
+Session 17 (logged, server kept running, next request succeeded normally) — consistent with the
+known Railway proxy flakiness, not a regression. `.env` confirmed untracked. TASKS.md Milestone 6
+checkboxes updated.
+
+**Not done:** nothing deliberately deferred this time — §11's scope (post/claim/confirm, no
+locking, no progress bar) was intentionally minimal from the PRD stage, and everything in it got
+built.
+
+**Next:** Milestone 7 — Trust tiers & certificates (PRD §14 first), per TASKS.md. Note: both
+Blood's (§8) and Goods' (§11) "post-donation certificate" deferrals point here — this milestone
+should cover confirmed-contribution certificates generically across every type, not just one.
+
+---
+
 ### Session 18 — Milestone 5: Meal-slot booking (backend + all three frontends)
 User said "continue" after Session 17 wrapped Blood. Per TASKS.md/CLAUDE.md workflow, next up was
 Milestone 5 — the *other* genuinely custom module (CLAUDE.md §3): a `MEAL_SLOT` need must

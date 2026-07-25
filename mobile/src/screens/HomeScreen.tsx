@@ -13,23 +13,29 @@ import { CreateBloodNeedScreen } from "./CreateBloodNeedScreen";
 import { CreateMealSlotNeedScreen } from "./CreateMealSlotNeedScreen";
 import { CreateGoodsNeedScreen } from "./CreateGoodsNeedScreen";
 import { BloodProfileScreen } from "./BloodProfileScreen";
+import { MyContributionsScreen } from "./MyContributionsScreen";
+import { CertificateScreen } from "./CertificateScreen";
 
-// No routing library yet (kept minimal for Milestones 0-6) — a simple local view switch is
-// enough for feed / my-needs / detail / create / blood-profile. Revisit once the app has enough
-// screens to need real nav.
+const TIER_LABEL: Record<string, string> = { BRONZE: "Bronze", SILVER: "Silver", GOLD: "Gold" };
+
+// No routing library yet (kept minimal for Milestones 0-7) — a simple local view switch is
+// enough for feed / my-needs / detail / create / blood-profile / contributions. Revisit once the
+// app has enough screens to need real nav.
 type Screen =
   | { name: "feed" }
   | { name: "mine" }
+  | { name: "contributions" }
   | { name: "detail"; needId: string }
   | { name: "create-money" }
   | { name: "create-kit" }
   | { name: "create-blood" }
   | { name: "create-meal-slot" }
   | { name: "create-goods" }
-  | { name: "blood-profile" };
+  | { name: "blood-profile" }
+  | { name: "certificate"; contributionId: string };
 
 export function HomeScreen() {
-  const { user, token, signOut } = useAuth();
+  const { user, token, signOut, trustTierInfo } = useAuth();
   const [screen, setScreen] = useState<Screen>({ name: "feed" });
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -75,6 +81,9 @@ export function HomeScreen() {
   if (screen.name === "blood-profile") {
     return <BloodProfileScreen onBack={() => setScreen({ name: "feed" })} />;
   }
+  if (screen.name === "certificate") {
+    return <CertificateScreen contributionId={screen.contributionId} onBack={() => setScreen({ name: "contributions" })} />;
+  }
 
   return (
     <View style={styles.container}>
@@ -84,6 +93,11 @@ export function HomeScreen() {
           <Text style={styles.role}>
             {user?.role} · {user?.phone}
           </Text>
+          {trustTierInfo && (
+            <Text style={styles.tier}>
+              {TIER_LABEL[trustTierInfo.trustTier]} · {trustTierInfo.confirmedContributionsCount} confirmed
+            </Text>
+          )}
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => setScreen({ name: "blood-profile" })}>
@@ -101,6 +115,9 @@ export function HomeScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.tab} onPress={() => setScreen({ name: "mine" })}>
           <Text style={[styles.tabText, screen.name === "mine" && styles.tabTextActive]}>My needs</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tab} onPress={() => setScreen({ name: "contributions" })}>
+          <Text style={[styles.tabText, screen.name === "contributions" && styles.tabTextActive]}>My contributions</Text>
         </TouchableOpacity>
       </View>
 
@@ -122,10 +139,13 @@ export function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {screen.name === "feed" ? (
-        <NeedsFeedScreen key={`feed-${refreshKey}`} onSelectNeed={handleSelectNeed} />
-      ) : (
-        <MyNeedsScreen key={`mine-${refreshKey}`} onSelectNeed={handleSelectNeed} />
+      {screen.name === "feed" && <NeedsFeedScreen key={`feed-${refreshKey}`} onSelectNeed={handleSelectNeed} />}
+      {screen.name === "mine" && <MyNeedsScreen key={`mine-${refreshKey}`} onSelectNeed={handleSelectNeed} />}
+      {screen.name === "contributions" && (
+        <MyContributionsScreen
+          key={`contributions-${refreshKey}`}
+          onViewCertificate={(contributionId) => setScreen({ name: "certificate", contributionId })}
+        />
       )}
     </View>
   );
@@ -143,6 +163,7 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary },
   role: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2 },
+  tier: { fontSize: 12, color: theme.color.primary, fontWeight: "600", marginTop: 2 },
   headerActions: { alignItems: "flex-end", gap: 4 },
   bloodProfileLink: { color: theme.color.primary, fontSize: 13, fontWeight: "600" },
   logout: { color: theme.color.danger, fontSize: 14, fontWeight: "600" },

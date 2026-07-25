@@ -9,6 +9,8 @@ export interface AuthUser {
   role: Role;
 }
 
+export type TrustTier = "BRONZE" | "SILVER" | "GOLD";
+
 export interface AdminUser {
   id: string;
   phone: string;
@@ -17,6 +19,9 @@ export interface AdminUser {
   city: string | null;
   area: string | null;
   createdAt: string;
+  // PRD §14.1 — computed server-side, never stored.
+  trustTier: TrustTier;
+  confirmedContributionsCount: number;
 }
 
 export interface StaffAccount {

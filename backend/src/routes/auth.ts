@@ -6,10 +6,21 @@ import { requestOtp, verifyOtp } from "../lib/otp";
 import { signAuthToken } from "../lib/jwt";
 import { requireAuth } from "../middleware/auth";
 import { computeEligibility } from "../lib/bloodEligibility";
+import { computeTrustTier } from "../lib/trustTier";
 
 const router = Router();
 
 const phoneSchema = z.string().regex(/^\+?[0-9]{10,15}$/, "Enter a valid phone number");
+
+// PRD §14.1 — computed fresh on every read, never stored, same principle as bloodEligibility.
+// Any role can accumulate confirmed contributions (Institutions can also donate, PRD §4), so
+// this isn't gated to USER.
+async function trustTierPayload(userId: string) {
+  const confirmedContributionsCount = await prisma.contribution.count({
+    where: { donorId: userId, status: "CONFIRMED" },
+  });
+  return { trustTier: computeTrustTier(confirmedContributionsCount), confirmedContributionsCount };
+}
 
 // Roles a new account can self-register as. ADMIN/STAFF accounts are provisioned
 // separately (STAFF by an existing ADMIN — see routes/admin.ts; ADMIN via seed script).
@@ -53,14 +64,14 @@ router.post("/otp/verify", async (req, res) => {
   // Full user object, same shape as GET /me — a hand-picked subset here previously meant a
   // client trusting this response right after login (rather than re-fetching /me) would see
   // fields like the blood profile as missing/undefined instead of null until their next fetch.
-  res.json({ token, user, bloodEligibility: computeEligibility(user) });
+  res.json({ token, user, bloodEligibility: computeEligibility(user), ...(await trustTierPayload(user.id)) });
 });
 
 router.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
   if (!user) return res.status(404).json({ error: "User not found" });
-  // PRD §8.2 — computed fresh on every read, never stored (see the lib for why).
-  res.json({ user, bloodEligibility: computeEligibility(user) });
+  // PRD §8.2/§14.1 — both computed fresh on every read, never stored (see the libs for why).
+  res.json({ user, bloodEligibility: computeEligibility(user), ...(await trustTierPayload(user.id)) });
 });
 
 // Self-service profile edits — name/location (any role) and the blood donor profile (PRD §8.1,

@@ -37,6 +37,15 @@ export interface BloodEligibility {
   reasons: string[];
 }
 
+export type TrustTier = "BRONZE" | "SILVER" | "GOLD";
+
+// PRD §14.1 — computed fresh server-side on every /api/auth/me read, never stored. Any role can
+// have one (Institutions can also donate, PRD §4).
+export interface TrustTierInfo {
+  trustTier: TrustTier;
+  confirmedContributionsCount: number;
+}
+
 export type NeedType = "MONEY" | "BLOOD" | "KIT" | "GOODS" | "MEAL_SLOT" | "SKILL_REQUEST" | "QUESTION";
 export type Urgency = "NORMAL" | "URGENT" | "EMERGENCY";
 export type NeedStatus =
@@ -144,6 +153,20 @@ export interface Contribution {
   utr: string | null;
   donor: { id: string; name: string | null; phone: string };
   createdAt: string;
+  // Only present on GET /api/contributions/mine (§14.3) — every other contributions endpoint is
+  // scoped to one already-known need.
+  need?: { id: string; title: string; type: NeedType };
+}
+
+// PRD §14.2 — a derived view over a CONFIRMED contribution, not a stored record.
+export interface Certificate {
+  certificateId: string;
+  donorName: string;
+  needTitle: string;
+  needType: NeedType;
+  summary: string;
+  confirmedAt: string;
+  disclaimer: string;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -166,16 +189,19 @@ export function requestOtp(phone: string) {
 }
 
 export function verifyOtp(phone: string, code: string, name?: string) {
-  return request<{ token: string; user: AuthUser; bloodEligibility: BloodEligibility }>("/api/auth/otp/verify", {
-    method: "POST",
-    // role omitted — self-registration through the mobile app is always the USER
-    // (donor/beneficiary) role; INSTITUTION accounts register from the web panel.
-    body: JSON.stringify({ phone, code, name }),
-  });
+  return request<{ token: string; user: AuthUser; bloodEligibility: BloodEligibility } & TrustTierInfo>(
+    "/api/auth/otp/verify",
+    {
+      method: "POST",
+      // role omitted — self-registration through the mobile app is always the USER
+      // (donor/beneficiary) role; INSTITUTION accounts register from the web panel.
+      body: JSON.stringify({ phone, code, name }),
+    }
+  );
 }
 
 export function fetchMe(token: string) {
-  return request<{ user: AuthUser; bloodEligibility: BloodEligibility }>("/api/auth/me", {
+  return request<{ user: AuthUser; bloodEligibility: BloodEligibility } & TrustTierInfo>("/api/auth/me", {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
@@ -476,6 +502,20 @@ export function claimGoods(token: string, needId: string, proofUrl?: string) {
 
 export function fetchContributions(token: string, needId: string) {
   return request<{ contributions: Contribution[] }>(`/api/needs/${needId}/contributions`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// PRD §14.3 — every contribution the caller has made, across every need, most recent first.
+export function fetchMyContributions(token: string) {
+  return request<{ contributions: Contribution[] }>("/api/contributions/mine", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// PRD §14.2 — 409s if the contribution isn't CONFIRMED yet.
+export function fetchCertificate(token: string, contributionId: string) {
+  return request<{ certificate: Certificate }>(`/api/contributions/${contributionId}/certificate`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }

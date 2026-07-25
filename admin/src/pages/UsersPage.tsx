@@ -30,6 +30,7 @@ export function UsersPage() {
             <th>Phone</th>
             <th>Role</th>
             <th>Location</th>
+            <th>Trust tier</th>
             <th>Joined</th>
           </tr>
         </thead>
@@ -42,12 +43,15 @@ export function UsersPage() {
                 <span className={`badge badge-${u.role.toLowerCase()}`}>{u.role}</span>
               </td>
               <td>{[u.area, u.city].filter(Boolean).join(", ") || "—"}</td>
+              <td>
+                {u.trustTier.charAt(0) + u.trustTier.slice(1).toLowerCase()} · {u.confirmedContributionsCount} confirmed
+              </td>
               <td>{new Date(u.createdAt).toLocaleDateString()}</td>
             </tr>
           ))}
           {users.length === 0 && (
             <tr>
-              <td colSpan={5} className="hint">
+              <td colSpan={6} className="hint">
                 No users yet.
               </td>
             </tr>

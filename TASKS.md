@@ -78,29 +78,62 @@
   immediately after
 
 ## Milestone 6 — Goods / unused items  *(write PRD §11 first)*
-- [ ] Post an item; claim; handoff confirmation
+- [x] Post an item; claim; handoff confirmation — **no custom module needed** (unlike Blood/
+  Meal-slot, CLAUDE.md §3): rides the shared engine exactly like Money/Kit with a fulfilment
+  target of 1. `backend/src/lib/goodsNeed.ts` (payload: `item`, `condition`,
+  server-computed-only `claimed`); claim is a `Contribution` with `kind: GOODS` via the existing
+  generic `POST /:id/contributions` (a pledge, no amount/kits/units/utr, same principle as
+  Blood's respond); on confirm the need jumps straight `LIVE → FULFILLED` (no
+  `PARTIALLY_FULFILLED` — no partial state for "1 item, 1 claim"); deliberately **no
+  claim-locking** (unlike Meal-slot's D-022) — multiple donors can submit competing pending
+  claims, the beneficiary picks one to confirm and is expected to reject the rest
+- [x] Test the flow — curl-tested end-to-end: post → submit → admin-verify → LIVE; donor claims
+  (pending) → beneficiary confirms → need jumps straight to FULFILLED, `claimed: true`; verified
+  a FULFILLED need correctly rejects further claims (409); verified reject path on a second need
+  (claim rejected → need stays LIVE, `claimed` stays `false`, item still open to other donors)
 
 ## Milestone 7 — Trust tiers & certificates  *(write PRD §14 first)*
-- [ ] Tier logic (Bronze/Silver/Gold from confirmed history)
-- [ ] Certificate generation (worded as platform records)
+- [x] Tier logic (Bronze/Silver/Gold from confirmed history) — `backend/src/lib/trustTier.ts`,
+  computed fresh on every read (never stored, same tamper-guard principle as every progress
+  field), from a **confirmed** contribution count across every type combined (Money/Kit/Blood/
+  Meal-slot/Goods); thresholds (5/15) isolated in one constants file so product can tune them
+  without a schema change; surfaced on `/auth/me`, `/auth/otp/verify`, and admin's
+  `GET /api/admin/users` (via a filtered `_count` on the contributions relation)
+- [x] Certificate generation (worded as platform records) — **derived, not stored**: no new
+  table, `GET /api/contributions/:id/certificate` computes it on read from a `CONFIRMED`
+  Contribution + its Need + donor (only that donor or admin/staff can view, 409 if not yet
+  confirmed); wording locked to D-006's "platform record, not official/medical/government/
+  tax-deductible" language regardless of type or institution-verification (`backend/src/lib/
+  contributionSummary.ts`); new `GET /api/contributions/mine` (PRD §14.3) — the first
+  donor-side contributions query, needed to let a donor find their own certificates
+- [x] Test the flow — curl-tested end-to-end: confirmed-contribution count → BRONZE tier surfaced
+  correctly on `/me`; `GET /mine` returns the donor's contributions with need title/type;
+  certificate fetch succeeds for the donor, 403s for an unrelated user, 409s for a still-pending
+  contribution; admin's `/users` list shows the same tier computation
 
 ## Milestone 8 — Community layer  *(write PRD §12–13 first)*
 - [ ] Q&A forum (ask/answer, admin moderation)
 - [ ] Volunteering: scribe requests + career mentoring
 
 ## Cross-cutting (revisit throughout)
-- [ ] Institution web panel (PRD §16) — *partial:* post/track MONEY, KIT, BLOOD **and**
-  MEAL_SLOT needs + confirm contributions + photo upload, on par with mobile
+- [ ] Institution web panel (PRD §16) — *partial:* post/track MONEY, KIT, BLOOD, MEAL_SLOT
+  **and** GOODS needs + confirm contributions + photo upload, on par with mobile
   (`web-panel/src/pages/MyNeedsPage.tsx`/`CreateMoneyNeedPage.tsx`/`CreateKitNeedPage.tsx`/
-  `CreateBloodNeedPage.tsx`/`CreateMealSlotNeedPage.tsx`); BLOOD and MEAL_SLOT needs auto-link to
-  the posting institution and can be self-verified fast-track from `NeedDetailPage.tsx` (D-008);
-  `NeedDetailPage.tsx` shows the per-date calendar (open/booked/confirmed) for MEAL_SLOT; KYC
-  onboarding (D-007) not started
+  `CreateBloodNeedPage.tsx`/`CreateMealSlotNeedPage.tsx`/`CreateGoodsNeedPage.tsx`); BLOOD,
+  MEAL_SLOT and GOODS needs auto-link to the posting institution and can be self-verified
+  fast-track from `NeedDetailPage.tsx` (D-008); `NeedDetailPage.tsx` shows the per-date calendar
+  (open/booked/confirmed) for MEAL_SLOT; KYC onboarding (D-007) not started
 - [ ] Admin console (PRD §15) — *partial:* Needs tab wired (verification queue + status browser +
   contribution override + urgency control, `admin/src/pages/NeedsPage.tsx`/`NeedDetailPage.tsx`,
-  blood- and meal-slot-aware); **Admin**-only Post a need tab (money + kit + blood + meal-slot +
-  photos, on behalf of a poster without their own account, `admin/src/pages/PostNeedPage.tsx`);
+  blood-, meal-slot- and goods-aware); **Admin**-only Post a need tab (money + kit + blood +
+  meal-slot + goods + photos, on behalf of a poster without their own account,
+  `admin/src/pages/PostNeedPage.tsx`); Users tab now shows trust tier (`UsersPage.tsx`, PRD §14.1);
   settings/analytics screens not started
+- [ ] Trust tiers & certificates (PRD §14) — backend + mobile fully wired (tier badge, "My
+  contributions" tab, certificate view); admin shows tier in the Users list; **web-panel
+  deliberately not wired** — institutions aren't really the "earns a tier, views a certificate"
+  persona this milestone targets (donors are), and nothing in this milestone needed it; revisit
+  if that assumption turns out wrong
 - [ ] Notifications system (PRD §17)
 - [ ] Security & privacy pass (PRD §20)
 - [ ] Analytics & metrics (PRD §21)

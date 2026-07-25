@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
+import { computeTrustTier } from "../lib/trustTier";
 
 // Admin console RBAC (D-018):
 //   ADMIN — full access, including creating/removing STAFF and editing users.
@@ -14,13 +15,30 @@ import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 const router = Router();
 router.use(requireAuth, requireRole(Role.ADMIN, Role.STAFF));
 
-// Admin + Staff: view/list all users (donors, institutions, hospitals).
+// Admin + Staff: view/list all users (donors, institutions, hospitals). PRD §14.1 — trust tier
+// is computed here too, same as /auth/me, so admin can see it without hitting each user's own
+// endpoint.
 router.get("/users", async (_req, res) => {
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
-    select: { id: true, phone: true, name: true, role: true, city: true, area: true, createdAt: true },
+    select: {
+      id: true,
+      phone: true,
+      name: true,
+      role: true,
+      city: true,
+      area: true,
+      createdAt: true,
+      _count: { select: { contributionsMade: { where: { status: "CONFIRMED" } } } },
+    },
   });
-  res.json({ users });
+  res.json({
+    users: users.map(({ _count, ...u }) => ({
+      ...u,
+      confirmedContributionsCount: _count.contributionsMade,
+      trustTier: computeTrustTier(_count.contributionsMade),
+    })),
+  });
 });
 
 // Admin + Staff: the verification queue and verify/reject actions (D-018 — "verify/accept").
