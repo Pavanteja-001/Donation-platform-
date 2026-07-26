@@ -28,7 +28,9 @@ function summarize(c: Contribution): string {
     const date = c.mealSlotDate ? formatDate(c.mealSlotDate) : "";
     return c.amount != null ? `Meal slot (₹${c.amount.toLocaleString("en-IN")}) · ${date}` : `Meal slot · ${date}`;
   }
-  return "Claimed item";
+  if (c.kind === "GOODS") return "Claimed item";
+  if (c.kind === "SKILL_REQUEST") return "Volunteered time";
+  return "Contribution";
 }
 
 function ContributionsListSkeleton() {

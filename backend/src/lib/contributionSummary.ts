@@ -12,6 +12,7 @@ export function summarizeContribution(c: Contribution): string {
     return c.amount != null ? `a meal slot (₹${c.amount.toLocaleString("en-IN")}) on ${date}` : `a meal slot on ${date}`;
   }
   if (c.kind === "GOODS") return "a claimed item";
+  if (c.kind === "SKILL_REQUEST") return "a volunteer service pledge";
   return "a contribution";
 }
 
