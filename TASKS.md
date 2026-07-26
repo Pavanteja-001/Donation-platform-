@@ -182,6 +182,6 @@ dev behavior (D-015) untouched; `.env` stays untracked.
   deliberately not wired** — institutions aren't really the "earns a tier, views a certificate"
   persona this milestone targets (donors are), and nothing in this milestone needed it; revisit
   if that assumption turns out wrong
-- [ ] Notifications system (PRD §17)
+- [x] Notifications system (PRD §17) — Expo push notifications wired: blood donor matching dispatch (`notifyEligibleBloodDonors`), contribution confirmation notifications (`POST /api/contributions/:id/confirm`), community Q&A answer notifications (`POST /api/forum/:id/answers`), foreground channel handlers & mock dev tokens (`mobile/src/lib/pushNotifications.ts`).
 - [ ] Security & privacy pass (PRD §20)
 - [ ] Analytics & metrics (PRD §21)

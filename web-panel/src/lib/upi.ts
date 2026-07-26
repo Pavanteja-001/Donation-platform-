@@ -1,5 +1,5 @@
-// D-009 — UPI deep-link, amount pre-filled. Built client-side; no backend involvement (D-001:
-// no gateway, the donor pays the beneficiary's UPI ID directly).
+// D-009 — UPI deep-link & QR helper for web. Generates standard upi://pay intent URL
+// and QR code image URL for scanning via mobile UPI apps (GPay, PhonePe, Paytm, BHIM).
 export function buildUpiDeepLink(params: { upiId: string; payeeName: string; amount: number; note: string }): string {
   const query = new URLSearchParams({
     pa: params.upiId,

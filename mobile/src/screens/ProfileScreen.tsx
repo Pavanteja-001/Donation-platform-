@@ -5,7 +5,8 @@ import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { Avatar, Badge, Button, Card } from "../components/ui";
+import { Avatar, Badge, Button, Card, Chip } from "../components/ui";
+import { useTranslation, type Language } from "../lib/i18n";
 import { updateMe, uploadProfilePhoto } from "../lib/api";
 import type { AppNavigationProp } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
@@ -16,6 +17,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function ProfileScreen() {
   const { token, user, trustTierInfo, refreshUser, signOut } = useAuth();
+  const { language, setLanguage, t } = useTranslation();
   const navigation = useNavigation<AppNavigationProp>();
   const [isToggling, setIsToggling] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -143,6 +145,30 @@ export function ProfileScreen() {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Blood Group</Text>
             <Text style={styles.infoValue}>{formatBloodGroup(user?.bloodGroup ?? null)}</Text>
+          </View>
+        </Card>
+      </Animated.View>
+
+      {/* Language Selector Card */}
+      <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+        <Card elevated style={styles.infoCard}>
+          <Text style={styles.infoTitle}>{t.selectLanguage}</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
+            <Chip
+              label={t.english}
+              active={language === "en"}
+              onPress={() => setLanguage("en")}
+            />
+            <Chip
+              label={t.telugu}
+              active={language === "te"}
+              onPress={() => setLanguage("te")}
+            />
+            <Chip
+              label={t.hindi}
+              active={language === "hi"}
+              onPress={() => setLanguage("hi")}
+            />
           </View>
         </Card>
       </Animated.View>

@@ -13,6 +13,8 @@ import {
   type MoneyPayload,
   type Need,
 } from "../lib/api";
+import { shareNeedViaWhatsApp } from "../lib/whatsapp";
+import { buildUpiDeepLink, buildUpiQrCodeUrl } from "../lib/upi";
 import { useAuth } from "../context/AuthContext";
 import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 
@@ -126,9 +128,28 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
         ‹ Back to your needs
       </button>
       <h2>{need.title}</h2>
-      <p className="hint" style={{ marginTop: "4px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px", marginBottom: "16px" }}>
         <span className={`badge status-${need.status.toLowerCase()}`}>{need.status.replace("_", " ")}</span>
-      </p>
+        <button
+          type="button"
+          onClick={() => shareNeedViaWhatsApp(need)}
+          style={{
+            backgroundColor: "#25D366",
+            color: "#FFFFFF",
+            border: "none",
+            borderRadius: "6px",
+            padding: "6px 12px",
+            fontSize: "13px",
+            fontWeight: 600,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          Share on WhatsApp
+        </button>
+      </div>
       <p style={{ marginTop: "16px", marginBottom: "16px", fontSize: "15px", lineHeight: "1.5" }}>{need.description}</p>
 
       {need.photos.length > 0 && (
@@ -141,9 +162,23 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
 
       {money && (
         <div style={{ backgroundColor: "var(--color-surface)", padding: "16px", borderRadius: "8px", border: "1px solid var(--color-border)", marginBottom: "20px" }}>
-          <strong>Target Raised:</strong> ₹{money.raised_amount.toLocaleString("en-IN")} / ₹{money.target_amount.toLocaleString("en-IN")}
-          <br />
-          <strong>UPI ID:</strong> {money.upi_id}
+          <div><strong>Target Raised:</strong> ₹{money.raised_amount.toLocaleString("en-IN")} / ₹{money.target_amount.toLocaleString("en-IN")}</div>
+          <div style={{ marginTop: "4px" }}><strong>UPI ID:</strong> {money.upi_id}</div>
+          
+          <div style={{ marginTop: "12px", display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" }}>
+            <a
+              href={buildUpiDeepLink({ upiId: money.upi_id, payeeName: need.postedBy.name ?? "Beneficiary", amount: money.target_amount - money.raised_amount, note: need.title })}
+              className="btn btn-secondary"
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              Pay via UPI Deep-Link
+            </a>
+            <img
+              src={buildUpiQrCodeUrl({ upiId: money.upi_id, payeeName: need.postedBy.name ?? "Beneficiary", amount: money.target_amount - money.raised_amount, note: need.title })}
+              alt="UPI QR Code"
+              style={{ width: "120px", height: "120px", borderRadius: "8px", border: "1px solid var(--color-border)" }}
+            />
+          </div>
         </div>
       )}
       {kit && (

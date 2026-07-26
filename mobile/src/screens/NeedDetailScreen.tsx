@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,10 +32,12 @@ import {
   type MoneyPayload,
   type Need,
 } from "../lib/api";
-import { buildUpiDeepLink } from "../lib/upi";
+import { buildUpiDeepLink, buildUpiQrCodeUrl } from "../lib/upi";
 import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { isProfileComplete } from "../lib/profile";
+import { shareNeedViaWhatsApp } from "../lib/whatsapp";
+import { Ionicons } from "@expo/vector-icons";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "../components/ProgressBar";
 import { ErrorState, Button, Input, Chip, Card, Badge, type BadgeTone } from "../components/ui";
@@ -479,6 +482,14 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
           {need.status === "REJECTED" && need.rejectionReason && (
             <Text style={styles.rejection}>Rejected: {need.rejectionReason}</Text>
           )}
+
+          <Pressable
+            style={styles.whatsappButton}
+            onPress={() => shareNeedViaWhatsApp(need)}
+          >
+            <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
+            <Text style={styles.whatsappButtonText}>Share on WhatsApp</Text>
+          </Pressable>
         </Card>
       </Animated.View>
 
@@ -498,6 +509,15 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
               label={`Pay via UPI (${money.upi_id})`}
               onPress={handlePayViaUpi}
             />
+            {Number(amount) > 0 && (
+              <View style={{ alignItems: "center", marginVertical: theme.spacing.xs }}>
+                <Text style={styles.actionHint}>Or scan QR code with GPay, PhonePe, or Paytm:</Text>
+                <ExpoImage
+                  source={{ uri: buildUpiQrCodeUrl({ upiId: money.upi_id, payeeName: need.postedBy.name ?? "Beneficiary", amount: Number(amount), note: need.title }) }}
+                  style={{ width: 140, height: 140, borderRadius: 8, marginTop: 6 }}
+                />
+              </View>
+            )}
             <Text style={styles.actionHint}>After paying, enter the payment UTR number to submit your proof.</Text>
             <Input
               placeholder="12-digit UTR / reference number"
@@ -787,4 +807,15 @@ const styles = StyleSheet.create({
   contributionAmount: { fontSize: 14, fontWeight: "700", color: theme.color.textPrimary },
   contributionUtr: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2, fontWeight: "500" },
   contributionActions: { flexDirection: "row", gap: theme.spacing.md, marginTop: theme.spacing.md },
+  whatsappButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: "#25D366",
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.radius,
+    marginTop: theme.spacing.md,
+  },
+  whatsappButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
 });

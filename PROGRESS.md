@@ -5,6 +5,62 @@
 
 ---
 
+### Session 31 — IDEAS: UPI Deep-Link Intent & QR Code Upgrade (D-009)
+
+**What was done:**
+
+1. **UPI Deep-Link & QR Helpers:**
+   - `mobile/src/lib/upi.ts`, `web-panel/src/lib/upi.ts`, `admin/src/lib/upi.ts`: `buildUpiDeepLink` (`upi://pay?pa=...&pn=...&am=...&cu=INR&tn=...`) and `buildUpiQrCodeUrl` (auto-generates 200x200 QR code image URL for instant mobile scanning via GPay, PhonePe, Paytm, BHIM).
+
+2. **Mobile App Upgrades (`NeedDetailScreen.tsx`):**
+   - Direct UPI intent launcher opens GPay/PhonePe/Paytm with pre-filled amount and note.
+   - Integrated dynamic QR Code image preview directly in the donate card when an amount is entered so donors can scan from another device.
+
+3. **Web Panel & Admin Console Upgrades (`NeedDetailPage.tsx`):**
+   - Added clickable "Pay via UPI Deep-Link" button and live QR Code image preview on money need detail pages, allowing instant scanning with phone UPI apps.
+
+4. **Build & Type Verification:**
+   - `backend`, `web-panel`, `admin`, and `mobile` compile clean with zero errors.
+
+---
+
+### Session 30 — IDEAS: Multi-Language (i18n) & WhatsApp Integration
+
+**What was done:**
+
+1. **Multi-Language (i18n) Support**:
+   - `mobile/src/lib/i18n.tsx`: Dictionaries for English (`en`), Telugu (`te` - తెలుగు), and Hindi (`hi` - हिन्दी) covering tabs, actions, types, urgencies, and statuses. Context provider `LanguageProvider` and `useTranslation()` hook.
+   - `mobile/App.tsx`: Wrapped root component tree with `<LanguageProvider>`.
+   - `mobile/src/screens/ProfileScreen.tsx`: Added Language Selector chips (`English`, `తెలుగు`, `हिन्दी`) to let users toggle the app language.
+
+2. **WhatsApp Sharing Integration ("Share on WhatsApp")**:
+   - `mobile/src/lib/whatsapp.ts`: Rich text formatter (`🚨 EMERGENCY`, category emoji, title, location, web/app deep link) and launcher via `whatsapp://send?text=...` with automatic web fallback `https://wa.me/?text=...`.
+   - `mobile/src/screens/NeedDetailScreen.tsx`: Added prominent WhatsApp Share button (`#25D366`) with WhatsApp icon in the detail header card.
+   - `web-panel` & `admin`: Added `lib/whatsapp.ts` helpers and "Share on WhatsApp" buttons on `NeedDetailPage.tsx` for both web applications (`https://api.whatsapp.com/send?text=...`).
+
+3. **Build & Type Verification**:
+   - `backend`, `web-panel`, `admin`, and `mobile` compile clean with zero errors.
+
+---
+
+### Session 29 — Cross-Cutting: Notifications system (PRD §17)
+
+**What was done:**
+
+1. **Push Notification Triggers Added:**
+   - **Blood Donor Matching**: `notifyEligibleBloodDonors` dispatches Expo push notifications to all eligible blood donors in the matching city/blood group when a BLOOD need goes LIVE or is escalated to EMERGENCY.
+   - **Contribution Confirmation**: `POST /api/contributions/:id/confirm` dispatches a push notification to the donor (`"Contribution Confirmed 🎉"`) when the beneficiary or admin confirms their contribution.
+   - **Community Forum Replies**: `POST /api/forum/:id/answers` dispatches a push notification to the question author (`"New answer to your question 💬"`) when another user posts an answer.
+
+2. **Mobile Foreground & Dev Token Handling:**
+   - Configured Expo foreground notification handlers in `mobile/src/lib/pushNotifications.ts` with custom Android importance channels (`default` and high-importance `emergency` channel).
+   - Maintained deterministic dev fallback mock push tokens (`ExponentPushToken[mock-<phone>]`) for development environments without requiring native credentials.
+
+3. **Build & Type Verification:**
+   - `backend`, `web-panel`, `admin`, and `mobile` compile clean without errors.
+
+---
+
 ### Session 28 — Milestone 8: Community layer (Q&A Forum + SKILL_REQUEST Volunteering)
 
 **What was done:**

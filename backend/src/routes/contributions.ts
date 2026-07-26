@@ -10,6 +10,7 @@ import { parseBloodPayload } from "../lib/bloodNeed";
 import { parseMealSlotPayload } from "../lib/mealSlotNeed";
 import { parseGoodsPayload } from "../lib/goodsNeed";
 import { CERTIFICATE_DISCLAIMER, summarizeContribution } from "../lib/contributionSummary";
+import { sendPushNotifications } from "../lib/pushNotifications";
 
 const router = Router();
 router.use(requireAuth);
@@ -216,6 +217,20 @@ router.post("/:id/confirm", async (req, res) => {
       ? [prisma.mealSlot.updateMany({ where: { contributionId: contribution.id }, data: { status: "CONFIRMED" } })]
       : []),
   ]);
+
+  // PRD §17 — send best-effort push notification to donor when their contribution is confirmed
+  const donor = await prisma.user.findUnique({ where: { id: contribution.donorId }, select: { expoPushToken: true } });
+  if (donor?.expoPushToken) {
+    sendPushNotifications([
+      {
+        to: donor.expoPushToken,
+        title: "Contribution Confirmed 🎉",
+        body: `Your contribution for "${contribution.need.title}" has been confirmed! Thank you for helping.`,
+        data: { contributionId: contribution.id, needId: contribution.need.id },
+      },
+    ]);
+  }
+
   res.json({ contribution: updatedContribution });
 });
 

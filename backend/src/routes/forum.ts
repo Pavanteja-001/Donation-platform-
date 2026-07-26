@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
+import { sendPushNotifications } from "../lib/pushNotifications";
 
 const router = Router();
 router.use(requireAuth);
@@ -86,6 +87,25 @@ router.post("/:id/answers", async (req, res) => {
     data: { body: parsed.data.body, questionId: req.params.id, authorId: req.user!.sub },
     include: { author: { select: { id: true, name: true, profilePhotoUrl: true } } },
   });
+
+  // PRD §17 — send push notification to question author if someone else answered
+  if (question.authorId !== req.user!.sub) {
+    const questionAuthor = await prisma.user.findUnique({
+      where: { id: question.authorId },
+      select: { expoPushToken: true },
+    });
+    if (questionAuthor?.expoPushToken) {
+      sendPushNotifications([
+        {
+          to: questionAuthor.expoPushToken,
+          title: "New answer to your question 💬",
+          body: `${answer.author.name ?? "A community member"} answered: "${question.title}"`,
+          data: { questionId: question.id, answerId: answer.id },
+        },
+      ]);
+    }
+  }
+
   res.status(201).json({ answer });
 });
 
