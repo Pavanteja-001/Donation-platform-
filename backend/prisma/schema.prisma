@@ -112,7 +112,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([role])
+  @@index([role, kycStatus])
 }
 
 // PRD §6.1 — Need types. Only BLOOD and MEAL_SLOT need custom modules (CLAUDE.md §3);
@@ -203,6 +203,7 @@ model Need {
   updatedAt DateTime @updatedAt
 
   @@index([status, urgency])
+  @@index([status, type])
   @@index([postedById])
 }
 
@@ -270,6 +271,7 @@ model Contribution {
 
   @@index([needId])
   @@index([donorId])
+  @@index([needId, donorId])
 }
 
 // PRD §10.2-10.3 / D-022 — one row per bookable calendar date under a MEAL_SLOT need. The

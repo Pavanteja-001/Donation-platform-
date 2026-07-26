@@ -405,34 +405,39 @@ router.get("/mine", async (req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
-  let need = await prisma.need.findUnique({
-    where: { id: req.params.id },
-    include: {
-      postedBy: { select: { id: true, name: true, role: true } },
-      // MEAL_SLOT only (empty for every other type) — donors need the actual per-date
-      // breakdown to pick a slot (§10.5), not just an aggregate count.
-      mealSlots: { orderBy: { date: "asc" } },
-    },
-  });
-  if (!need) return res.status(404).json({ error: "Need not found" });
-  need = { ...(await expireIfPastDeadline(need)), postedBy: need.postedBy, mealSlots: need.mealSlots };
+  const needId = req.params.id;
+  const userId = req.user!.sub;
 
-  const isOwner = need.postedById === req.user!.sub;
+  const [needRaw, myContribution] = await Promise.all([
+    prisma.need.findUnique({
+      where: { id: needId },
+      include: {
+        postedBy: { select: { id: true, name: true, role: true } },
+        // MEAL_SLOT only (empty for every other type) — donors need the actual per-date
+        // breakdown to pick a slot (§10.5), not just an aggregate count.
+        mealSlots: { orderBy: { date: "asc" } },
+      },
+    }),
+    prisma.contribution.findFirst({
+      where: {
+        needId,
+        donorId: userId,
+        status: { in: [ContributionStatus.PENDING_CONFIRMATION, ContributionStatus.CONFIRMED] },
+      },
+      select: { id: true, status: true, kind: true },
+    })
+  ]);
+
+  if (!needRaw) return res.status(404).json({ error: "Need not found" });
+  const need = { ...(await expireIfPastDeadline(needRaw)), postedBy: needRaw.postedBy, mealSlots: needRaw.mealSlots };
+
+  const isOwner = need.postedById === userId;
   const isAdminOrStaff = req.user!.role === "ADMIN" || req.user!.role === "STAFF";
   const publicStatuses: NeedStatus[] = [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED, NeedStatus.FULFILLED];
   const isPubliclyVisible = publicStatuses.includes(need.status);
   if (!isOwner && !isAdminOrStaff && !isPubliclyVisible) {
     return res.status(404).json({ error: "Need not found" });
   }
-
-  const myContribution = await prisma.contribution.findFirst({
-    where: {
-      needId: need.id,
-      donorId: req.user!.sub,
-      status: { in: [ContributionStatus.PENDING_CONFIRMATION, ContributionStatus.CONFIRMED] },
-    },
-    select: { id: true, status: true, kind: true },
-  });
 
   res.json({ need, myContribution });
 });
@@ -481,18 +486,23 @@ async function createContribution(res: import("express").Response, data: Prisma.
 // KIT needs in mode=DELIVER skip payment entirely — the pledge itself is the contribution.
 // Starts PENDING_CONFIRMATION (§6.5).
 router.post("/:id/contributions", async (req, res) => {
-  let need = await prisma.need.findUnique({ where: { id: req.params.id } });
-  if (!need) return res.status(404).json({ error: "Need not found" });
-  need = await expireIfPastDeadline(need);
+  const needId = req.params.id;
+  const userId = req.user!.sub;
 
-  // Check for duplicate pending responses (Chunk 6)
-  const existingPending = await prisma.contribution.findFirst({
-    where: {
-      needId: need.id,
-      donorId: req.user!.sub,
-      status: ContributionStatus.PENDING_CONFIRMATION,
-    },
-  });
+  const [needRaw, existingPending] = await Promise.all([
+    prisma.need.findUnique({ where: { id: needId } }),
+    prisma.contribution.findFirst({
+      where: {
+        needId,
+        donorId: userId,
+        status: ContributionStatus.PENDING_CONFIRMATION,
+      },
+    }),
+  ]);
+
+  if (!needRaw) return res.status(404).json({ error: "Need not found" });
+  let need = await expireIfPastDeadline(needRaw);
+
   if (existingPending) {
     return res.status(409).json({
       error: "You already have a pending response for this request.",
@@ -592,9 +602,16 @@ const mealSlotBookSchema = z.object({
 // POST /:id/contributions, because it needs a specific slotId and the locking transaction below
 // — genuinely different shape from "donate an amount/kits/units against the need as a whole."
 router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
-  let need = await prisma.need.findUnique({ where: { id: req.params.id } });
-  if (!need || need.type !== NeedType.MEAL_SLOT) return res.status(404).json({ error: "Need not found" });
-  need = await expireIfPastDeadline(need);
+  const needId = req.params.id;
+  const slotId = req.params.slotId;
+
+  const [needRaw, slot] = await Promise.all([
+    prisma.need.findUnique({ where: { id: needId } }),
+    prisma.mealSlot.findUnique({ where: { id: slotId } }),
+  ]);
+
+  if (!needRaw || needRaw.type !== NeedType.MEAL_SLOT) return res.status(404).json({ error: "Need not found" });
+  let need = await expireIfPastDeadline(needRaw);
 
   const fundable: NeedStatus[] = [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED];
   if (!fundable.includes(need.status)) {
@@ -616,7 +633,6 @@ router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
     return res.status(400).json({ error: "A deliver-mode meal-slot booking has no payment — don't send a utr" });
   }
 
-  const slot = await prisma.mealSlot.findUnique({ where: { id: req.params.slotId } });
   if (!slot || slot.needId !== need.id) {
     return res.status(404).json({ error: "Meal slot not found" });
   }
@@ -662,19 +678,22 @@ router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
 // Owner (beneficiary) or Admin/Staff only — a donor sees their own contributions via a
 // "my contributions" endpoint, which is a later milestone (not needed to prove the core loop).
 router.get("/:id/contributions", async (req, res) => {
-  const need = await prisma.need.findUnique({ where: { id: req.params.id } });
+  const need = await prisma.need.findUnique({
+    where: { id: req.params.id },
+    include: {
+      contributions: {
+        orderBy: { createdAt: "desc" },
+        include: { donor: { select: { id: true, name: true, phone: true } } },
+      },
+    },
+  });
   if (!need) return res.status(404).json({ error: "Need not found" });
   const isOwner = need.postedById === req.user!.sub;
   const isAdminOrStaff = req.user!.role === "ADMIN" || req.user!.role === "STAFF";
   if (!isOwner && !isAdminOrStaff) {
     return res.status(403).json({ error: "Not allowed to view these contributions" });
   }
-  const contributions = await prisma.contribution.findMany({
-    where: { needId: need.id },
-    orderBy: { createdAt: "desc" },
-    include: { donor: { select: { id: true, name: true, phone: true } } },
-  });
-  res.json({ contributions });
+  res.json({ contributions: need.contributions });
 });
 
 export default router;

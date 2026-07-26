@@ -37,7 +37,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   // eslint-disable-next-line no-console
-  console.log(`DonationPlatform backend listening on http://localhost:${PORT}`);
+  console.log(`DonationPlatform backend listening on http://0.0.0.0:${PORT}`);
 });

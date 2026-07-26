@@ -17,5 +17,22 @@ export async function expireIfPastDeadline(need: Need): Promise<Need> {
 }
 
 export async function expireManyIfPastDeadline(needs: Need[]): Promise<Need[]> {
-  return Promise.all(needs.map(expireIfPastDeadline));
+  const now = new Date();
+  const expiredNeedIds = needs
+    .filter((n) => n.deadline && EXPIRABLE_STATUSES.includes(n.status) && n.deadline.getTime() <= now.getTime())
+    .map((n) => n.id);
+
+  if (expiredNeedIds.length > 0) {
+    await prisma.need.updateMany({
+      where: { id: { in: expiredNeedIds } },
+      data: { status: NeedStatus.EXPIRED },
+    });
+    // Sync memory object statuses for the immediate response
+    for (const need of needs) {
+      if (expiredNeedIds.includes(need.id)) {
+        need.status = NeedStatus.EXPIRED;
+      }
+    }
+  }
+  return needs;
 }

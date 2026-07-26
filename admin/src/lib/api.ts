@@ -160,6 +160,15 @@ export interface Contribution {
   createdAt: string;
 }
 
+export class ApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
@@ -168,24 +177,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       headers: { "Content-Type": "application/json", ...options.headers },
     });
   } catch (err) {
-    throw new Error("Unable to connect to the server. Please check your internet connection and try again.");
+    throw new ApiError("Unable to connect to the server. Please check your internet connection and try again.");
   }
 
   const body = await res.json().catch(() => undefined);
   if (!res.ok) {
+    const status = res.status;
     if (body?.error) {
-      throw new Error(body.error);
+      throw new ApiError(body.error, status);
     }
-    if (res.status === 401) {
-      throw new Error("Session expired. Please log in again.");
+    if (status === 401) {
+      throw new ApiError("Session expired. Please log in again.", status);
     }
-    if (res.status === 403) {
-      throw new Error("Access denied: You do not have permission to perform this action.");
+    if (status === 403) {
+      throw new ApiError("Access denied: You do not have permission to perform this action.", status);
     }
-    if (res.status === 409) {
-      throw new Error("Conflict: This request has already been processed or a duplicate exists.");
+    if (status === 409) {
+      throw new ApiError("Conflict: This request has already been processed or a duplicate exists.", status);
     }
-    throw new Error(`Request failed with status code ${res.status}. Please try again later.`);
+    throw new ApiError(`Request failed with status code ${status}. Please try again later.`, status);
   }
   return body as T;
 }

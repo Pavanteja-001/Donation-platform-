@@ -23,6 +23,7 @@ export function LoginScreen() {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [isRegistered, setIsRegistered] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -34,7 +35,8 @@ export function LoginScreen() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await requestOtp("+91" + phone);
+      const res = await requestOtp("+91" + phone);
+      setIsRegistered(res.registered);
       setStep("otp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -46,6 +48,10 @@ export function LoginScreen() {
   async function handleVerifyOtp() {
     if (code.length !== 6) {
       setError("Enter a valid 6-digit code");
+      return;
+    }
+    if (!isRegistered && !name.trim()) {
+      setError("Please enter your name to register");
       return;
     }
     setError(null);
@@ -101,13 +107,6 @@ export function LoginScreen() {
                   onChangeText={(txt) => setPhone(normalise(txt))}
                   prefix="+91"
                 />
-                
-                <Input
-                  label="Name (First time only)"
-                  placeholder="Your Full Name"
-                  value={name}
-                  onChangeText={setName}
-                />
 
                 {error && <Text style={styles.error}>{error}</Text>}
 
@@ -135,6 +134,15 @@ export function LoginScreen() {
                   value={code}
                   onChangeText={(txt) => setCode(txt.replace(/\D/g, ""))}
                 />
+
+                {!isRegistered && (
+                  <Input
+                    label="Full Name"
+                    placeholder="Your Full Name"
+                    value={name}
+                    onChangeText={setName}
+                  />
+                )}
 
                 {__DEV__ && (
                   <View style={styles.devHintContainer}>

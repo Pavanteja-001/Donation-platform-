@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { fetchMe, type AuthUser, type Role } from "../lib/api";
+import { fetchMe, ApiError, type AuthUser, type Role } from "../lib/api";
 
 const TOKEN_KEY = "donationplatform_admin_token";
 const CONSOLE_ROLES: Role[] = ["ADMIN", "STAFF"];
@@ -35,7 +35,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(stored);
         setUser(me);
       })
-      .catch(() => localStorage.removeItem(TOKEN_KEY))
+      .catch((err) => {
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          localStorage.removeItem(TOKEN_KEY);
+        }
+      })
       .finally(() => setIsLoading(false));
   }, []);
 

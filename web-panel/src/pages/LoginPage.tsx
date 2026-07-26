@@ -20,6 +20,7 @@ export function LoginPage() {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [isRegistered, setIsRegistered] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -46,7 +47,8 @@ export function LoginPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await requestOtp("+91" + phone);
+      const res = await requestOtp("+91" + phone);
+      setIsRegistered(res.registered);
       setStep("otp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -59,6 +61,9 @@ export function LoginPage() {
     e.preventDefault();
     if (code.length !== 6) {
       return setError("Enter a valid 6-digit code");
+    }
+    if (!isRegistered && !name.trim()) {
+      return setError("Institution contact name is required for registration");
     }
     setError(null);
     setIsSubmitting(true);
@@ -156,15 +161,6 @@ export function LoginPage() {
               prefix="+91"
               required
             />
-            <label style={{ display: "block", marginTop: "16px" }}>
-              Institution contact name
-              <input
-                type="text"
-                placeholder="First time only"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
             {error && <p className="error" style={{ marginTop: "16px" }}>{error}</p>}
             <Button type="submit" label="Send OTP" disabled={phone.length < 10} loading={isSubmitting} style={{ width: "100%", marginTop: "16px" }} />
           </form>
@@ -182,13 +178,25 @@ export function LoginPage() {
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               required
             />
+            {!isRegistered && (
+              <div style={{ marginTop: "16px" }}>
+                <Input
+                  label="Institution contact name"
+                  type="text"
+                  placeholder="Your Full Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+            )}
             {import.meta.env.DEV && <p className="dev-hint" style={{ marginTop: "8px", marginBottom: "16px" }}>Dev build: the OTP is always 123456 (D-015).</p>}
             {error && <p className="error" style={{ marginBottom: "16px" }}>{error}</p>}
-            <Button type="submit" label="Verify & continue" disabled={code.length < 6} loading={isSubmitting} style={{ width: "100%" }} />
+            <Button type="submit" label="Verify & continue" disabled={code.length < 6} loading={isSubmitting} style={{ width: "100%", marginTop: "16px" }} />
             <button
               type="button"
               className="link"
-              onClick={() => setStep("phone")}
+              onClick={() => { setStep("phone"); setError(null); }}
               style={{ marginTop: "16px", display: "block", marginLeft: "auto", marginRight: "auto" }}
             >
               Change phone number

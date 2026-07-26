@@ -213,11 +213,12 @@ router.post("/staff", adminOnly, async (req, res) => {
 });
 
 router.delete("/staff/:id", adminOnly, async (req, res) => {
-  const staff = await prisma.user.findUnique({ where: { id: req.params.id } });
-  if (!staff || staff.role !== Role.STAFF) {
+  const result = await prisma.user.deleteMany({
+    where: { id: req.params.id, role: Role.STAFF },
+  });
+  if (result.count === 0) {
     return res.status(404).json({ error: "Staff account not found" });
   }
-  await prisma.user.delete({ where: { id: staff.id } });
   res.status(204).send();
 });
 

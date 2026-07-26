@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import * as SecureStore from "expo-secure-store";
-import { fetchMe, type AuthUser, type BloodEligibility, type TrustTierInfo } from "../lib/api";
+import { fetchMe, ApiError, type AuthUser, type BloodEligibility, type TrustTierInfo } from "../lib/api";
+import { clearNeedsFeedCache } from "../screens/NeedsFeedScreen";
+import { clearMyNeedsCache } from "../screens/MyNeedsScreen";
+import { clearContributionsCache } from "../screens/MyContributionsScreen";
 
 const TOKEN_KEY = "donationplatform_auth_token";
 
@@ -38,8 +41,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(me);
           setBloodEligibility(bloodEligibility);
           setTrustTierInfo({ trustTier, confirmedContributionsCount });
-        } catch {
-          await SecureStore.deleteItemAsync(TOKEN_KEY);
+        } catch (err) {
+          if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+            await SecureStore.deleteItemAsync(TOKEN_KEY);
+          }
         }
       }
       setIsLoading(false);
@@ -61,6 +66,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setTrustTierInfo(newTrustTierInfo);
       },
       signOut: async () => {
+        clearNeedsFeedCache();
+        clearMyNeedsCache();
+        clearContributionsCache();
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         setToken(null);
         setUser(null);

@@ -26,13 +26,14 @@ async function trustTierPayload(userId: string) {
 // separately (STAFF by an existing ADMIN — see routes/admin.ts; ADMIN via seed script).
 const SELF_REGISTERABLE_ROLES = [Role.USER, Role.INSTITUTION] as const;
 
-router.post("/otp/request", (req, res) => {
+router.post("/otp/request", async (req, res) => {
   const parsed = phoneSchema.safeParse(req.body?.phone);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid phone" });
   }
   requestOtp(parsed.data);
-  res.json({ ok: true });
+  const exists = await prisma.user.findUnique({ where: { phone: parsed.data } });
+  res.json({ ok: true, registered: !!exists });
 });
 
 const verifySchema = z.object({
@@ -54,24 +55,43 @@ router.post("/otp/verify", async (req, res) => {
   }
 
   let user = await prisma.user.findUnique({ where: { phone } });
+  let isNewUser = false;
   if (!user) {
+    isNewUser = true;
     user = await prisma.user.create({
       data: { phone, name, role: role ?? Role.USER },
+    });
+  } else if (role && user.role === Role.USER && role === Role.INSTITUTION) {
+    // Promote user to INSTITUTION if logging in from the institution partner panel (D-007)
+    user = await prisma.user.update({
+      where: { phone },
+      data: { role: Role.INSTITUTION },
     });
   }
 
   const token = signAuthToken({ sub: user.id, role: user.role, phone: user.phone });
-  // Full user object, same shape as GET /me — a hand-picked subset here previously meant a
-  // client trusting this response right after login (rather than re-fetching /me) would see
-  // fields like the blood profile as missing/undefined instead of null until their next fetch.
-  res.json({ token, user, bloodEligibility: computeEligibility(user), ...(await trustTierPayload(user.id)) });
+  // Skip DB query for brand new users to optimize signup speed
+  const trustPayload = isNewUser
+    ? { trustTier: "BRONZE", confirmedContributionsCount: 0 }
+    : await trustTierPayload(user.id);
+
+  res.json({ token, user, bloodEligibility: computeEligibility(user), ...trustPayload });
 });
 
 router.get("/me", requireAuth, async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
+  const userId = req.user!.sub;
+  const [user, confirmedContributionsCount] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    prisma.contribution.count({ where: { donorId: userId, status: "CONFIRMED" } }),
+  ]);
   if (!user) return res.status(404).json({ error: "User not found" });
-  // PRD §8.2/§14.1 — both computed fresh on every read, never stored (see the libs for why).
-  res.json({ user, bloodEligibility: computeEligibility(user), ...(await trustTierPayload(user.id)) });
+
+  res.json({
+    user,
+    bloodEligibility: computeEligibility(user),
+    trustTier: computeTrustTier(confirmedContributionsCount),
+    confirmedContributionsCount,
+  });
 });
 
 // Self-service profile edits — name/location (any role) and the blood donor profile (PRD §8.1,
@@ -141,7 +161,13 @@ router.patch("/me", requireAuth, async (req, res) => {
     }
   }
 
-  const user = await prisma.user.update({ where: { id: req.user!.sub }, data: parsed.data });
+  const updateData: any = { ...parsed.data };
+  if (parsed.data.kycStatus === KycStatus.PENDING_APPROVAL) {
+    // Automatically promote role to INSTITUTION to ensure they show up in admin's KYC queue (D-007)
+    updateData.role = Role.INSTITUTION;
+  }
+
+  const user = await prisma.user.update({ where: { id: req.user!.sub }, data: updateData });
   res.json({ user });
 });
 

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { fetchMe, type AuthUser } from "../lib/api";
+import { fetchMe, ApiError, type AuthUser } from "../lib/api";
 
 const TOKEN_KEY = "donationplatform_web_panel_token";
 
@@ -41,7 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(stored);
         setUser(me);
       })
-      .catch(() => localStorage.removeItem(TOKEN_KEY))
+      .catch((err) => {
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          localStorage.removeItem(TOKEN_KEY);
+        }
+      })
       .finally(() => setIsLoading(false));
   }, []);
 

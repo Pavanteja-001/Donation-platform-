@@ -80,21 +80,31 @@ function NeedItem({ item, onSelect }: { item: Need; onSelect: (need: Need) => vo
   );
 }
 
+let cachedMyNeeds: Need[] | null = null;
+
+export function clearMyNeedsCache() {
+  cachedMyNeeds = null;
+}
+
 export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
   const { token } = useAuth();
-  const [needs, setNeeds] = useState<Need[] | null>(null);
+  const [needs, setNeeds] = useState<Need[] | null>(cachedMyNeeds);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(
     async (opts: { silent?: boolean } = {}) => {
       if (!token) return;
-      if (!opts.silent) setError(null);
+      const isSilent = opts.silent || cachedMyNeeds !== null;
+      if (!isSilent) setError(null);
       try {
-        const { needs } = await fetchMyNeeds(token);
-        setNeeds(needs);
+        const { needs: freshNeeds } = await fetchMyNeeds(token);
+        cachedMyNeeds = freshNeeds;
+        setNeeds(freshNeeds);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load your needs");
+        if (!cachedMyNeeds) {
+          setError(err instanceof Error ? err.message : "Failed to load your needs");
+        }
       }
     },
     [token]

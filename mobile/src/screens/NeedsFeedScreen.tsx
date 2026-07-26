@@ -23,21 +23,31 @@ function FeedSkeleton() {
   );
 }
 
+let cachedNeeds: Need[] | null = null;
+
+export function clearNeedsFeedCache() {
+  cachedNeeds = null;
+}
+
 export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
   const { token } = useAuth();
-  const [needs, setNeeds] = useState<Need[] | null>(null);
+  const [needs, setNeeds] = useState<Need[] | null>(cachedNeeds);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(
     async (opts: { silent?: boolean } = {}) => {
       if (!token) return;
-      if (!opts.silent) setError(null);
+      const isSilent = opts.silent || cachedNeeds !== null;
+      if (!isSilent) setError(null);
       try {
-        const { needs } = await fetchNeeds(token);
-        setNeeds(needs);
+        const { needs: freshNeeds } = await fetchNeeds(token);
+        cachedNeeds = freshNeeds;
+        setNeeds(freshNeeds);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load needs");
+        if (!cachedNeeds) {
+          setError(err instanceof Error ? err.message : "Failed to load needs");
+        }
       }
     },
     [token]

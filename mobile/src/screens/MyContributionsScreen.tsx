@@ -83,25 +83,35 @@ function ContributionItem({ item, onViewCertificate }: { item: Contribution; onV
   );
 }
 
+let cachedContributions: Contribution[] | null = null;
+
+export function clearContributionsCache() {
+  cachedContributions = null;
+}
+
 export function MyContributionsScreen({
   onViewCertificate,
 }: {
   onViewCertificate: (contributionId: string) => void;
 }) {
   const { token } = useAuth();
-  const [contributions, setContributions] = useState<Contribution[] | null>(null);
+  const [contributions, setContributions] = useState<Contribution[] | null>(cachedContributions);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(
     async (opts: { silent?: boolean } = {}) => {
       if (!token) return;
-      if (!opts.silent) setError(null);
+      const isSilent = opts.silent || cachedContributions !== null;
+      if (!isSilent) setError(null);
       try {
-        const { contributions } = await fetchMyContributions(token);
-        setContributions(contributions);
+        const { contributions: freshContributions } = await fetchMyContributions(token);
+        cachedContributions = freshContributions;
+        setContributions(freshContributions);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load your contributions");
+        if (!cachedContributions) {
+          setError(err instanceof Error ? err.message : "Failed to load your contributions");
+        }
       }
     },
     [token]
