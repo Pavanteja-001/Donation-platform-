@@ -81,9 +81,11 @@ function NeedItem({ item, onSelect }: { item: Need; onSelect: (need: Need) => vo
 }
 
 let cachedMyNeeds: Need[] | null = null;
+let cachedMyNeedsFetchedAt = 0;
 
 export function clearMyNeedsCache() {
   cachedMyNeeds = null;
+  cachedMyNeedsFetchedAt = 0;
 }
 
 export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
@@ -93,13 +95,21 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(
-    async (opts: { silent?: boolean } = {}) => {
+    async (opts: { silent?: boolean; force?: boolean } = {}) => {
       if (!token) return;
+
+      const now = Date.now();
+      const isStale = now - cachedMyNeedsFetchedAt > 15000;
+      if (cachedMyNeeds !== null && !isStale && !opts.force) {
+        return;
+      }
+
       const isSilent = opts.silent || cachedMyNeeds !== null;
       if (!isSilent) setError(null);
       try {
         const { needs: freshNeeds } = await fetchMyNeeds(token);
         cachedMyNeeds = freshNeeds;
+        cachedMyNeedsFetchedAt = Date.now();
         setNeeds(freshNeeds);
       } catch (err) {
         if (!cachedMyNeeds) {
@@ -118,7 +128,7 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
 
   async function handleRefresh() {
     setIsRefreshing(true);
-    await load({ silent: true });
+    await load({ silent: true, force: true });
     setIsRefreshing(false);
   }
 

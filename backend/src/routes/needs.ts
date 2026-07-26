@@ -96,13 +96,15 @@ const createSchema = z.object({
 // Any authenticated USER (donor/beneficiary) or INSTITUTION can post a need (PRD §4).
 // Starts as DRAFT (PRD §6.2) — not visible to anyone else until POST /:id/submit.
 router.post("/", async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
-  if (!user) return res.status(404).json({ error: "User not found" });
+  if (req.user!.role === Role.INSTITUTION) {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-  if (user.role === Role.INSTITUTION && user.kycStatus !== KycStatus.APPROVED) {
-    return res.status(403).json({
-      error: `Your organization must be approved by an administrator before you can submit needs. Current status: ${user.kycStatus}.`,
-    });
+    if (user.kycStatus !== KycStatus.APPROVED) {
+      return res.status(403).json({
+        error: `Your organization must be approved by an administrator before you can submit needs. Current status: ${user.kycStatus}.`,
+      });
+    }
   }
 
   const parsed = createSchema.safeParse(req.body);

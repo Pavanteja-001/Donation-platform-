@@ -23,7 +23,7 @@ type Props<Name extends keyof RootStackParamList> = NativeStackScreenProps<RootS
 // (unchanged from before this chunk, minimizing the diff to their actual logic); these just
 // translate that interface to/from React Navigation's route/navigation props in one place.
 function NeedDetailRoute({ route }: Props<"NeedDetail">) {
-  return <NeedDetailScreen needId={route.params.needId} />;
+  return <NeedDetailScreen needId={route.params.needId} initialNeed={route.params.initialNeed} />;
 }
 function CreateMoneyRoute({ navigation }: Props<"CreateMoney">) {
   return <CreateMoneyNeedScreen onDone={() => navigation.goBack()} />;

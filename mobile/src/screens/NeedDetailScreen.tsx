@@ -91,10 +91,10 @@ const STATUS_BADGE_TONE: Record<Need["status"], BadgeTone> = {
   CANCELLED: "danger",
 };
 
-export function NeedDetailScreen({ needId }: { needId: string }) {
+export function NeedDetailScreen({ needId, initialNeed }: { needId: string; initialNeed?: Need }) {
   const { token, user, bloodEligibility } = useAuth();
   const navigation = useNavigation<any>();
-  const [need, setNeed] = useState<Need | null>(null);
+  const [need, setNeed] = useState<Need | null>(initialNeed || null);
   const [contributions, setContributions] = useState<Contribution[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 

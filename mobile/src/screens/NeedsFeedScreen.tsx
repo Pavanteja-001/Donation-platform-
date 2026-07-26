@@ -24,9 +24,11 @@ function FeedSkeleton() {
 }
 
 let cachedNeeds: Need[] | null = null;
+let cachedNeedsFetchedAt = 0;
 
 export function clearNeedsFeedCache() {
   cachedNeeds = null;
+  cachedNeedsFetchedAt = 0;
 }
 
 export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
@@ -36,13 +38,21 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(
-    async (opts: { silent?: boolean } = {}) => {
+    async (opts: { silent?: boolean; force?: boolean } = {}) => {
       if (!token) return;
+
+      const now = Date.now();
+      const isStale = now - cachedNeedsFetchedAt > 15000;
+      if (cachedNeeds !== null && !isStale && !opts.force) {
+        return;
+      }
+
       const isSilent = opts.silent || cachedNeeds !== null;
       if (!isSilent) setError(null);
       try {
         const { needs: freshNeeds } = await fetchNeeds(token);
         cachedNeeds = freshNeeds;
+        cachedNeedsFetchedAt = Date.now();
         setNeeds(freshNeeds);
       } catch (err) {
         if (!cachedNeeds) {
@@ -61,7 +71,7 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
 
   async function handleRefresh() {
     setIsRefreshing(true);
-    await load({ silent: true });
+    await load({ silent: true, force: true });
     setIsRefreshing(false);
   }
 

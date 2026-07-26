@@ -63,12 +63,12 @@ function CreateNeedButton() {
 
 function HomeTabScreen() {
   const navigation = useNavigation<AppNavigationProp>();
-  return <NeedsFeedScreen onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id })} />;
+  return <NeedsFeedScreen onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id, initialNeed: need })} />;
 }
 
 function MyNeedsTabScreen() {
   const navigation = useNavigation<AppNavigationProp>();
-  return <MyNeedsScreen onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id })} />;
+  return <MyNeedsScreen onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id, initialNeed: need })} />;
 }
 
 function ActivityTabScreen() {

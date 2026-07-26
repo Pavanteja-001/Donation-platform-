@@ -84,9 +84,11 @@ function ContributionItem({ item, onViewCertificate }: { item: Contribution; onV
 }
 
 let cachedContributions: Contribution[] | null = null;
+let cachedContributionsFetchedAt = 0;
 
 export function clearContributionsCache() {
   cachedContributions = null;
+  cachedContributionsFetchedAt = 0;
 }
 
 export function MyContributionsScreen({
@@ -100,13 +102,21 @@ export function MyContributionsScreen({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(
-    async (opts: { silent?: boolean } = {}) => {
+    async (opts: { silent?: boolean; force?: boolean } = {}) => {
       if (!token) return;
+
+      const now = Date.now();
+      const isStale = now - cachedContributionsFetchedAt > 15000;
+      if (cachedContributions !== null && !isStale && !opts.force) {
+        return;
+      }
+
       const isSilent = opts.silent || cachedContributions !== null;
       if (!isSilent) setError(null);
       try {
         const { contributions: freshContributions } = await fetchMyContributions(token);
         cachedContributions = freshContributions;
+        cachedContributionsFetchedAt = Date.now();
         setContributions(freshContributions);
       } catch (err) {
         if (!cachedContributions) {
@@ -125,7 +135,7 @@ export function MyContributionsScreen({
 
   async function handleRefresh() {
     setIsRefreshing(true);
-    await load({ silent: true });
+    await load({ silent: true, force: true });
     setIsRefreshing(false);
   }
 
