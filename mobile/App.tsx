@@ -2,13 +2,16 @@ import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { NavigationContainer } from "@react-navigation/native";
+import { createNavigationContainerRef, NavigationContainer } from "@react-navigation/native";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { theme } from "./src/lib/theme";
 import { ToastProvider } from "./src/components/ui";
 import { registerForPushNotificationsAsync } from "./src/lib/pushNotifications";
+import * as Notifications from "expo-notifications";
+
+export const navigationRef = createNavigationContainerRef<any>();
 
 function Root() {
   const { user, token, isLoading } = useAuth();
@@ -20,6 +23,27 @@ function Root() {
   useEffect(() => {
     if (token) registerForPushNotificationsAsync(token);
   }, [token]);
+
+  // Handle notification taps to navigate directly to the matched need details (D-016)
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const needId = response.notification.request.content.data?.needId;
+      if (needId) {
+        const navigateWhenReady = () => {
+          if (navigationRef.isReady()) {
+            navigationRef.navigate("NeedDetail", { needId });
+          } else {
+            setTimeout(navigateWhenReady, 50);
+          }
+        };
+        navigateWhenReady();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -42,7 +66,7 @@ function Root() {
   // double up the inset padding); SafeAreaProvider at the app root is what react-native-screens
   // actually needs to be present.
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <RootNavigator />
     </NavigationContainer>
   );
