@@ -41,6 +41,59 @@ router.get("/users", async (_req, res) => {
   });
 });
 
+// PRD §21 / Admin Console §15 — Platform Analytics & Metrics
+router.get("/analytics", async (_req, res) => {
+  const [
+    totalUsers,
+    totalInstitutions,
+    totalNeeds,
+    totalLiveNeeds,
+    totalFulfilledNeeds,
+    confirmedContributions,
+    needs,
+  ] = await Promise.all([
+    prisma.user.count({ where: { role: Role.USER } }),
+    prisma.user.count({ where: { role: Role.INSTITUTION } }),
+    prisma.need.count(),
+    prisma.need.count({ where: { status: NeedStatus.LIVE } }),
+    prisma.need.count({ where: { status: NeedStatus.FULFILLED } }),
+    prisma.contribution.count({ where: { status: "CONFIRMED" } }),
+    prisma.need.findMany({ select: { type: true, payload: true, status: true } }),
+  ]);
+
+  let totalMoneyRaised = 0;
+  let totalKitsFunded = 0;
+  let totalBloodUnitsFulfilled = 0;
+  let totalMealSlotsConfirmed = 0;
+  let totalVolunteersPledged = 0;
+
+  for (const n of needs) {
+    if (!n.payload) continue;
+    const p = n.payload as Record<string, any>;
+    if (n.type === "MONEY" && typeof p.raised_amount === "number") totalMoneyRaised += p.raised_amount;
+    if (n.type === "KIT" && typeof p.kits_funded === "number") totalKitsFunded += p.kits_funded;
+    if (n.type === "BLOOD" && typeof p.units_fulfilled === "number") totalBloodUnitsFulfilled += p.units_fulfilled;
+    if (n.type === "MEAL_SLOT" && typeof p.slots_confirmed === "number") totalMealSlotsConfirmed += p.slots_confirmed;
+    if (n.type === "SKILL_REQUEST" && typeof p.volunteers_joined === "number") totalVolunteersPledged += p.volunteers_joined;
+  }
+
+  res.json({
+    analytics: {
+      totalUsers,
+      totalInstitutions,
+      totalNeeds,
+      totalLiveNeeds,
+      totalFulfilledNeeds,
+      totalConfirmedContributions: confirmedContributions,
+      totalMoneyRaised,
+      totalKitsFunded,
+      totalBloodUnitsFulfilled,
+      totalMealSlotsConfirmed,
+      totalVolunteersPledged,
+    },
+  });
+});
+
 // Admin + Staff: the verification queue and verify/reject actions (D-018 — "verify/accept").
 // Default (no `status`) is the queue — PENDING_VERIFICATION only, oldest first, since that's
 // the actionable view. Pass `?status=LIVE` etc. (or `?status=ALL`) for general oversight of

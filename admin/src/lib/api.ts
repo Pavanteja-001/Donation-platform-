@@ -118,6 +118,15 @@ export interface GoodsPayload {
   claimed: boolean;
 }
 
+// PRD §13 — SKILL_REQUEST payload.
+export interface SkillRequestPayload {
+  role_needed: string;
+  volunteers_needed: number;
+  volunteers_joined: number;
+  date: string;
+  time: string;
+}
+
 export interface Need {
   id: string;
   type: NeedType;
@@ -133,7 +142,7 @@ export interface Need {
   linkedInstitutionId: string | null;
   institutionVerified: boolean;
   adminVerified: boolean;
-  payload: MoneyPayload | KitPayload | BloodPayload | MealSlotPayload | GoodsPayload | Record<string, unknown> | null;
+  payload: MoneyPayload | KitPayload | BloodPayload | MealSlotPayload | GoodsPayload | SkillRequestPayload | Record<string, unknown> | null;
   // Only ever non-empty for MEAL_SLOT needs (§10.2).
   mealSlots: MealSlot[];
   postedBy: { id: string; name: string | null; phone?: string; role: Role };
@@ -579,6 +588,27 @@ export function deleteForumQuestion(token: string, id: string) {
 export function deleteForumAnswer(token: string, id: string) {
   return request<{ ok: boolean }>(`/api/forum/answers/${id}`, {
     method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+// PRD §21 / Admin Console §15 — Platform Analytics & Metrics
+export interface AnalyticsData {
+  totalUsers: number;
+  totalInstitutions: number;
+  totalNeeds: number;
+  totalLiveNeeds: number;
+  totalFulfilledNeeds: number;
+  totalConfirmedContributions: number;
+  totalMoneyRaised: number;
+  totalKitsFunded: number;
+  totalBloodUnitsFulfilled: number;
+  totalMealSlotsConfirmed: number;
+  totalVolunteersPledged: number;
+}
+
+export function fetchAnalytics(token: string) {
+  return request<{ analytics: AnalyticsData }>("/api/admin/analytics", {
     headers: authHeaders(token),
   });
 }

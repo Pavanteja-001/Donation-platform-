@@ -13,6 +13,7 @@ import {
   type KitPayload,
   type MealSlotPayload,
   type MoneyPayload,
+  type SkillRequestPayload,
   type Need,
   type Urgency,
 } from "../lib/api";
@@ -38,6 +39,10 @@ function isMealSlotPayload(payload: Need["payload"]): payload is MealSlotPayload
 
 function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayload {
   return !!payload && typeof (payload as GoodsPayload).item === "string";
+}
+
+function isSkillRequestPayload(payload: Need["payload"]): payload is SkillRequestPayload {
+  return !!payload && typeof (payload as SkillRequestPayload).volunteers_needed === "number";
 }
 
 function formatGroup(g: BloodPayload["blood_group"]) {
@@ -141,6 +146,7 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
   const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
   const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
+  const skillRequest = need.type === "SKILL_REQUEST" && isSkillRequestPayload(need.payload) ? need.payload : null;
 
   return (
     <div>
@@ -233,6 +239,13 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
         <p className="hint">
           Item: {goods.item} · Acceptable condition: {goods.condition} · {goods.claimed ? "Claimed" : "Not yet claimed"}
         </p>
+      )}
+      {skillRequest && (
+        <div style={{ backgroundColor: "var(--color-surface)", padding: "16px", borderRadius: "8px", border: "1px solid var(--color-border)", marginBottom: "20px" }}>
+          <div><strong>Volunteers Progress:</strong> {skillRequest.volunteers_joined} / {skillRequest.volunteers_needed} volunteers joined</div>
+          <div><strong>Role Needed:</strong> {skillRequest.role_needed}</div>
+          <div><strong>Date &amp; Time:</strong> {skillRequest.date} at {skillRequest.time}</div>
+        </div>
       )}
       {need.status === "REJECTED" && need.rejectionReason && <p className="error">Rejected: {need.rejectionReason}</p>}
       {error && <p className="error">{error}</p>}

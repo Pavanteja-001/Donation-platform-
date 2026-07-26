@@ -7,6 +7,7 @@ import {
   type KitPayload,
   type MealSlotPayload,
   type MoneyPayload,
+  type SkillRequestPayload,
   type Need,
 } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -32,6 +33,10 @@ function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayload {
   return !!payload && typeof (payload as GoodsPayload).item === "string";
 }
 
+function isSkillRequestPayload(payload: Need["payload"]): payload is SkillRequestPayload {
+  return !!payload && typeof (payload as SkillRequestPayload).volunteers_needed === "number";
+}
+
 function progressLabel(need: Need): string | null {
   if (need.type === "MONEY" && isMoneyPayload(need.payload)) {
     return `₹${need.payload.raised_amount.toLocaleString("en-IN")} / ₹${need.payload.target_amount.toLocaleString("en-IN")}`;
@@ -47,6 +52,9 @@ function progressLabel(need: Need): string | null {
   }
   if (need.type === "GOODS" && isGoodsPayload(need.payload)) {
     return need.payload.claimed ? "Claimed" : "Not yet claimed";
+  }
+  if (need.type === "SKILL_REQUEST" && isSkillRequestPayload(need.payload)) {
+    return `${need.payload.volunteers_joined} / ${need.payload.volunteers_needed} volunteers`;
   }
   return null;
 }

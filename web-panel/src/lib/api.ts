@@ -100,6 +100,15 @@ export interface GoodsPayload {
   claimed: boolean;
 }
 
+// PRD §13 — SKILL_REQUEST payload.
+export interface SkillRequestPayload {
+  role_needed: string;
+  volunteers_needed: number;
+  volunteers_joined: number;
+  date: string;
+  time: string;
+}
+
 export interface Need {
   id: string;
   type: NeedType;
@@ -115,7 +124,7 @@ export interface Need {
   linkedInstitutionId: string | null;
   institutionVerified: boolean;
   adminVerified: boolean;
-  payload: MoneyPayload | KitPayload | BloodPayload | MealSlotPayload | GoodsPayload | Record<string, unknown> | null;
+  payload: MoneyPayload | KitPayload | BloodPayload | MealSlotPayload | GoodsPayload | SkillRequestPayload | Record<string, unknown> | null;
   // Only ever non-empty for MEAL_SLOT needs (§10.2).
   mealSlots: MealSlot[];
   postedBy: { id: string; name: string | null; role: Role };

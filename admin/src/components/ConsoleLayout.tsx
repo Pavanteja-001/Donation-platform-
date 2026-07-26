@@ -64,6 +64,12 @@ export function ConsoleLayout() {
           >
             Forum Moderation
           </NavLink>
+          <NavLink
+            to="/analytics"
+            className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+          >
+            Analytics &amp; Metrics
+          </NavLink>
         </nav>
 
         <div className="sidebar-footer">

@@ -41,6 +41,11 @@ function progressLabel(need: Need): string | null {
     if (typeof p.claimed !== "boolean") return null;
     return p.claimed ? "Claimed" : "Not yet claimed";
   }
+  if (need.type === "SKILL_REQUEST") {
+    const p = need.payload as { volunteers_joined?: number; volunteers_needed?: number };
+    if (typeof p.volunteers_joined !== "number" || typeof p.volunteers_needed !== "number") return null;
+    return `${p.volunteers_joined} / ${p.volunteers_needed} volunteers`;
+  }
   return null;
 }
 

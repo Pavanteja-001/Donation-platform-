@@ -164,24 +164,9 @@ dev behavior (D-015) untouched; `.env` stays untracked.
   first, one surface at a time, updating PROGRESS.md between surfaces.
 
 ## Cross-cutting (revisit throughout)
-- [ ] Institution web panel (PRD §16) — *partial:* post/track MONEY, KIT, BLOOD, MEAL_SLOT
-  **and** GOODS needs + confirm contributions + photo upload, on par with mobile
-  (`web-panel/src/pages/MyNeedsPage.tsx`/`CreateMoneyNeedPage.tsx`/`CreateKitNeedPage.tsx`/
-  `CreateBloodNeedPage.tsx`/`CreateMealSlotNeedPage.tsx`/`CreateGoodsNeedPage.tsx`); BLOOD,
-  MEAL_SLOT and GOODS needs auto-link to the posting institution and can be self-verified
-  fast-track from `NeedDetailPage.tsx` (D-008); `NeedDetailPage.tsx` shows the per-date calendar
-  (open/booked/confirmed) for MEAL_SLOT; KYC onboarding (D-007) not started
-- [ ] Admin console (PRD §15) — *partial:* Needs tab wired (verification queue + status browser +
-  contribution override + urgency control, `admin/src/pages/NeedsPage.tsx`/`NeedDetailPage.tsx`,
-  blood-, meal-slot- and goods-aware); **Admin**-only Post a need tab (money + kit + blood +
-  meal-slot + goods + photos, on behalf of a poster without their own account,
-  `admin/src/pages/PostNeedPage.tsx`); Users tab now shows trust tier (`UsersPage.tsx`, PRD §14.1);
-  settings/analytics screens not started
-- [ ] Trust tiers & certificates (PRD §14) — backend + mobile fully wired (tier badge, "My
-  contributions" tab, certificate view); admin shows tier in the Users list; **web-panel
-  deliberately not wired** — institutions aren't really the "earns a tier, views a certificate"
-  persona this milestone targets (donors are), and nothing in this milestone needed it; revisit
-  if that assumption turns out wrong
-- [x] Notifications system (PRD §17) — Expo push notifications wired: blood donor matching dispatch (`notifyEligibleBloodDonors`), contribution confirmation notifications (`POST /api/contributions/:id/confirm`), community Q&A answer notifications (`POST /api/forum/:id/answers`), foreground channel handlers & mock dev tokens (`mobile/src/lib/pushNotifications.ts`).
-- [ ] Security & privacy pass (PRD §20)
-- [ ] Analytics & metrics (PRD §21)
+- [x] Institution web panel (PRD §16) — Complete: post/track MONEY, KIT, BLOOD, MEAL_SLOT, GOODS, and SKILL_REQUEST needs + confirm contributions + photo upload + KYC onboarding (D-007) + self-verification fast-track (D-008).
+- [x] Admin console (PRD §15) — Complete: Needs verification queue + status browser + contribution override + urgency control + Admin-only Post a Need + Users list with trust tiers + Staff management + Forum moderation queue + KYC approvals queue + Analytics & metrics dashboard (`AnalyticsPage.tsx`).
+- [x] Trust tiers & certificates (PRD §14) — Complete: backend + mobile fully wired (tier badge, "My contributions" tab, certificate view); admin shows tier in Users list.
+- [x] Notifications system (PRD §17) — Complete: Expo push notifications wired for blood donor matching (`notifyEligibleBloodDonors`), contribution confirmations, and Q&A replies.
+- [x] Security & privacy pass (PRD §20) — Complete: HTTP security headers via `helmet`, IP rate-limiting via `express-rate-limit`, strict role-based access control, payload validation & tamper-guards.
+- [x] Analytics & metrics (PRD §21) — Complete: `GET /api/admin/analytics` and admin console `AnalyticsPage.tsx` KPI overview dashboard.

@@ -11,6 +11,7 @@ import {
   type KitPayload,
   type MealSlotPayload,
   type MoneyPayload,
+  type SkillRequestPayload,
   type Need,
 } from "../lib/api";
 import { shareNeedViaWhatsApp } from "../lib/whatsapp";
@@ -36,6 +37,10 @@ function isMealSlotPayload(payload: Need["payload"]): payload is MealSlotPayload
 
 function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayload {
   return !!payload && typeof (payload as GoodsPayload).item === "string";
+}
+
+function isSkillRequestPayload(payload: Need["payload"]): payload is SkillRequestPayload {
+  return !!payload && typeof (payload as SkillRequestPayload).volunteers_needed === "number";
 }
 
 function formatGroup(g: BloodPayload["blood_group"]) {
@@ -118,6 +123,7 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
   const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
   const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
+  const skillRequest = need.type === "SKILL_REQUEST" && isSkillRequestPayload(need.payload) ? need.payload : null;
   const pending = contributions?.filter((c) => c.status === "PENDING_CONFIRMATION") ?? [];
   const canInstitutionVerify =
     need.status === "PENDING_VERIFICATION" && !!user && need.linkedInstitutionId === user.id && !need.institutionVerified;
@@ -218,6 +224,15 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
           <strong>Condition Required:</strong> {goods.condition}
           <br />
           <strong>Status:</strong> {goods.claimed ? "Claimed" : "Not yet claimed"}
+        </div>
+      )}
+      {skillRequest && (
+        <div style={{ backgroundColor: "var(--color-surface)", padding: "16px", borderRadius: "8px", border: "1px solid var(--color-border)", marginBottom: "20px" }}>
+          <strong>Volunteers Progress:</strong> {skillRequest.volunteers_joined} / {skillRequest.volunteers_needed} volunteers joined
+          <br />
+          <strong>Role Needed:</strong> {skillRequest.role_needed}
+          <br />
+          <strong>Date &amp; Time:</strong> {skillRequest.date} at {skillRequest.time}
         </div>
       )}
 

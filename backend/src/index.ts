@@ -7,6 +7,8 @@ import "dotenv/config";
 import "express-async-errors";
 import cors from "cors";
 import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/auth";
 import adminRoutes from "./routes/admin";
 import needsRoutes from "./routes/needs";
@@ -15,7 +17,21 @@ import uploadsRoutes from "./routes/uploads";
 import forumRoutes from "./routes/forum";
 
 const app = express();
+
+// PRD §20 — Security & Privacy Pass: HTTP security headers & rate limiting
+app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cors());
+
+// Rate limit: 200 requests per 15-minute window per IP
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  message: { error: "Too many requests from this IP, please try again after 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/", apiLimiter);
+
 app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));

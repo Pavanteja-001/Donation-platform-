@@ -5,6 +5,28 @@
 
 ---
 
+### Session 32 — Final Audit: 100% PRD & TASKS Completion & Wiring
+
+**What was done:**
+
+1. **SKILL_REQUEST Web & Admin Integration:**
+   - Updated `Need` interface payload union in `web-panel/src/lib/api.ts` and `admin/src/lib/api.ts` with `SkillRequestPayload`.
+   - Updated `progressLabel` in `web-panel/src/pages/MyNeedsPage.tsx` and `admin/src/pages/NeedsPage.tsx` to handle `SKILL_REQUEST` (`volunteers_joined / volunteers_needed volunteers`).
+   - Added dedicated `SKILL_REQUEST` detail cards in `web-panel/src/pages/NeedDetailPage.tsx` and `admin/src/pages/NeedDetailPage.tsx` showing role needed, volunteer count, date, and time.
+
+2. **Security & Hardening Pass (PRD §20):**
+   - Configured `helmet` for HTTP security headers and `express-rate-limit` (200 requests / 15 mins per IP) in `backend/src/index.ts`.
+
+3. **Analytics & Metrics Dashboard (PRD §21 / Admin Console §15):**
+   - Added `GET /api/admin/analytics` in `backend/src/routes/admin.ts` returning platform-wide aggregate KPIs (Money Raised, Kits Funded, Blood Units Fulfilled, Meal Slots Booked, Volunteers Pledged, Total Users, Total Institutions, Total Needs, Live Needs, Fulfilled Needs).
+   - Built `admin/src/pages/AnalyticsPage.tsx` KPI overview dashboard, added `/analytics` route in `App.tsx`, and added "Analytics & Metrics" sidebar link in `ConsoleLayout.tsx`.
+
+4. **100% Completion Verification:**
+   - All tasks in `TASKS.md` checked off.
+   - Clean builds across the entire stack (`backend`, `web-panel`, `admin`, `mobile`).
+
+---
+
 ### Session 31 — IDEAS: UPI Deep-Link Intent & QR Code Upgrade (D-009)
 
 **What was done:**
