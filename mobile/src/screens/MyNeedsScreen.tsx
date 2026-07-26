@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { RefreshControl, StyleSheet, Text, Pressable, View } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { useFocusEffect } from "@react-navigation/native";
+import { FlashList } from "@shopify/flash-list";
 import { fetchMyNeeds, type MoneyPayload, type Need } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { EmptyState, ErrorState, Skeleton, Badge, type BadgeTone } from "../components/ui";
+import { EmptyState, ErrorState, Skeleton, Badge, Card, type BadgeTone } from "../components/ui";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -21,29 +23,60 @@ const STATUS_BADGE_TONE: Record<Need["status"], BadgeTone> = {
   CANCELLED: "danger",
 };
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 function NeedsListSkeleton() {
   return (
     <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
       {[1, 2, 3].map((i) => (
-        <View
-          key={i}
-          style={{
-            padding: theme.spacing.lg,
-            borderWidth: 1,
-            borderColor: theme.color.border,
-            borderRadius: theme.radius,
-            gap: theme.spacing.sm,
-            backgroundColor: theme.color.surface,
-          }}
-        >
+        <Card elevated key={i} style={{ gap: theme.spacing.sm }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <Skeleton width="50%" height={18} />
             <Skeleton width="20%" height={14} />
           </View>
           <Skeleton width="30%" height={12} />
-        </View>
+        </Card>
       ))}
     </View>
+  );
+}
+
+function NeedItem({ item, onSelect }: { item: Need; onSelect: (need: Need) => void }) {
+  const scale = useSharedValue(1);
+  const money = isMoneyPayload(item.payload) ? item.payload : null;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  return (
+    <AnimatedPressable
+      onPress={() => onSelect(item)}
+      onPressIn={() => (scale.value = withSpring(0.97, { damping: 15 }))}
+      onPressOut={() => (scale.value = withSpring(1, { damping: 15 }))}
+      style={[styles.card, theme.elevation.level1, animatedStyle]}
+    >
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1, paddingRight: theme.spacing.sm }}>
+          <Text style={styles.title} numberOfLines={1}>
+            {item.title}
+          </Text>
+        </View>
+        <Badge label={item.status.replace("_", " ")} tone={STATUS_BADGE_TONE[item.status]} />
+      </View>
+      {money && (
+        <Text style={styles.meta}>
+          ₹{money.raised_amount.toLocaleString("en-IN")} / ₹{money.target_amount.toLocaleString("en-IN")}
+        </Text>
+      )}
+      {item.status === "REJECTED" && item.rejectionReason && (
+        <Text style={styles.rejection} numberOfLines={2}>
+          {item.rejectionReason}
+        </Text>
+      )}
+    </AnimatedPressable>
   );
 }
 
@@ -95,44 +128,23 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
     return (
       <View style={styles.centered}>
         <EmptyState
-          title="You haven't posted any needs yet"
-          subtitle="Your posted help requests will be visible here."
+          title="No helper requests yet"
+          subtitle="Your posted helper requests will be visible here."
         />
       </View>
     );
   }
 
   return (
-    <ScrollView
+    <FlashList
+      data={needs}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => <NeedItem item={item} onSelect={onSelectNeed} />}
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.color.primary} />}
-    >
-      {needs.map((need) => {
-        const money = isMoneyPayload(need.payload) ? need.payload : null;
-        return (
-          <TouchableOpacity key={need.id} style={styles.card} onPress={() => onSelectNeed(need)} activeOpacity={0.7}>
-            <View style={styles.headerRow}>
-              <View style={{ flex: 1, paddingRight: theme.spacing.sm }}>
-                <Text style={styles.title} numberOfLines={1}>
-                  {need.title}
-                </Text>
-              </View>
-              <Badge label={need.status.replace("_", " ")} tone={STATUS_BADGE_TONE[need.status]} />
-            </View>
-            {money && (
-              <Text style={styles.meta}>
-                ₹{money.raised_amount.toLocaleString("en-IN")} / ₹{money.target_amount.toLocaleString("en-IN")}
-              </Text>
-            )}
-            {need.status === "REJECTED" && need.rejectionReason && (
-              <Text style={styles.rejection} numberOfLines={2}>
-                {need.rejectionReason}
-              </Text>
-            )}
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
+      refreshControl={
+        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.color.primary} />
+      }
+    />
   );
 }
 
@@ -143,12 +155,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.surface,
     borderWidth: 1,
     borderColor: theme.color.border,
-    borderRadius: theme.radius,
+    borderRadius: theme.radius * 1.2,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.md,
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 15, fontWeight: "700", color: theme.color.textPrimary },
-  meta: { fontSize: 12, color: theme.color.textSecondary, marginTop: 4 },
-  rejection: { fontSize: 12, color: theme.color.danger, marginTop: 4 },
+  meta: { fontSize: 12, color: theme.color.textSecondary, marginTop: 4, fontWeight: "500" },
+  rejection: { fontSize: 12, color: theme.color.danger, marginTop: 4, fontWeight: "500" },
 });

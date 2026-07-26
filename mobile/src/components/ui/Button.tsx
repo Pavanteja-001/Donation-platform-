@@ -1,11 +1,13 @@
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, type GestureResponderEvent } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, type GestureResponderEvent } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { theme } from "../../lib/theme";
 
 export type ButtonVariant = "primary" | "secondary" | "danger";
 
-// PRD Appendix A.4 — the one button component every screen should reach for instead of
-// hand-rolling TouchableOpacity + StyleSheet each time (as most existing screens still do —
-// Chunk 7 refactors those; this chunk just establishes the component).
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// PRD Appendix A.4 — The one button component every screen should reach for.
+// Overhauled with Reanimated to ensure 60/120fps micro-interactions (press scaling).
 export function Button({
   label,
   onPress,
@@ -20,19 +22,40 @@ export function Button({
   loading?: boolean;
 }) {
   const isDisabled = disabled || loading;
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  const handlePressIn = () => {
+    if (!isDisabled) {
+      scale.value = withSpring(0.96, { damping: 15, stiffness: 300 });
+    }
+  };
+
+  const handlePressOut = () => {
+    if (!isDisabled) {
+      scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+    }
+  };
+
   return (
-    <TouchableOpacity
-      style={[styles.base, styles[variant], isDisabled && styles.disabled]}
+    <AnimatedPressable
+      style={[styles.base, styles[variant], isDisabled && styles.disabled, animatedStyle]}
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={isDisabled}
-      activeOpacity={0.7}
     >
       {loading ? (
         <ActivityIndicator color={variant === "secondary" ? theme.color.primary : theme.color.onPrimary} />
       ) : (
         <Text style={[styles.label, textStyles[variant]]}>{label}</Text>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -43,7 +66,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
+    minHeight: 48,
   },
   primary: { backgroundColor: theme.color.primary },
   secondary: { backgroundColor: "transparent", borderWidth: 1, borderColor: theme.color.primary },

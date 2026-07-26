@@ -1,18 +1,17 @@
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { postMealSlotNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { PhotoPicker, type PickedPhoto } from "../components/PhotoPicker";
+import { Button, Input, Chip, Card } from "../components/ui";
 
 type Mode = "MONEY" | "DELIVER";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// PRD §10.1/§10.2 — post a MEAL_SLOT need (meal type, cost/slot, funding mode, and the bookable
-// calendar dates). No date-picker dependency yet — plain "YYYY-MM-DD" text entry, added one at a
-// time into a chip list, same "don't add a dependency until it's needed" call as elsewhere in
-// this app (e.g. no routing library).
+// PRD §10.1/§10.2 — post a MEAL_SLOT need. Overhauled with Reanimated and premium styling.
 export function CreateMealSlotNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
@@ -74,164 +73,148 @@ export function CreateMealSlotNeedScreen({ onDone }: { onDone: () => void }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Post a meal-slot need</Text>
-      <Text style={styles.hint}>An admin verifies every need before it goes live (PRD §6.3).</Text>
+      <Animated.View entering={FadeInDown.delay(100).duration(500)}>
+        <Card elevated style={styles.card}>
+          <Text style={styles.title}>Post a Meal Slot Need</Text>
+          <Text style={styles.hint}>An admin verifies every helper request before it goes live.</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Title"
-        placeholderTextColor={theme.color.textSecondary}
-        value={title}
-        onChangeText={setTitle}
-      />
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        placeholder="Describe what this is for"
-        placeholderTextColor={theme.color.textSecondary}
-        value={description}
-        onChangeText={setDescription}
-        multiline
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Meal (e.g. breakfast, lunch, dinner)"
-        placeholderTextColor={theme.color.textSecondary}
-        value={mealType}
-        onChangeText={setMealType}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Cost per slot (₹)"
-        placeholderTextColor={theme.color.textSecondary}
-        keyboardType="number-pad"
-        value={costPerSlot}
-        onChangeText={setCostPerSlot}
-      />
+          <Input
+            label="Title"
+            placeholder="E.g., Daily lunch program at shelter home"
+            value={title}
+            onChangeText={(txt) => {
+              setTitle(txt);
+              setError(null);
+            }}
+          />
+          <Input
+            label="Description"
+            placeholder="Describe who these meals will serve"
+            value={description}
+            onChangeText={(txt) => {
+              setDescription(txt);
+              setError(null);
+            }}
+            multiline
+            style={styles.multiline}
+          />
+          <Input
+            label="Meal Type"
+            placeholder="E.g., Lunch, Breakfast, Dinner"
+            value={mealType}
+            onChangeText={(txt) => {
+              setMealType(txt);
+              setError(null);
+            }}
+          />
+          <Input
+            label="Cost per Slot (₹)"
+            placeholder="E.g., 2500"
+            keyboardType="number-pad"
+            value={costPerSlot}
+            onChangeText={(txt) => {
+              setCostPerSlot(txt);
+              setError(null);
+            }}
+          />
 
-      <Text style={styles.label}>How can donors help?</Text>
-      <View style={styles.modeRow}>
-        <TouchableOpacity
-          style={[styles.modeOption, mode === "MONEY" && styles.modeOptionActive]}
-          onPress={() => setMode("MONEY")}
-        >
-          <Text style={[styles.modeOptionText, mode === "MONEY" && styles.modeOptionTextActive]}>
-            Fund a slot (money)
+          <Text style={styles.label}>How can donors help?</Text>
+          <View style={styles.modeRow}>
+            <Chip
+              label="Fund a slot (money)"
+              active={mode === "MONEY"}
+              onPress={() => {
+                setMode("MONEY");
+                setError(null);
+              }}
+            />
+            <Chip
+              label="Cook & serve in person"
+              active={mode === "DELIVER"}
+              onPress={() => {
+                setMode("DELIVER");
+                setError(null);
+              }}
+            />
+          </View>
+          <Text style={styles.fieldHint}>
+            {mode === "MONEY"
+              ? "Donors pay per slot via UPI directly to you, same as a money request."
+              : "Donors pledge to personally cook/serve that date — no app payment."}
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modeOption, mode === "DELIVER" && styles.modeOptionActive]}
-          onPress={() => setMode("DELIVER")}
-        >
-          <Text style={[styles.modeOptionText, mode === "DELIVER" && styles.modeOptionTextActive]}>
-            Cook & serve in person
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.hint}>
-        {mode === "MONEY"
-          ? "Donors pay per slot via UPI, same as a money need."
-          : "Donors pledge to personally cook/serve that date — no payment through the app."}
-      </Text>
 
-      {mode === "MONEY" && (
-        <TextInput
-          style={styles.input}
-          placeholder="Your UPI ID"
-          placeholderTextColor={theme.color.textSecondary}
-          autoCapitalize="none"
-          value={upiId}
-          onChangeText={setUpiId}
-        />
-      )}
+          {mode === "MONEY" && (
+            <Input
+              label="Your UPI ID"
+              placeholder="E.g., name@upi"
+              autoCapitalize="none"
+              value={upiId}
+              onChangeText={(txt) => {
+                setUpiId(txt);
+                setError(null);
+              }}
+            />
+          )}
 
-      <Text style={styles.label}>Bookable dates</Text>
-      <View style={styles.dateRow}>
-        <TextInput
-          style={[styles.input, styles.dateInput]}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={theme.color.textSecondary}
-          value={dateInput}
-          onChangeText={setDateInput}
-        />
-        <TouchableOpacity style={styles.addDateButton} onPress={handleAddDate}>
-          <Text style={styles.addDateButtonText}>Add</Text>
-        </TouchableOpacity>
-      </View>
-      {dates.length > 0 && (
-        <View style={styles.dateChipRow}>
-          {dates.map((d) => (
-            <TouchableOpacity key={d} style={styles.dateChip} onPress={() => handleRemoveDate(d)}>
-              <Text style={styles.dateChipText}>{d} ✕</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+          <Text style={styles.label}>Bookable Dates</Text>
+          <View style={styles.dateRow}>
+            <View style={{ flex: 1 }}>
+              <Input
+                placeholder="YYYY-MM-DD"
+                value={dateInput}
+                onChangeText={(txt) => {
+                  setDateInput(txt);
+                  setError(null);
+                }}
+              />
+            </View>
+            <View style={{ marginTop: 2 }}>
+              <Button label="Add" variant="secondary" onPress={handleAddDate} />
+            </View>
+          </View>
 
-      <PhotoPicker photos={photos} onChange={setPhotos} />
+          {dates.length > 0 && (
+            <View style={styles.dateChipRow}>
+              {dates.map((d) => (
+                <Chip
+                  key={d}
+                  label={`${d} ✕`}
+                  active
+                  onPress={() => handleRemoveDate(d)}
+                />
+              ))}
+            </View>
+          )}
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
-      <TouchableOpacity style={[styles.button, isSubmitting && styles.buttonDisabled]} onPress={handleSubmit} disabled={isSubmitting}>
-        {isSubmitting ? <ActivityIndicator color={theme.color.onPrimary} /> : <Text style={styles.buttonText}>Submit for verification</Text>}
-      </TouchableOpacity>
+          <View style={styles.pickerSection}>
+            <Text style={styles.label}>Photos</Text>
+            <PhotoPicker photos={photos} onChange={setPhotos} />
+          </View>
+
+          {error && <Text style={styles.errorText}>{error}</Text>}
+          <Button
+            label="Submit for Verification"
+            onPress={handleSubmit}
+            loading={isSubmitting}
+          />
+        </Card>
+      </Animated.View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg },
-  title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
-  hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
-  label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },
-  input: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    fontSize: 16,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.md,
-  },
+  content: { padding: theme.spacing.lg, paddingBottom: 40 },
+  card: { padding: theme.spacing.xl, gap: theme.spacing.md },
+  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 4 },
+  hint: { ...theme.typography.caption, fontSize: 13, color: theme.color.textSecondary, lineHeight: 18, marginBottom: theme.spacing.xs },
+  label: { fontSize: 13, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.xs },
+  fieldHint: { fontSize: 12, color: theme.color.textSecondary, lineHeight: 16, marginBottom: theme.spacing.sm },
   multiline: { minHeight: 90, textAlignVertical: "top" },
-  modeRow: { flexDirection: "row", gap: theme.spacing.sm, marginBottom: theme.spacing.sm },
-  modeOption: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    alignItems: "center",
-  },
-  modeOptionActive: { borderColor: theme.color.primary, backgroundColor: theme.color.primary },
-  modeOptionText: { fontSize: 13, fontWeight: "600", color: theme.color.textSecondary },
-  modeOptionTextActive: { color: theme.color.onPrimary },
+  modeRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
   dateRow: { flexDirection: "row", gap: theme.spacing.sm, alignItems: "flex-start" },
-  dateInput: { flex: 1 },
-  addDateButton: {
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-  },
-  addDateButtonText: { color: theme.color.onPrimary, fontSize: 14, fontWeight: "600" },
-  dateChipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
-  dateChip: {
-    borderWidth: 1,
-    borderColor: theme.color.primary,
-    borderRadius: 999,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 6,
-  },
-  dateChipText: { color: theme.color.primary, fontSize: 13, fontWeight: "600" },
-  errorText: { color: theme.color.danger, fontSize: 13, marginBottom: theme.spacing.md },
-  button: {
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: theme.color.onPrimary, fontSize: 16, fontWeight: "600" },
+  dateChipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.xs },
+  pickerSection: { marginTop: theme.spacing.xs },
+  errorText: { color: theme.color.danger, fontSize: 13, fontWeight: "500" },
 });

@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { postBloodNeed, uploadPhotos, type BloodGroup } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { PhotoPicker, type PickedPhoto } from "../components/PhotoPicker";
+import { Button, Input, Chip, Card } from "../components/ui";
 
 const BLOOD_GROUPS: BloodGroup[] = [
   "A_POSITIVE",
@@ -20,9 +22,7 @@ function formatGroup(g: BloodGroup) {
   return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
 }
 
-// PRD §8.3 — post a BLOOD need (group + units). No funding mode, no UPI — a respond-and-confirm
-// flow, not a donate-and-confirm one (§8.5). Institution linking (D-008) isn't exposed here yet
-// — see lib/api.ts's postBloodNeed comment.
+// PRD §8.3 — post a BLOOD need (group + units). Overhauled with Reanimated and premium styling.
 export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
@@ -61,98 +61,86 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Post a blood request</Text>
-      <Text style={styles.hint}>
-        An admin (or a linked hospital/blood bank) verifies this before it goes live and eligible
-        donors nearby are notified (PRD §8.4).
-      </Text>
+      <Animated.View entering={FadeInDown.delay(100).duration(500)}>
+        <Card elevated style={styles.card}>
+          <Text style={styles.title}>Post a Blood Request</Text>
+          <Text style={styles.hint}>
+            An admin verifies this before it goes live and eligible donors nearby are notified.
+          </Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Title"
-        placeholderTextColor={theme.color.textSecondary}
-        value={title}
-        onChangeText={setTitle}
-      />
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        placeholder="Describe the situation"
-        placeholderTextColor={theme.color.textSecondary}
-        value={description}
-        onChangeText={setDescription}
-        multiline
-      />
+          <Input
+            label="Title"
+            placeholder="E.g., Emergency AB+ blood needed at City Hospital"
+            value={title}
+            onChangeText={(txt) => {
+              setTitle(txt);
+              setError(null);
+            }}
+          />
+          <Input
+            label="Description"
+            placeholder="Describe the situation and specify patient info if needed"
+            value={description}
+            onChangeText={(txt) => {
+              setDescription(txt);
+              setError(null);
+            }}
+            multiline
+            style={styles.multiline}
+          />
 
-      <Text style={styles.label}>Blood group needed</Text>
-      <View style={styles.chipGrid}>
-        {BLOOD_GROUPS.map((g) => (
-          <TouchableOpacity
-            key={g}
-            style={[styles.chip, bloodGroup === g && styles.chipActive]}
-            onPress={() => setBloodGroup(g)}
-          >
-            <Text style={[styles.chipText, bloodGroup === g && styles.chipTextActive]}>{formatGroup(g)}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          <Text style={styles.label}>Blood Group Needed</Text>
+          <View style={styles.chipGrid}>
+            {BLOOD_GROUPS.map((g) => (
+              <Chip
+                key={g}
+                label={formatGroup(g)}
+                active={bloodGroup === g}
+                onPress={() => {
+                  setBloodGroup(g);
+                  setError(null);
+                }}
+              />
+            ))}
+          </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Units needed"
-        placeholderTextColor={theme.color.textSecondary}
-        keyboardType="number-pad"
-        value={unitsNeeded}
-        onChangeText={setUnitsNeeded}
-      />
+          <Input
+            label="Units Needed"
+            placeholder="E.g., 2"
+            keyboardType="number-pad"
+            value={unitsNeeded}
+            onChangeText={(txt) => {
+              setUnitsNeeded(txt);
+              setError(null);
+            }}
+          />
 
-      <PhotoPicker photos={photos} onChange={setPhotos} />
+          <View style={styles.pickerSection}>
+            <Text style={styles.label}>Photos</Text>
+            <PhotoPicker photos={photos} onChange={setPhotos} />
+          </View>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
-      <TouchableOpacity style={[styles.button, isSubmitting && styles.buttonDisabled]} onPress={handleSubmit} disabled={isSubmitting}>
-        {isSubmitting ? <ActivityIndicator color={theme.color.onPrimary} /> : <Text style={styles.buttonText}>Submit for verification</Text>}
-      </TouchableOpacity>
+          {error && <Text style={styles.errorText}>{error}</Text>}
+          <Button
+            label="Submit for Verification"
+            onPress={handleSubmit}
+            loading={isSubmitting}
+          />
+        </Card>
+      </Animated.View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg },
-  title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
-  hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
-  label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },
-  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
-  chip: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-  },
-  // Primary, not danger-red — red is reserved for urgency/emergency badges only (PRD Appendix A),
-  // this is just a neutral "selected" state, not an urgency signal.
-  chipActive: { backgroundColor: theme.color.primary, borderColor: theme.color.primary },
-  chipText: { fontSize: 13, fontWeight: "600", color: theme.color.textSecondary },
-  chipTextActive: { color: theme.color.onPrimary },
-  input: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    fontSize: 16,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.md,
-  },
+  content: { padding: theme.spacing.lg, paddingBottom: 40 },
+  card: { padding: theme.spacing.xl, gap: theme.spacing.md },
+  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 4 },
+  hint: { ...theme.typography.caption, fontSize: 13, color: theme.color.textSecondary, lineHeight: 18, marginBottom: theme.spacing.xs },
+  label: { fontSize: 13, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.xs },
+  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.xs },
   multiline: { minHeight: 90, textAlignVertical: "top" },
-  errorText: { color: theme.color.danger, fontSize: 13, marginBottom: theme.spacing.md },
-  button: {
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: theme.color.onPrimary, fontSize: 16, fontWeight: "600" },
+  pickerSection: { marginTop: theme.spacing.xs },
+  errorText: { color: theme.color.danger, fontSize: 13, fontWeight: "500" },
 });

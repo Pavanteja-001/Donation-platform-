@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,7 +9,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { updateMe, type BloodGroup, type Gender } from "../lib/api";
 import { theme } from "../lib/theme";
-import { Button, Input } from "../components/ui";
+import { Button, Input, Chip, Card } from "../components/ui";
 
 const BLOOD_GROUPS: BloodGroup[] = [
   "A_POSITIVE",
@@ -98,140 +97,131 @@ export function RegisterScreen({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Complete your profile</Text>
-      <Text style={styles.hint}>
-        To post needs or respond to blood requests, India eligibility rules require a completed profile.
-      </Text>
+      <Card elevated style={styles.card}>
+        <Text style={styles.title}>Complete your profile</Text>
+        <Text style={styles.hint}>
+          To post needs or respond to blood requests, India eligibility rules require a completed profile.
+        </Text>
 
-      <Input
-        label="Full name"
-        placeholder="Enter your full name"
-        value={name}
-        onChangeText={(txt) => {
-          setName(txt);
-          if (errors.name) setErrors((prev) => ({ ...prev, name: "" }));
-        }}
-        error={errors.name}
-      />
+        <Input
+          label="Full Name"
+          placeholder="Enter your full name"
+          value={name}
+          onChangeText={(txt) => {
+            setName(txt);
+            if (errors.name) setErrors((prev) => ({ ...prev, name: "" }));
+          }}
+          error={errors.name}
+        />
 
-      <Input
-        label="Email address (optional)"
-        placeholder="Enter your email address"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        value={email}
-        onChangeText={(txt) => {
-          setEmail(txt);
-          if (errors.email) setErrors((prev) => ({ ...prev, email: "" }));
-        }}
-        error={errors.email}
-      />
+        <Input
+          label="Email Address (optional)"
+          placeholder="Enter your email address"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={(txt) => {
+            setEmail(txt);
+            if (errors.email) setErrors((prev) => ({ ...prev, email: "" }));
+          }}
+          error={errors.email}
+        />
 
-      <Input
-        label="Date of birth"
-        placeholder="YYYY-MM-DD"
-        value={dob}
-        onChangeText={(txt) => {
-          setDob(txt);
-          if (errors.dob) setErrors((prev) => ({ ...prev, dob: "" }));
-        }}
-        error={errors.dob}
-      />
+        <Input
+          label="Date of Birth"
+          placeholder="YYYY-MM-DD"
+          value={dob}
+          onChangeText={(txt) => {
+            setDob(txt);
+            if (errors.dob) setErrors((prev) => ({ ...prev, dob: "" }));
+          }}
+          error={errors.dob}
+        />
 
-      <Input
-        label="Permanent city"
-        placeholder="e.g. Visakhapatnam"
-        value={city}
-        onChangeText={(txt) => {
-          setCity(txt);
-          if (errors.city) setErrors((prev) => ({ ...prev, city: "" }));
-        }}
-        error={errors.city}
-      />
+        <Input
+          label="Permanent City"
+          placeholder="e.g. Visakhapatnam"
+          value={city}
+          onChangeText={(txt) => {
+            setCity(txt);
+            if (errors.city) setErrors((prev) => ({ ...prev, city: "" }));
+          }}
+          error={errors.city}
+        />
 
-      <Input
-        label="Permanent area / locality"
-        placeholder="e.g. Madhurawada"
-        value={area}
-        onChangeText={(txt) => {
-          setArea(txt);
-          if (errors.area) setErrors((prev) => ({ ...prev, area: "" }));
-        }}
-        error={errors.area}
-      />
+        <Input
+          label="Permanent Area / Locality"
+          placeholder="e.g. Madhurawada"
+          value={area}
+          onChangeText={(txt) => {
+            setArea(txt);
+            if (errors.area) setErrors((prev) => ({ ...prev, area: "" }));
+          }}
+          error={errors.area}
+        />
 
-      <Text style={styles.label}>Gender</Text>
-      <View style={[styles.chipGrid, errors.gender ? { marginBottom: theme.spacing.xs } : null]}>
-        {GENDERS.map((g) => (
-          <TouchableOpacity
-            key={g.value}
-            style={[styles.chip, gender === g.value && styles.chipActive]}
-            onPress={() => {
-              setGender(g.value);
-              if (errors.gender) setErrors((prev) => ({ ...prev, gender: "" }));
-            }}
-          >
-            <Text style={[styles.chipText, gender === g.value && styles.chipTextActive]}>
-              {g.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {errors.gender ? <Text style={styles.fieldError}>{errors.gender}</Text> : null}
+        <Text style={styles.label}>Gender</Text>
+        <View style={[styles.chipGrid, errors.gender ? { marginBottom: theme.spacing.xs } : null]}>
+          {GENDERS.map((g) => (
+            <Chip
+              key={g.value}
+              label={g.label}
+              active={gender === g.value}
+              onPress={() => {
+                setGender(g.value);
+                if (errors.gender) setErrors((prev) => ({ ...prev, gender: "" }));
+              }}
+            />
+          ))}
+        </View>
+        {errors.gender ? <Text style={styles.fieldError}>{errors.gender}</Text> : null}
 
-      <Text style={styles.label}>Blood group</Text>
-      <View style={[styles.chipGrid, errors.bloodGroup ? { marginBottom: theme.spacing.xs } : null]}>
-        {BLOOD_GROUPS.map((g) => (
-          <TouchableOpacity
-            key={g}
-            style={[styles.chip, bloodGroup === g && styles.chipActive]}
-            onPress={() => {
-              setBloodGroup(g);
-              if (errors.bloodGroup) setErrors((prev) => ({ ...prev, bloodGroup: "" }));
-            }}
-          >
-            <Text style={[styles.chipText, bloodGroup === g && styles.chipTextActive]}>
-              {formatGroup(g)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {errors.bloodGroup ? <Text style={styles.fieldError}>{errors.bloodGroup}</Text> : null}
+        <Text style={styles.label}>Blood Group</Text>
+        <View style={[styles.chipGrid, errors.bloodGroup ? { marginBottom: theme.spacing.xs } : null]}>
+          {BLOOD_GROUPS.map((g) => (
+            <Chip
+              key={g}
+              label={formatGroup(g)}
+              active={bloodGroup === g}
+              onPress={() => {
+                setBloodGroup(g);
+                if (errors.bloodGroup) setErrors((prev) => ({ ...prev, bloodGroup: "" }));
+              }}
+            />
+          ))}
+        </View>
+        {errors.bloodGroup ? <Text style={styles.fieldError}>{errors.bloodGroup}</Text> : null}
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+        {error && <Text style={styles.errorText}>{error}</Text>}
 
-      <View style={styles.actions}>
-        <Button label="Save & continue" onPress={handleSave} loading={isSaving} />
-        {isSkippable && (
-          <TouchableOpacity onPress={onDone} style={styles.skipButton}>
-            <Text style={styles.skipText}>Skip for now</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+        <View style={styles.actions}>
+          <Button label="Save & Continue" onPress={handleSave} loading={isSaving} />
+          {isSkippable && (
+            <TouchableOpacity onPress={onDone} style={styles.skipButton}>
+              <Text style={styles.skipText}>Skip for now</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Card>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg, paddingTop: 48 },
-  title: { fontSize: 24, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
-  hint: { fontSize: 14, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
+  content: { padding: theme.spacing.md, paddingTop: 24, paddingBottom: 40 },
+  card: {
+    padding: theme.spacing.xl,
+    borderRadius: theme.radius * 1.5,
+    backgroundColor: theme.color.surface,
+  },
+  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 6 },
+  hint: { ...theme.typography.caption, fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
   label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
-  chip: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-  },
-  chipActive: { backgroundColor: theme.color.primary, borderColor: theme.color.primary },
-  chipText: { fontSize: 13, fontWeight: "600", color: theme.color.textSecondary },
-  chipTextActive: { color: theme.color.onPrimary },
   errorText: { color: theme.color.danger, fontSize: 13, marginTop: theme.spacing.md, marginBottom: theme.spacing.md },
   fieldError: { color: theme.color.danger, fontSize: 12, marginTop: 0, marginBottom: theme.spacing.md },
-  actions: { gap: theme.spacing.md, marginTop: theme.spacing.md, marginBottom: 40 },
+  actions: { gap: theme.spacing.md, marginTop: theme.spacing.md },
   skipButton: { paddingVertical: theme.spacing.md, alignItems: "center" },
   skipText: { color: theme.color.textSecondary, fontSize: 15, fontWeight: "600" },
 });

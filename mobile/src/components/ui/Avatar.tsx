@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { theme } from "../../lib/theme";
 
 function initialsFrom(name: string | null | undefined): string {
@@ -10,6 +11,7 @@ function initialsFrom(name: string | null | undefined): string {
 }
 
 // PRD Appendix A.4 — shows profile photo when available, falls back to initials circle.
+// Overhauled with expo-image for aggressive caching and smooth load transitions.
 export function Avatar({
   name,
   photoUrl,
@@ -24,6 +26,9 @@ export function Avatar({
       <Image
         source={{ uri: photoUrl }}
         style={[styles.circle, { width: size, height: size, borderRadius: size / 2 }]}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={200}
       />
     );
   }

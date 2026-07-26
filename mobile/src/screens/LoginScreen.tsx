@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Animated, { FadeInDown, FadeInUp, FadeOut } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { Button, Input } from "../components/ui";
+import { Button, Input, Card } from "../components/ui";
 
 type Step = "phone" | "otp";
 
@@ -14,7 +16,6 @@ function normalise(raw: string): string {
   else if (s.startsWith("91") && s.length > 10) s = s.slice(2);
   return s.replace(/\D/g, "").slice(0, 10);
 }
-
 
 export function LoginScreen() {
   const { signIn } = useAuth();
@@ -68,37 +69,98 @@ export function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Text style={styles.title}>DonationPlatform</Text>
-      <Text style={styles.subtitle}>
-        {step === "phone" ? "Log in with your phone number" : `Enter the code sent to +91 ${phone}`}
-      </Text>
+      <View style={styles.innerContainer}>
+        {/* Top Logo Section with FadeInUp */}
+        <Animated.View entering={FadeInUp.delay(100).duration(500)} style={styles.logoContainer}>
+          <View style={styles.iconCircle}>
+            <Feather name="droplet" size={32} color={theme.color.primary} />
+          </View>
+          <Text style={styles.title}>DonationPlatform</Text>
+          <Text style={styles.subtitle}>Connecting donors and saving lives instantly</Text>
+        </Animated.View>
 
-      {step === "phone" ? (
-        <>
-          <Input
-            placeholder="98765 43210"
-            keyboardType="phone-pad"
-            autoComplete="tel"
-            maxLength={10}
-            value={phone}
-            onChangeText={(txt) => setPhone(normalise(txt))}
-            prefix="+91"
-          />
-          <Input placeholder="Name (first time only)" value={name} onChangeText={setName} />
-          {error && <Text style={styles.error}>{error}</Text>}
-          <Button label="Send OTP" onPress={handleRequestOtp} disabled={phone.length < 10} loading={isSubmitting} />
-        </>
-      ) : (
-        <>
-          <Input placeholder="6-digit code" keyboardType="number-pad" maxLength={6} value={code} onChangeText={(txt) => setCode(txt.replace(/\D/g, ""))} />
-          {__DEV__ && <Text style={styles.devHint}>Dev build: the OTP is always 123456 (D-015).</Text>}
-          {error && <Text style={styles.error}>{error}</Text>}
-          <Button label="Verify & continue" onPress={handleVerifyOtp} disabled={code.length < 6} loading={isSubmitting} />
-          <TouchableOpacity onPress={() => setStep("phone")}>
-            <Text style={styles.link}>Change phone number</Text>
-          </TouchableOpacity>
-        </>
-      )}
+        {/* Input Card Container with FadeInDown */}
+        <Animated.View entering={FadeInDown.delay(200).duration(600)}>
+          <Card elevated style={styles.card}>
+            {step === "phone" ? (
+              <Animated.View
+                key="phone-step"
+                entering={FadeInDown.duration(300)}
+                exiting={FadeOut.duration(200)}
+              >
+                <Text style={styles.cardHeader}>Log In / Register</Text>
+                <Text style={styles.cardSubheader}>Enter your phone number to get started</Text>
+
+                <Input
+                  label="Phone Number"
+                  placeholder="98765 43210"
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  maxLength={10}
+                  value={phone}
+                  onChangeText={(txt) => setPhone(normalise(txt))}
+                  prefix="+91"
+                />
+                
+                <Input
+                  label="Name (First time only)"
+                  placeholder="Your Full Name"
+                  value={name}
+                  onChangeText={setName}
+                />
+
+                {error && <Text style={styles.error}>{error}</Text>}
+
+                <Button
+                  label="Send OTP"
+                  onPress={handleRequestOtp}
+                  disabled={phone.length < 10}
+                  loading={isSubmitting}
+                />
+              </Animated.View>
+            ) : (
+              <Animated.View
+                key="otp-step"
+                entering={FadeInDown.duration(300)}
+                exiting={FadeOut.duration(200)}
+              >
+                <Text style={styles.cardHeader}>Verify OTP</Text>
+                <Text style={styles.cardSubheader}>Enter the 6-digit code sent to +91 {phone}</Text>
+
+                <Input
+                  label="OTP Code"
+                  placeholder="123456"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={code}
+                  onChangeText={(txt) => setCode(txt.replace(/\D/g, ""))}
+                />
+
+                {__DEV__ && (
+                  <View style={styles.devHintContainer}>
+                    <Feather name="info" size={14} color={theme.color.warning} />
+                    <Text style={styles.devHint}>Dev build: OTP is always 123456</Text>
+                  </View>
+                )}
+
+                {error && <Text style={styles.error}>{error}</Text>}
+
+                <Button
+                  label="Verify & Continue"
+                  onPress={handleVerifyOtp}
+                  disabled={code.length < 6}
+                  loading={isSubmitting}
+                />
+
+                <TouchableOpacity onPress={() => { setError(null); setStep("phone"); }} style={styles.backButton}>
+                  <Feather name="arrow-left" size={14} color={theme.color.primary} />
+                  <Text style={styles.backText}>Change phone number</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+          </Card>
+        </Animated.View>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -107,34 +169,82 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.color.background,
+  },
+  innerContainer: {
+    flex: 1,
     justifyContent: "center",
     paddingHorizontal: theme.spacing.xl,
   },
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: theme.spacing.xxl,
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: theme.color.primary + "12", // 7% opacity primary color
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: theme.spacing.md,
+  },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
+    ...theme.typography.h1,
     color: theme.color.textPrimary,
     marginBottom: theme.spacing.xs,
   },
   subtitle: {
-    fontSize: 15,
+    ...theme.typography.caption,
     color: theme.color.textSecondary,
-    marginBottom: theme.spacing.xl,
-  },
-  link: {
-    color: theme.color.primary,
-    textAlign: "center",
-    marginTop: theme.spacing.lg,
     fontSize: 14,
+    textAlign: "center",
+  },
+  card: {
+    padding: theme.spacing.xl,
+    borderRadius: theme.radius * 1.5,
+    backgroundColor: theme.color.surface,
+  },
+  cardHeader: {
+    ...theme.typography.h2,
+    color: theme.color.textPrimary,
+    marginBottom: theme.spacing.xs,
+  },
+  cardSubheader: {
+    ...theme.typography.caption,
+    fontSize: 13,
+    color: theme.color.textSecondary,
+    marginBottom: theme.spacing.lg,
   },
   error: {
     color: theme.color.danger,
     marginBottom: theme.spacing.md,
     fontSize: 14,
   },
-  devHint: {
-    color: theme.color.warning,
-    fontSize: 12,
+  devHintContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: theme.color.warning + "12",
+    padding: theme.spacing.sm,
+    borderRadius: theme.radius / 2,
     marginBottom: theme.spacing.md,
+  },
+  devHint: {
+    color: "#B27A00",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: theme.spacing.lg,
+    paddingVertical: theme.spacing.xs,
+  },
+  backText: {
+    color: theme.color.primary,
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

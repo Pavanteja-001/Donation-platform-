@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { updateMe, type BloodGroup, type Gender } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { Button, Input, Chip, Card } from "../components/ui";
 
 const BLOOD_GROUPS: BloodGroup[] = [
   "A_POSITIVE",
@@ -25,8 +27,7 @@ const GENDERS: { value: Gender; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
-// PRD §8.1 — opt-in blood donor profile. Sensitive health data (CLAUDE.md §7); this is the only
-// place it's edited, and filling it in is what "becoming a blood donor" means.
+// PRD §8.1 — opt-in blood donor profile. Overhauled with Reanimated and premium styling.
 export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
   const { token, user, refreshUser } = useAuth();
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | null>(user?.bloodGroup ?? null);
@@ -57,100 +58,92 @@ export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Blood donor profile</Text>
-      <Text style={styles.hint}>
-        Filling this in is what makes you a matchable blood donor (PRD §8.1). We only use it to
-        find eligible donors nearby — never shown to anyone until you respond to a request.
-      </Text>
+      <Animated.View entering={FadeInDown.delay(100).duration(500)}>
+        <Card elevated style={styles.card}>
+          <Text style={styles.title}>Blood Donor Profile</Text>
+          <Text style={styles.hint}>
+            Filling this in is what makes you a matchable blood donor. We only use it to
+            find eligible donors nearby — never shown to anyone until you respond to a request.
+          </Text>
 
-      <Text style={styles.label}>Blood group</Text>
-      <View style={styles.chipGrid}>
-        {BLOOD_GROUPS.map((g) => (
-          <TouchableOpacity
-            key={g}
-            style={[styles.chip, bloodGroup === g && styles.chipActive]}
-            onPress={() => setBloodGroup(g)}
-          >
-            <Text style={[styles.chipText, bloodGroup === g && styles.chipTextActive]}>{formatGroup(g)}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          <Text style={styles.label}>Blood Group</Text>
+          <View style={styles.chipGrid}>
+            {BLOOD_GROUPS.map((g) => (
+              <Chip
+                key={g}
+                label={formatGroup(g)}
+                active={bloodGroup === g}
+                onPress={() => {
+                  setBloodGroup(g);
+                  setError(null);
+                }}
+              />
+            ))}
+          </View>
 
-      <Text style={styles.label}>Gender</Text>
-      <Text style={styles.hint}>Only used to compute the India donation-gap rule (90 days men / 120 days women).</Text>
-      <View style={styles.chipGrid}>
-        {GENDERS.map((g) => (
-          <TouchableOpacity
-            key={g.value}
-            style={[styles.chip, gender === g.value && styles.chipActive]}
-            onPress={() => setGender(g.value)}
-          >
-            <Text style={[styles.chipText, gender === g.value && styles.chipTextActive]}>{g.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          <Text style={styles.label}>Gender</Text>
+          <Text style={styles.fieldHint}>Only used to compute the India donation-gap rule (90 days men / 120 days women).</Text>
+          <View style={styles.chipGrid}>
+            {GENDERS.map((g) => (
+              <Chip
+                key={g.value}
+                label={g.label}
+                active={gender === g.value}
+                onPress={() => {
+                  setGender(g.value);
+                  setError(null);
+                }}
+              />
+            ))}
+          </View>
 
-      <Text style={styles.label}>Date of birth</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor={theme.color.textSecondary}
-        value={dob}
-        onChangeText={setDob}
-      />
+          <Input
+            label="Date of Birth"
+            placeholder="YYYY-MM-DD"
+            value={dob}
+            onChangeText={(txt) => {
+              setDob(txt);
+              setError(null);
+            }}
+          />
 
-      <View style={styles.switchRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Available to donate</Text>
-          <Text style={styles.hint}>Turn off to pause without deleting your profile.</Text>
-        </View>
-        <Switch value={availableToDonate} onValueChange={setAvailableToDonate} />
-      </View>
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1, paddingRight: theme.spacing.md }}>
+              <Text style={styles.switchLabel}>Available to Donate</Text>
+              <Text style={styles.switchHint}>Turn off to pause matching without deleting your profile.</Text>
+            </View>
+            <Switch
+              value={availableToDonate}
+              onValueChange={setAvailableToDonate}
+              trackColor={{ false: theme.color.border, true: theme.color.primary }}
+              thumbColor={Platform.OS === "android" ? theme.color.surface : undefined}
+            />
+          </View>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
-      <TouchableOpacity style={[styles.button, isSaving && styles.buttonDisabled]} onPress={handleSave} disabled={isSaving}>
-        {isSaving ? <ActivityIndicator color={theme.color.onPrimary} /> : <Text style={styles.buttonText}>Save</Text>}
-      </TouchableOpacity>
+          {error && <Text style={styles.errorText}>{error}</Text>}
+
+          <View style={styles.actions}>
+            <Button label="Save Blood Profile" onPress={handleSave} loading={isSaving} />
+            <Button label="Back" variant="secondary" onPress={onBack} />
+          </View>
+        </Card>
+      </Animated.View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg },
-  title: { fontSize: 20, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
-  hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.md },
-  label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },
-  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
-  chip: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-  },
-  chipActive: { backgroundColor: theme.color.primary, borderColor: theme.color.primary },
-  chipText: { fontSize: 13, fontWeight: "600", color: theme.color.textSecondary },
-  chipTextActive: { color: theme.color.onPrimary },
-  input: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    fontSize: 16,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.lg,
-  },
-  switchRow: { flexDirection: "row", alignItems: "center", marginBottom: theme.spacing.lg },
-  errorText: { color: theme.color.danger, fontSize: 13, marginBottom: theme.spacing.md },
-  button: {
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: theme.color.onPrimary, fontSize: 16, fontWeight: "600" },
+  content: { padding: theme.spacing.lg, paddingBottom: 40 },
+  card: { padding: theme.spacing.xl, gap: theme.spacing.md },
+  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 4 },
+  hint: { ...theme.typography.caption, fontSize: 13, color: theme.color.textSecondary, lineHeight: 18 },
+  label: { fontSize: 13, fontWeight: "700", color: theme.color.textPrimary, marginTop: theme.spacing.xs },
+  fieldHint: { fontSize: 12, color: theme.color.textSecondary, lineHeight: 16, marginBottom: theme.spacing.sm },
+  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+  switchRow: { flexDirection: "row", alignItems: "center", marginVertical: theme.spacing.sm },
+  switchLabel: { fontSize: 15, fontWeight: "700", color: theme.color.textPrimary },
+  switchHint: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2, lineHeight: 16, fontWeight: "500" },
+  errorText: { color: theme.color.danger, fontSize: 13, fontWeight: "500" },
+  actions: { gap: theme.spacing.md, marginTop: theme.spacing.md },
 });

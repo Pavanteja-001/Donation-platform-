@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { Image } from "expo-image";
 import type { BloodPayload, GoodsPayload, KitPayload, MealSlotPayload, MoneyPayload, Need, Urgency } from "../lib/api";
 import { theme } from "../lib/theme";
@@ -35,6 +36,8 @@ function formatBloodGroup(g: string) {
   return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export function NeedCard({ need, onPress }: { need: Need; onPress?: () => void }) {
   const urgency = URGENCY_STYLE[need.urgency];
   const location = [need.area, need.city].filter(Boolean).join(", ");
@@ -44,10 +47,42 @@ export function NeedCard({ need, onPress }: { need: Need; onPress?: () => void }
   const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
 
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  const handlePressIn = () => {
+    if (onPress) {
+      scale.value = withSpring(0.98, { damping: 15, stiffness: 350 });
+    }
+  };
+
+  const handlePressOut = () => {
+    if (onPress) {
+      scale.value = withSpring(1, { damping: 15, stiffness: 350 });
+    }
+  };
+
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} disabled={!onPress} activeOpacity={0.7}>
+    <AnimatedPressable
+      style={[styles.card, theme.elevation.level1, animatedStyle]}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      disabled={!onPress}
+    >
       {need.photos.length > 0 && (
-        <Image source={{ uri: need.photos[0] }} style={styles.cover} contentFit="cover" cachePolicy="memory-disk" />
+        <Image
+          source={{ uri: need.photos[0] }}
+          style={styles.cover}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={200}
+        />
       )}
       <View style={styles.headerRow}>
         <View style={[styles.badge, { backgroundColor: urgency.background }]}>
@@ -100,7 +135,7 @@ export function NeedCard({ need, onPress }: { need: Need; onPress?: () => void }
         </View>
       )}
       {location ? <Text style={styles.meta}>{location}</Text> : null}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -109,13 +144,13 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.surface,
     borderWidth: 1,
     borderColor: theme.color.border,
-    borderRadius: theme.radius,
+    borderRadius: theme.radius * 1.2,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.md,
     overflow: "hidden",
   },
   cover: {
-    height: 140,
+    height: 150,
     marginHorizontal: -theme.spacing.lg,
     marginTop: -theme.spacing.lg,
     marginBottom: theme.spacing.md,
@@ -129,15 +164,15 @@ const styles = StyleSheet.create({
   },
   badge: {
     paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 999,
+    paddingVertical: 3,
+    borderRadius: 6, // slightly squared badge corners for premium dashboard look
   },
-  badgeText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
-  type: { fontSize: 11, color: theme.color.textSecondary, fontWeight: "600" },
-  title: { fontSize: 16, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
-  description: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.xs },
-  progress: { marginBottom: theme.spacing.xs },
-  bloodGroup: { fontSize: 13, fontWeight: "700", color: theme.color.danger, marginBottom: 2 },
-  mealType: { fontSize: 13, fontWeight: "700", color: theme.color.primary, marginBottom: 2, textTransform: "capitalize" },
-  meta: { fontSize: 12, color: theme.color.textSecondary },
+  badgeText: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  type: { fontSize: 11, color: theme.color.textSecondary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  title: { fontSize: 17, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
+  description: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.sm, lineHeight: 18 },
+  progress: { marginBottom: theme.spacing.sm },
+  bloodGroup: { fontSize: 13, fontWeight: "700", color: theme.color.danger, marginBottom: 4 },
+  mealType: { fontSize: 13, fontWeight: "700", color: theme.color.primary, marginBottom: 4, textTransform: "capitalize" },
+  meta: { fontSize: 12, color: theme.color.textSecondary, fontWeight: "500" },
 });

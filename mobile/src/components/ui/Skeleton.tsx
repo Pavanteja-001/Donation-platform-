@@ -1,27 +1,41 @@
-import { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
+import { useEffect } from "react";
+import { StyleSheet, type ViewStyle } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { theme } from "../../lib/theme";
 
 // PRD Appendix A.5 — loading state. A single pulsing block; screens compose several of these
-// into a skeleton shape (e.g. NeedCard's photo/title/progress-bar outline) rather than a bare
-// spinner, so a loading list doesn't jump/reflow once real content arrives.
-export function Skeleton({ width = "100%", height = 16, style }: { width?: number | `${number}%`; height?: number; style?: ViewStyle }) {
-  const opacity = useRef(new Animated.Value(0.4)).current;
+// into a skeleton shape. Overhauled with Reanimated to ensure 60/120fps UI thread execution.
+export function Skeleton({
+  width = "100%",
+  height = 16,
+  style,
+}: {
+  width?: number | `${number}%`;
+  height?: number;
+  style?: ViewStyle;
+}) {
+  const opacity = useSharedValue(0.4);
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: theme.motion.normal * 2, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.4, duration: theme.motion.normal * 2, useNativeDriver: true }),
-      ])
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: theme.motion.normal * 2 }),
+        withTiming(0.4, { duration: theme.motion.normal * 2 })
+      ),
+      -1, // Infinite loop
+      true
     );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity]);
+  }, []);
 
-  return <Animated.View style={[styles.block, { width, height, opacity }, style]} />;
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: opacity.value,
+    };
+  });
+
+  return <Animated.View style={[styles.block, { width, height }, animatedStyle, style]} />;
 }
 
 const styles = StyleSheet.create({
-  block: { backgroundColor: theme.color.border, borderRadius: theme.radius },
+  block: { backgroundColor: theme.color.border, borderRadius: theme.radius / 2 }, // smaller radius for precise skeleton look
 });

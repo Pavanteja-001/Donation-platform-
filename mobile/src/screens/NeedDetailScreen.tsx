@@ -2,17 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Linking,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   bookMealSlot,
   claimGoods,
@@ -39,8 +37,7 @@ import { useNavigation } from "@react-navigation/native";
 import { isProfileComplete } from "../lib/profile";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "../components/ProgressBar";
-import { ErrorState } from "../components/ui";
-
+import { ErrorState, Button, Input, Chip, Card, Badge, type BadgeTone } from "../components/ui";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -82,6 +79,17 @@ function formatContributionAmount(c: Contribution): string {
 }
 
 const FUNDABLE: Need["status"][] = ["LIVE", "PARTIALLY_FULFILLED"];
+
+const STATUS_BADGE_TONE: Record<Need["status"], BadgeTone> = {
+  DRAFT: "neutral",
+  PENDING_VERIFICATION: "accent",
+  LIVE: "primary",
+  PARTIALLY_FULFILLED: "primary",
+  FULFILLED: "primary",
+  REJECTED: "danger",
+  EXPIRED: "danger",
+  CANCELLED: "danger",
+};
 
 export function NeedDetailScreen({ needId }: { needId: string }) {
   const { token, user, bloodEligibility } = useAuth();
@@ -208,7 +216,7 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
   }
 
   async function handlePayViaUpiForKit(kit: KitPayload) {
-    if (!kit.upi_id) return; // shouldn't happen — backend requires upi_id when mode=MONEY
+    if (!kit.upi_id) return;
     const parsedKits = Number(kitsInput);
     if (!parsedKits || parsedKits <= 0) {
       Alert.alert("Enter how many kits you're funding first");
@@ -282,7 +290,6 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
     }
   }
 
-  // PRD §11.3 — "claim it." A pledge, not a payment, same consent principle as blood's respond.
   async function handleClaim() {
     if (!token) return;
     setIsClaiming(true);
@@ -324,9 +331,6 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
     }
   }
 
-  // PRD §10.3-10.4 / D-022 — booking a specific date. A 409 here means someone else booked it
-  // first (the locking working as intended, not a bug) — refetch so the donor sees it's gone
-  // and can pick another.
   async function handleBookSlot(mealSlot: MealSlotPayload) {
     if (!token || !selectedSlotId) return;
     if (mealSlot.mode === "MONEY" && !mealSlotUtr.trim()) {
@@ -347,7 +351,7 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
       const message = err instanceof Error ? err.message : "Failed to book this date";
       Alert.alert("Couldn't book that date", message);
       setSelectedSlotId(null);
-      load(); // refresh the calendar — the date may have just been taken
+      load();
     } finally {
       setIsBookingSlot(false);
     }
@@ -377,7 +381,7 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
   if (!need) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={theme.color.primary} />
+        <ActivityIndicator color={theme.color.primary} size="large" />
       </View>
     );
   }
@@ -391,365 +395,360 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
   const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
   const canBookMealSlot = mealSlot && FUNDABLE.includes(need.status) && !isOwner;
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
-  // §11.3 — no PARTIALLY_FULFILLED for GOODS (one-shot claim), so only LIVE is claimable.
   const canClaimGoods = goods && need.status === "LIVE" && !isOwner && !hasClaimed;
   const pendingContributions = contributions?.filter((c) => c.status === "PENDING_CONFIRMATION") ?? [];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-
-      <Text style={styles.title}>{need.title}</Text>
-      <Text style={styles.status}>
-        {need.status.replace("_", " ")} · {need.urgency}
-      </Text>
-      <Text style={styles.description}>{need.description}</Text>
-
-      {need.photos.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
-          {need.photos.map((url) => (
-            <ExpoImage key={url} source={{ uri: url }} style={styles.photo} contentFit="cover" cachePolicy="memory-disk" />
-          ))}
-        </ScrollView>
-      )}
-
-      {money && (
-        <View style={styles.section}>
-          <ProgressBar raised={money.raised_amount} target={money.target_amount} />
-        </View>
-      )}
-      {kit && (
-        <View style={styles.section}>
-          <ProgressBar
-            raised={kit.kits_funded}
-            target={kit.kits_needed}
-            label={`${kit.kits_funded} of ${kit.kits_needed} kits funded`}
-          />
-          <Text style={styles.hint}>{kit.contents}</Text>
-        </View>
-      )}
-      {blood && (
-        <View style={styles.section}>
-          <Text style={styles.bloodGroup}>{formatBloodGroup(blood.blood_group)}</Text>
-          <ProgressBar
-            raised={blood.units_fulfilled}
-            target={blood.units_needed}
-            label={`${blood.units_fulfilled} of ${blood.units_needed} units`}
-          />
-        </View>
-      )}
-      {mealSlot && (
-        <View style={styles.section}>
-          <Text style={styles.mealType}>{mealSlot.meal_type}</Text>
-          <ProgressBar
-            raised={mealSlot.slots_confirmed}
-            target={mealSlot.slots_total}
-            label={`${mealSlot.slots_confirmed} of ${mealSlot.slots_total} slots confirmed`}
-          />
-        </View>
-      )}
-      {goods && (
-        <View style={styles.section}>
-          <Text style={styles.mealType}>{goods.item}</Text>
-          <Text style={styles.hint}>Acceptable condition: {goods.condition}</Text>
-          <Text style={styles.hint}>{goods.claimed ? "Claimed" : "Not yet claimed"}</Text>
-        </View>
-      )}
-
-      {need.status === "REJECTED" && need.rejectionReason && (
-        <Text style={styles.rejection}>Rejected: {need.rejectionReason}</Text>
-      )}
-
-      {canDonate && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donate</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Amount (₹)"
-            placeholderTextColor={theme.color.textSecondary}
-            keyboardType="number-pad"
-            value={amount}
-            onChangeText={setAmount}
-          />
-          <TouchableOpacity style={styles.secondaryButton} onPress={handlePayViaUpi}>
-            <Text style={styles.secondaryButtonText}>Pay via UPI ({money.upi_id})</Text>
-          </TouchableOpacity>
-          <Text style={styles.hint}>After paying, enter the UTR from your payment to confirm your contribution.</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="UTR / reference number"
-            placeholderTextColor={theme.color.textSecondary}
-            value={utr}
-            onChangeText={setUtr}
-          />
-
-          {proofImage ? (
-            <View style={styles.proofPreviewRow}>
-              <Image source={{ uri: proofImage.uri }} style={styles.proofPreview} />
-              <TouchableOpacity onPress={() => setProofImage(null)}>
-                <Text style={styles.link}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.secondaryButton} onPress={handlePickProofImage}>
-              <Text style={styles.secondaryButtonText}>Attach payment screenshot (optional)</Text>
-            </TouchableOpacity>
-          )}
-
-          {error && <Text style={styles.errorText}>{error}</Text>}
-          <TouchableOpacity
-            style={[styles.button, isSubmitting && styles.buttonDisabled]}
-            onPress={handleSubmitProof}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={theme.color.onPrimary} />
-            ) : (
-              <Text style={styles.buttonText}>Submit contribution</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {canDonateKit && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{kit.mode === "MONEY" ? "Fund a kit" : "Pledge to deliver"}</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Number of kits"
-            placeholderTextColor={theme.color.textSecondary}
-            keyboardType="number-pad"
-            value={kitsInput}
-            onChangeText={setKitsInput}
-          />
-
-          {kit.mode === "MONEY" ? (
-            <>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => handlePayViaUpiForKit(kit)}>
-                <Text style={styles.secondaryButtonText}>Pay via UPI ({kit.upi_id})</Text>
-              </TouchableOpacity>
-              <Text style={styles.hint}>After paying, enter the UTR from your payment to confirm your contribution.</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="UTR / reference number"
-                placeholderTextColor={theme.color.textSecondary}
-                value={kitUtr}
-                onChangeText={setKitUtr}
-              />
-            </>
-          ) : (
-            <Text style={styles.hint}>
-              No payment needed — buy the kits yourself and deliver them, then submit your pledge. The
-              beneficiary confirms once they're received.
-            </Text>
-          )}
-
-          {kitProofImage ? (
-            <View style={styles.proofPreviewRow}>
-              <Image source={{ uri: kitProofImage.uri }} style={styles.proofPreview} />
-              <TouchableOpacity onPress={() => setKitProofImage(null)}>
-                <Text style={styles.link}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.secondaryButton} onPress={handlePickKitProofImage}>
-              <Text style={styles.secondaryButtonText}>
-                {kit.mode === "MONEY" ? "Attach payment screenshot (optional)" : "Attach delivery photo (optional)"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {error && <Text style={styles.errorText}>{error}</Text>}
-          <TouchableOpacity
-            style={[styles.button, isSubmittingKit && styles.buttonDisabled]}
-            onPress={() => handleSubmitKitContribution(kit)}
-            disabled={isSubmittingKit}
-          >
-            {isSubmittingKit ? (
-              <ActivityIndicator color={theme.color.onPrimary} />
-            ) : (
-              <Text style={styles.buttonText}>{kit.mode === "MONEY" ? "Submit contribution" : "Submit pledge"}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {canRespondToBlood && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Respond</Text>
-          {bloodEligibility && !bloodEligibility.hasProfile && (
-            <Text style={styles.hint}>
-              You don't have a blood donor profile yet — you can still respond, but filling one in
-              (from the home screen) helps you get matched to nearby requests automatically.
-            </Text>
-          )}
-          {bloodEligibility?.hasProfile && !bloodEligibility.eligible && (
-            <Text style={styles.hint}>
-              Heads up: based on your profile you may not be eligible right now ({bloodEligibility.reasons.join("; ")}
-              ) — you can still respond if you know this need is different (e.g. a different donor).
-            </Text>
-          )}
-          <Text style={styles.hint}>
-            Only respond if you can actually donate — this shares your contact details with the
-            beneficiary/hospital so they can coordinate with you directly.
-          </Text>
-          <TouchableOpacity
-            style={[styles.button, isResponding && styles.buttonDisabled]}
-            onPress={handleRespond}
-            disabled={isResponding}
-          >
-            {isResponding ? <ActivityIndicator color={theme.color.onPrimary} /> : <Text style={styles.buttonText}>I can donate</Text>}
-          </TouchableOpacity>
-        </View>
-      )}
-      {blood && hasResponded && (
-        <View style={styles.section}>
-          <Text style={styles.hint}>
-            Thanks — the beneficiary/hospital has your response and can now see your contact
-            details to coordinate.
-          </Text>
-        </View>
-      )}
-
-      {canBookMealSlot && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Book a date</Text>
-          <Text style={styles.hint}>
-            {mealSlot.mode === "MONEY"
-              ? `Pick an open date, pay ₹${mealSlot.cost_per_slot} via UPI (${mealSlot.upi_id}), then submit the UTR.`
-              : "Pick an open date you can personally cook/serve on."}
-          </Text>
-          <View style={styles.dateChipRow}>
-            {need.mealSlots.map((slot) => {
-              const isOpen = slot.status === "OPEN";
-              const isSelected = selectedSlotId === slot.id;
-              return (
-                <TouchableOpacity
-                  key={slot.id}
-                  disabled={!isOpen}
-                  style={[
-                    styles.dateChip,
-                    !isOpen && styles.dateChipTaken,
-                    isSelected && styles.dateChipSelected,
-                  ]}
-                  onPress={() => setSelectedSlotId(isSelected ? null : slot.id)}
-                >
-                  <Text
-                    style={[
-                      styles.dateChipText,
-                      !isOpen && styles.dateChipTextTaken,
-                      isSelected && styles.dateChipTextSelected,
-                    ]}
-                  >
-                    {formatDate(slot.date)}
-                    {!isOpen ? " (taken)" : ""}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+      {/* Title Header Card */}
+      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <Card elevated style={styles.headerCard}>
+          <Text style={styles.title}>{need.title}</Text>
+          <View style={styles.statusBadgeRow}>
+            <Badge label={need.status.replace("_", " ")} tone={STATUS_BADGE_TONE[need.status]} />
+            <Text style={styles.urgencyText}>{need.urgency}</Text>
           </View>
+          <Text style={styles.description}>{need.description}</Text>
 
-          {selectedSlotId && (
-            <>
-              {mealSlot.mode === "MONEY" && (
-                <>
-                  <TouchableOpacity
-                    style={styles.secondaryButton}
-                    onPress={async () => {
-                      const link = buildUpiDeepLink({
-                        upiId: mealSlot.upi_id!,
-                        payeeName: need.postedBy.name ?? "Institution",
-                        amount: mealSlot.cost_per_slot,
-                        note: need.title,
-                      });
-                      const canOpen = await Linking.canOpenURL(link);
-                      if (canOpen) Linking.openURL(link);
-                      else Alert.alert("No UPI app found", "Pay manually to: " + mealSlot.upi_id);
-                    }}
-                  >
-                    <Text style={styles.secondaryButtonText}>Pay via UPI ({mealSlot.upi_id})</Text>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="UTR / reference number"
-                    placeholderTextColor={theme.color.textSecondary}
-                    value={mealSlotUtr}
-                    onChangeText={setMealSlotUtr}
-                  />
-                </>
-              )}
-              {error && <Text style={styles.errorText}>{error}</Text>}
-              <TouchableOpacity
-                style={[styles.button, isBookingSlot && styles.buttonDisabled]}
-                onPress={() => handleBookSlot(mealSlot)}
-                disabled={isBookingSlot}
-              >
-                {isBookingSlot ? (
-                  <ActivityIndicator color={theme.color.onPrimary} />
-                ) : (
-                  <Text style={styles.buttonText}>Book {formatDate(need.mealSlots.find((s) => s.id === selectedSlotId)!.date)}</Text>
-                )}
-              </TouchableOpacity>
-            </>
+          {need.photos.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
+              {need.photos.map((url) => (
+                <ExpoImage
+                  key={url}
+                  source={{ uri: url }}
+                  style={styles.photo}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={200}
+                />
+              ))}
+            </ScrollView>
           )}
-        </View>
-      )}
+        </Card>
+      </Animated.View>
 
-      {canClaimGoods && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Claim this item</Text>
-          <Text style={styles.hint}>
-            Only claim if you actually have this item to give — claiming shares your contact
-            details with the beneficiary so they can coordinate handover with you directly.
-          </Text>
-          <TouchableOpacity
-            style={[styles.button, isClaiming && styles.buttonDisabled]}
-            onPress={handleClaim}
-            disabled={isClaiming}
-          >
-            {isClaiming ? <ActivityIndicator color={theme.color.onPrimary} /> : <Text style={styles.buttonText}>I have this</Text>}
-          </TouchableOpacity>
-        </View>
-      )}
-      {goods && hasClaimed && (
-        <View style={styles.section}>
-          <Text style={styles.hint}>
-            Thanks — the beneficiary has your claim and can now see your contact details to
-            coordinate handover.
-          </Text>
-        </View>
-      )}
-
-      {isOwner && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contributions awaiting your confirmation</Text>
-          {pendingContributions.length === 0 && <Text style={styles.hint}>Nothing pending right now.</Text>}
-          {pendingContributions.map((c) => (
-            <View key={c.id} style={styles.contributionCard}>
-              <Text style={styles.contributionAmount}>
-                {formatContributionAmount(c)} · {c.donor.name ?? c.donor.phone}
-              </Text>
-              <Text style={styles.hint}>
-                {c.utr ? `UTR: ${c.utr}` : c.kind === "BLOOD" ? "No payment — a donation pledge" : "No payment — delivery pledge"}
-              </Text>
-              <View style={styles.contributionActions}>
-                <TouchableOpacity
-                  style={styles.button}
-                  onPress={() => handleDecision(c.id, "confirm")}
-                  disabled={busyContributionId === c.id}
-                >
-                  <Text style={styles.buttonText}>Confirm</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dangerButton}
-                  onPress={() => handleDecision(c.id, "reject")}
-                  disabled={busyContributionId === c.id}
-                >
-                  <Text style={styles.dangerButtonText}>Reject</Text>
-                </TouchableOpacity>
+      {/* Progress Card */}
+      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+        <Card elevated style={styles.detailsCard}>
+          {money && (
+            <ProgressBar raised={money.raised_amount} target={money.target_amount} />
+          )}
+          {kit && (
+            <View>
+              <ProgressBar
+                raised={kit.kits_funded}
+                target={kit.kits_needed}
+                label={`${kit.kits_funded} of ${kit.kits_needed} kits funded`}
+              />
+              <Text style={styles.detailsHint}>Kit Contents: {kit.contents}</Text>
+            </View>
+          )}
+          {blood && (
+            <View>
+              <Text style={styles.bloodGroup}>{formatBloodGroup(blood.blood_group)} Blood Needed</Text>
+              <ProgressBar
+                raised={blood.units_fulfilled}
+                target={blood.units_needed}
+                label={`${blood.units_fulfilled} of ${blood.units_needed} units`}
+              />
+            </View>
+          )}
+          {mealSlot && (
+            <View>
+              <Text style={styles.mealType}>{mealSlot.meal_type}</Text>
+              <ProgressBar
+                raised={mealSlot.slots_confirmed}
+                target={mealSlot.slots_total}
+                label={`${mealSlot.slots_confirmed} of ${mealSlot.slots_total} slots confirmed`}
+              />
+            </View>
+          )}
+          {goods && (
+            <View>
+              <Text style={styles.mealType}>{goods.item}</Text>
+              <Text style={styles.detailsHint}>Condition: {goods.condition}</Text>
+              <View style={styles.badgeRow}>
+                <Badge
+                  label={goods.claimed ? "Claimed" : "Available"}
+                  tone={goods.claimed ? "danger" : "primary"}
+                />
               </View>
             </View>
-          ))}
-        </View>
+          )}
+
+          {need.status === "REJECTED" && need.rejectionReason && (
+            <Text style={styles.rejection}>Rejected: {need.rejectionReason}</Text>
+          )}
+        </Card>
+      </Animated.View>
+
+      {/* UPI Donation Action Card */}
+      {canDonate && (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Card elevated style={styles.actionCard}>
+            <Text style={styles.sectionTitle}>Donate Funds</Text>
+            <Input
+              placeholder="Amount (₹)"
+              keyboardType="number-pad"
+              value={amount}
+              onChangeText={setAmount}
+            />
+            <Button
+              variant="secondary"
+              label={`Pay via UPI (${money.upi_id})`}
+              onPress={handlePayViaUpi}
+            />
+            <Text style={styles.actionHint}>After paying, enter the payment UTR number to submit your proof.</Text>
+            <Input
+              placeholder="12-digit UTR / reference number"
+              value={utr}
+              onChangeText={setUtr}
+            />
+
+            {proofImage ? (
+              <View style={styles.proofPreviewRow}>
+                <ExpoImage source={{ uri: proofImage.uri }} style={styles.proofPreview} />
+                <Button label="Remove Image" variant="danger" onPress={() => setProofImage(null)} />
+              </View>
+            ) : (
+              <View style={styles.uploadBtnRow}>
+                <Button variant="secondary" label="Attach Payment Screenshot" onPress={handlePickProofImage} />
+              </View>
+            )}
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
+            <Button
+              label="Submit Donation Confirmation"
+              onPress={handleSubmitProof}
+              loading={isSubmitting}
+            />
+          </Card>
+        </Animated.View>
+      )}
+
+      {/* Kit Funding Action Card */}
+      {canDonateKit && (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Card elevated style={styles.actionCard}>
+            <Text style={styles.sectionTitle}>{kit.mode === "MONEY" ? "Fund a Kit" : "Pledge Delivery"}</Text>
+            <Input
+              placeholder="Number of kits"
+              keyboardType="number-pad"
+              value={kitsInput}
+              onChangeText={setKitsInput}
+            />
+
+            {kit.mode === "MONEY" ? (
+              <>
+                <Button
+                  variant="secondary"
+                  label={`Pay via UPI (${kit.upi_id})`}
+                  onPress={() => handlePayViaUpiForKit(kit)}
+                />
+                <Text style={styles.actionHint}>After paying, enter the payment UTR number below.</Text>
+                <Input
+                  placeholder="12-digit UTR / reference number"
+                  value={kitUtr}
+                  onChangeText={setKitUtr}
+                />
+              </>
+            ) : (
+              <Text style={styles.actionHint}>
+                No online payment required. Buy the kits yourself and deliver them to the location.
+              </Text>
+            )}
+
+            {kitProofImage ? (
+              <View style={styles.proofPreviewRow}>
+                <ExpoImage source={{ uri: kitProofImage.uri }} style={styles.proofPreview} />
+                <Button label="Remove Photo" variant="danger" onPress={() => setKitProofImage(null)} />
+              </View>
+            ) : (
+              <View style={styles.uploadBtnRow}>
+                <Button
+                  variant="secondary"
+                  label={kit.mode === "MONEY" ? "Attach Payment Screenshot" : "Attach Delivery Photo"}
+                  onPress={handlePickKitProofImage}
+                />
+              </View>
+            )}
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
+            <Button
+              label={kit.mode === "MONEY" ? "Submit Contribution" : "Submit Delivery Pledge"}
+              onPress={() => handleSubmitKitContribution(kit)}
+              loading={isSubmittingKit}
+            />
+          </Card>
+        </Animated.View>
+      )}
+
+      {/* Blood Respond Action Card */}
+      {canRespondToBlood && (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Card elevated style={styles.actionCard}>
+            <Text style={styles.sectionTitle}>Respond to Blood Need</Text>
+            {bloodEligibility && !bloodEligibility.hasProfile && (
+              <Text style={styles.actionHint}>
+                You don't have a donor profile yet. Completing your profile from home screen helps match automatic needs.
+              </Text>
+            )}
+            {bloodEligibility?.hasProfile && !bloodEligibility.eligible && (
+              <Text style={styles.warningHint}>
+                Heads up: You might not be eligible right now ({bloodEligibility.reasons.join("; ")}).
+              </Text>
+            )}
+            <Text style={styles.actionHint}>
+              Please only respond if you can donate. Tapping will share your contact info with the hospital to coordinate.
+            </Text>
+            <Button
+              label="I Can Donate"
+              onPress={handleRespond}
+              loading={isResponding}
+            />
+          </Card>
+        </Animated.View>
+      )}
+
+      {blood && hasResponded && (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Card elevated style={styles.actionCard}>
+            <Text style={styles.thankYouText}>
+              Thank you! The beneficiary/hospital has received your details and will get in touch shortly.
+            </Text>
+          </Card>
+        </Animated.View>
+      )}
+
+      {/* Meal Date Booking Action Card */}
+      {canBookMealSlot && (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Card elevated style={styles.actionCard}>
+            <Text style={styles.sectionTitle}>Book a Date</Text>
+            <Text style={styles.actionHint}>
+              {mealSlot.mode === "MONEY"
+                ? `Select a date, pay ₹${mealSlot.cost_per_slot} via UPI (${mealSlot.upi_id}), and confirm with UTR.`
+                : "Select an open date you will cook and serve meals on."}
+            </Text>
+
+            <View style={styles.dateChipRow}>
+              {need.mealSlots.map((slot) => {
+                const isOpen = slot.status === "OPEN";
+                const isSelected = selectedSlotId === slot.id;
+                return (
+                  <Chip
+                    key={slot.id}
+                    label={`${formatDate(slot.date)}${!isOpen ? " (taken)" : ""}`}
+                    active={isSelected}
+                    disabled={!isOpen}
+                    onPress={() => setSelectedSlotId(isSelected ? null : slot.id)}
+                  />
+                );
+              })}
+            </View>
+
+            {selectedSlotId && (
+              <Animated.View entering={FadeInDown.duration(300)}>
+                {mealSlot.mode === "MONEY" && (
+                  <>
+                    <Button
+                      variant="secondary"
+                      label={`Pay via UPI (${mealSlot.upi_id})`}
+                      onPress={async () => {
+                        const link = buildUpiDeepLink({
+                          upiId: mealSlot.upi_id!,
+                          payeeName: need.postedBy.name ?? "Institution",
+                          amount: mealSlot.cost_per_slot,
+                          note: need.title,
+                        });
+                        const canOpen = await Linking.canOpenURL(link);
+                        if (canOpen) Linking.openURL(link);
+                        else Alert.alert("No UPI app found", "Pay manually to: " + mealSlot.upi_id);
+                      }}
+                    />
+                    <Input
+                      placeholder="12-digit UTR / reference number"
+                      value={mealSlotUtr}
+                      onChangeText={setMealSlotUtr}
+                    />
+                  </>
+                )}
+                {error && <Text style={styles.errorText}>{error}</Text>}
+                <Button
+                  label={`Book ${formatDate(need.mealSlots.find((s) => s.id === selectedSlotId)!.date)}`}
+                  onPress={() => handleBookSlot(mealSlot)}
+                  loading={isBookingSlot}
+                />
+              </Animated.View>
+            )}
+          </Card>
+        </Animated.View>
+      )}
+
+      {/* Goods Claim Action Card */}
+      {canClaimGoods && (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Card elevated style={styles.actionCard}>
+            <Text style={styles.sectionTitle}>Claim This Item</Text>
+            <Text style={styles.actionHint}>
+              Only claim if you can personally provide and coordinate the handover of this item.
+            </Text>
+            <Button
+              label="I Have This Item"
+              onPress={handleClaim}
+              loading={isClaiming}
+            />
+          </Card>
+        </Animated.View>
+      )}
+
+      {goods && hasClaimed && (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Card elevated style={styles.actionCard}>
+            <Text style={styles.thankYouText}>
+              Thanks! The beneficiary has your claim and will reach out to coordinate handover.
+            </Text>
+          </Card>
+        </Animated.View>
+      )}
+
+      {/* Owner Confirmation Panel */}
+      {isOwner && (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Card elevated style={styles.ownerCard}>
+            <Text style={styles.sectionTitle}>Pending Confirmations</Text>
+            {pendingContributions.length === 0 && (
+              <Text style={styles.noPendingText}>No pending contributions to confirm right now.</Text>
+            )}
+            {pendingContributions.map((c) => (
+              <Card key={c.id} style={styles.contributionCard}>
+                <Text style={styles.contributionAmount}>
+                  {formatContributionAmount(c)} · {c.donor.name ?? c.donor.phone}
+                </Text>
+                <Text style={styles.contributionUtr}>
+                  {c.utr ? `UTR: ${c.utr}` : c.kind === "BLOOD" ? "Blood donation pledge" : "Delivery pledge"}
+                </Text>
+                <View style={styles.contributionActions}>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="Confirm"
+                      onPress={() => handleDecision(c.id, "confirm")}
+                      disabled={busyContributionId === c.id}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="Reject"
+                      variant="danger"
+                      onPress={() => handleDecision(c.id, "reject")}
+                      disabled={busyContributionId === c.id}
+                    />
+                  </View>
+                </View>
+              </Card>
+            ))}
+          </Card>
+        </Animated.View>
       )}
     </ScrollView>
   );
@@ -757,92 +756,35 @@ export function NeedDetailScreen({ needId }: { needId: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg },
+  content: { padding: theme.spacing.lg, paddingBottom: 40, gap: theme.spacing.md },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
+  headerCard: { padding: theme.spacing.xl, borderRadius: theme.radius * 1.5 },
   title: { fontSize: 22, fontWeight: "700", color: theme.color.textPrimary },
-  status: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2, marginBottom: theme.spacing.md },
+  statusBadgeRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, marginTop: theme.spacing.xs, marginBottom: theme.spacing.md },
+  urgencyText: { fontSize: 12, color: theme.color.textSecondary, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
   description: { fontSize: 15, color: theme.color.textPrimary, lineHeight: 22 },
   photoRow: { marginTop: theme.spacing.md },
   photo: { width: 140, height: 100, borderRadius: theme.radius, marginRight: theme.spacing.sm, backgroundColor: theme.color.border },
-  rejection: { color: theme.color.danger, marginTop: theme.spacing.md, fontSize: 14 },
-  section: {
-    marginTop: theme.spacing.xl,
-    paddingTop: theme.spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: theme.color.border,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.md },
+  detailsCard: { padding: theme.spacing.lg },
+  detailsHint: { fontSize: 13, color: theme.color.textSecondary, marginTop: theme.spacing.sm, fontWeight: "500" },
+  badgeRow: { marginTop: theme.spacing.sm, flexDirection: "row" },
+  rejection: { color: theme.color.danger, marginTop: theme.spacing.md, fontSize: 14, fontWeight: "600" },
+  actionCard: { padding: theme.spacing.xl, gap: theme.spacing.md },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: theme.color.textPrimary },
   bloodGroup: { fontSize: 16, fontWeight: "700", color: theme.color.danger, marginBottom: theme.spacing.sm },
   mealType: { fontSize: 16, fontWeight: "700", color: theme.color.primary, marginBottom: theme.spacing.sm, textTransform: "capitalize" },
-  dateChipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
-  dateChip: {
-    borderWidth: 1,
-    borderColor: theme.color.primary,
-    borderRadius: 999,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 6,
-  },
-  dateChipTaken: { borderColor: theme.color.border },
-  dateChipSelected: { backgroundColor: theme.color.primary },
-  dateChipText: { color: theme.color.primary, fontSize: 13, fontWeight: "600" },
-  dateChipTextTaken: { color: theme.color.textSecondary },
-  dateChipTextSelected: { color: theme.color.onPrimary },
-  proofPreviewRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  proofPreview: { width: 56, height: 56, borderRadius: theme.radius, backgroundColor: theme.color.border },
-  link: { color: theme.color.primary, fontSize: 14, fontWeight: "600" },
-  input: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    fontSize: 16,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.md,
-  },
-  hint: { fontSize: 12, color: theme.color.textSecondary, marginBottom: theme.spacing.md },
-  button: {
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: theme.color.onPrimary, fontSize: 15, fontWeight: "600" },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    alignItems: "center",
-    marginBottom: theme.spacing.md,
-  },
-  secondaryButtonText: { color: theme.color.primary, fontSize: 15, fontWeight: "600" },
-  dangerButton: {
-    borderWidth: 1,
-    borderColor: theme.color.danger,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    alignItems: "center",
-  },
-  dangerButtonText: { color: theme.color.danger, fontSize: 15, fontWeight: "600" },
-  errorText: { color: theme.color.danger, fontSize: 13, marginBottom: theme.spacing.md },
-  contributionCard: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  contributionAmount: { fontSize: 14, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 2 },
-  contributionActions: { flexDirection: "row", gap: theme.spacing.sm, marginTop: theme.spacing.sm },
+  actionHint: { fontSize: 13, color: theme.color.textSecondary, lineHeight: 18, fontWeight: "500" },
+  warningHint: { fontSize: 13, color: theme.color.warning, lineHeight: 18, fontWeight: "600" },
+  dateChipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.xs },
+  proofPreviewRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, marginTop: theme.spacing.xs },
+  proofPreview: { width: 64, height: 64, borderRadius: theme.radius, backgroundColor: theme.color.border },
+  uploadBtnRow: { alignSelf: "flex-start" },
+  errorText: { color: theme.color.danger, fontSize: 13, fontWeight: "500" },
+  thankYouText: { fontSize: 15, fontWeight: "600", color: theme.color.primary, textAlign: "center", lineHeight: 22 },
+  ownerCard: { padding: theme.spacing.xl, gap: theme.spacing.md },
+  noPendingText: { fontSize: 13, color: theme.color.textSecondary, fontWeight: "500", fontStyle: "italic" },
+  contributionCard: { padding: theme.spacing.md, borderWidth: 1, borderColor: theme.color.border, backgroundColor: theme.color.background, marginTop: theme.spacing.sm },
+  contributionAmount: { fontSize: 14, fontWeight: "700", color: theme.color.textPrimary },
+  contributionUtr: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2, fontWeight: "500" },
+  contributionActions: { flexDirection: "row", gap: theme.spacing.md, marginTop: theme.spacing.md },
 });

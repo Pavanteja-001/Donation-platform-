@@ -1,19 +1,57 @@
-import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { Pressable, StyleSheet, Text } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { theme } from "../../lib/theme";
 
-// PRD Appendix A.4 — the selectable/filter chip already reimplemented ad hoc in several places
-// (kit mode picker, blood-group picker, meal-slot date picker, status filters). One component,
-// one visual language for all of them.
-export function Chip({ label, active = false, onPress, disabled = false }: { label: string; active?: boolean; onPress?: () => void; disabled?: boolean }) {
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// PRD Appendix A.4 — Selectable/filter chip. Overhauled with Reanimated to ensure
+// 60/120fps micro-interactions (press scaling) and consistent styling.
+export function Chip({
+  label,
+  active = false,
+  onPress,
+  disabled = false,
+}: {
+  label: string;
+  active?: boolean;
+  onPress?: () => void;
+  disabled?: boolean;
+}) {
+  const scale = useSharedValue(1);
+
+  const animatedPressStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  const handlePressIn = () => {
+    if (!disabled && onPress) {
+      scale.value = withSpring(0.94, { damping: 15, stiffness: 350 });
+    }
+  };
+
+  const handlePressOut = () => {
+    if (!disabled && onPress) {
+      scale.value = withSpring(1, { damping: 15, stiffness: 350 });
+    }
+  };
+
   return (
-    <TouchableOpacity
-      style={[styles.chip, active && styles.chipActive, disabled && styles.disabled]}
+    <AnimatedPressable
+      style={[
+        styles.chip,
+        active && styles.chipActive,
+        disabled && styles.disabled,
+        animatedPressStyle,
+      ]}
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={disabled || !onPress}
-      activeOpacity={0.7}
     >
       <Text style={[styles.text, active && styles.textActive]}>{label}</Text>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -23,9 +61,11 @@ const styles = StyleSheet.create({
     borderColor: theme.color.border,
     borderRadius: 999,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: 6,
-    minHeight: 32,
+    paddingVertical: 8,
+    minHeight: 38,
     justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: theme.color.surface,
   },
   chipActive: { borderColor: theme.color.primary, backgroundColor: theme.color.primary },
   disabled: { opacity: 0.5 },

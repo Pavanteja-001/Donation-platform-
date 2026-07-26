@@ -1,16 +1,20 @@
 import { useCallback, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { RefreshControl, StyleSheet, Text, Pressable, View } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { useFocusEffect } from "@react-navigation/native";
+import { FlashList } from "@shopify/flash-list";
 import { fetchMyContributions, type Contribution } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { EmptyState, ErrorState, Skeleton, Badge, type BadgeTone } from "../components/ui";
+import { EmptyState, ErrorState, Skeleton, Badge, Card, type BadgeTone } from "../components/ui";
 
 const STATUS_BADGE_TONE: Record<Contribution["status"], BadgeTone> = {
   PENDING_CONFIRMATION: "accent",
   CONFIRMED: "primary",
   REJECTED: "danger",
 };
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
@@ -31,26 +35,51 @@ function ContributionsListSkeleton() {
   return (
     <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
       {[1, 2, 3].map((i) => (
-        <View
-          key={i}
-          style={{
-            padding: theme.spacing.lg,
-            borderWidth: 1,
-            borderColor: theme.color.border,
-            borderRadius: theme.radius,
-            gap: theme.spacing.sm,
-            backgroundColor: theme.color.surface,
-          }}
-        >
+        <Card elevated key={i} style={{ gap: theme.spacing.sm }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <Skeleton width="50%" height={18} />
             <Skeleton width="20%" height={14} />
           </View>
           <Skeleton width="40%" height={12} />
           <Skeleton width="30%" height={10} style={{ marginTop: 4 }} />
-        </View>
+        </Card>
       ))}
     </View>
+  );
+}
+
+function ContributionItem({ item, onViewCertificate }: { item: Contribution; onViewCertificate: (id: string) => void }) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  return (
+    <Card elevated style={styles.card}>
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1, paddingRight: theme.spacing.sm }}>
+          <Text style={styles.title} numberOfLines={1}>
+            {item.need?.title ?? "—"}
+          </Text>
+        </View>
+        <Badge label={item.status.replace("_", " ")} tone={STATUS_BADGE_TONE[item.status]} />
+      </View>
+      <Text style={styles.meta}>{summarize(item)}</Text>
+      <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
+      {item.status === "CONFIRMED" && (
+        <AnimatedPressable
+          onPress={() => onViewCertificate(item.id)}
+          onPressIn={() => (scale.value = withSpring(0.95, { damping: 15 }))}
+          onPressOut={() => (scale.value = withSpring(1, { damping: 15 }))}
+          style={[styles.linkContainer, animatedStyle]}
+        >
+          <Text style={styles.link}>View Certificate</Text>
+        </AnimatedPressable>
+      )}
+    </Card>
   );
 }
 
@@ -106,7 +135,7 @@ export function MyContributionsScreen({
     return (
       <View style={styles.centered}>
         <EmptyState
-          title="You haven't contributed to anything yet"
+          title="No contributions yet"
           subtitle="Your contributions history will appear here once you make a donation or pledge."
         />
       </View>
@@ -114,30 +143,17 @@ export function MyContributionsScreen({
   }
 
   return (
-    <ScrollView
+    <FlashList
+      data={contributions}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <ContributionItem item={item} onViewCertificate={onViewCertificate} />
+      )}
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.color.primary} />}
-    >
-      {contributions.map((c) => (
-        <View key={c.id} style={styles.card}>
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1, paddingRight: theme.spacing.sm }}>
-              <Text style={styles.title} numberOfLines={1}>
-                {c.need?.title ?? "—"}
-              </Text>
-            </View>
-            <Badge label={c.status.replace("_", " ")} tone={STATUS_BADGE_TONE[c.status]} />
-          </View>
-          <Text style={styles.meta}>{summarize(c)}</Text>
-          <Text style={styles.date}>{formatDate(c.createdAt)}</Text>
-          {c.status === "CONFIRMED" && (
-            <TouchableOpacity onPress={() => onViewCertificate(c.id)} activeOpacity={0.7}>
-              <Text style={styles.link}>View certificate</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      ))}
-    </ScrollView>
+      refreshControl={
+        <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.color.primary} />
+      }
+    />
   );
 }
 
@@ -145,16 +161,12 @@ const styles = StyleSheet.create({
   list: { padding: theme.spacing.lg },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
   card: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    padding: theme.spacing.lg,
     marginBottom: theme.spacing.md,
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 15, fontWeight: "700", color: theme.color.textPrimary },
-  meta: { fontSize: 13, color: theme.color.textPrimary, marginTop: 4 },
-  date: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2 },
-  link: { color: theme.color.primary, fontSize: 13, fontWeight: "600", marginTop: theme.spacing.sm },
+  meta: { fontSize: 13, color: theme.color.textPrimary, marginTop: 4, fontWeight: "500" },
+  date: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2, fontWeight: "500" },
+  linkContainer: { alignSelf: "flex-start", marginTop: theme.spacing.sm },
+  link: { color: theme.color.primary, fontSize: 13, fontWeight: "700" },
 });

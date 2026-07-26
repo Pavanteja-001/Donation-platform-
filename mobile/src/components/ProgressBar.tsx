@@ -1,17 +1,32 @@
+import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { theme } from "../lib/theme";
 
-// PRD §7.4/§9.4 — every MONEY/KIT need shows a public progress bar (raised/funded ÷ target).
-// `label` overrides the default ₹-formatted one — used for kit needs ("X of Y kits").
-export function ProgressBar({ raised, target, label }: { raised: number; target: number; label?: string }) {
-  const pct = target > 0 ? Math.min(raised / target, 1) : 0;
+// PRD §7.4/§9.4 — public progress bar. Overhauled with Reanimated to animate the width fill.
+export function ProgressBar({ raised = 0, target = 0, label }: { raised?: number; target?: number; label?: string }) {
+  const safeRaised = raised ?? 0;
+  const safeTarget = target ?? 0;
+  const pct = safeTarget > 0 ? Math.min(safeRaised / safeTarget, 1) : 0;
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withTiming(pct, { duration: 800 });
+  }, [pct]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      width: `${progress.value * 100}%`,
+    };
+  });
+
   return (
     <View>
       <View style={styles.track}>
-        <View style={[styles.fill, { width: `${pct * 100}%` }]} />
+        <Animated.View style={[styles.fill, animatedStyle]} />
       </View>
       <Text style={styles.label}>
-        {label ?? `₹${raised.toLocaleString("en-IN")} raised of ₹${target.toLocaleString("en-IN")}`}
+        {label ?? `₹${safeRaised.toLocaleString("en-IN")} raised of ₹${safeTarget.toLocaleString("en-IN")}`}
       </Text>
     </View>
   );
@@ -33,5 +48,6 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xs,
     fontSize: 12,
     color: theme.color.textSecondary,
+    fontWeight: "500", // slightly bolder label
   },
 });

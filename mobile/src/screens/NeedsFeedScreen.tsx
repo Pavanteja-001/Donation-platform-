@@ -6,28 +6,18 @@ import { fetchNeeds, type Need } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { NeedCard } from "../components/NeedCard";
 import { theme } from "../lib/theme";
-import { EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { EmptyState, ErrorState, Skeleton, Card } from "../components/ui";
 
 function FeedSkeleton() {
   return (
     <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
       {[1, 2, 3, 4].map((i) => (
-        <View
-          key={i}
-          style={{
-            padding: theme.spacing.md,
-            borderWidth: 1,
-            borderColor: theme.color.border,
-            borderRadius: theme.radius,
-            gap: theme.spacing.sm,
-            backgroundColor: theme.color.surface,
-          }}
-        >
-          <Skeleton width="60%" height={20} />
+        <Card elevated key={i} style={{ gap: theme.spacing.sm }}>
+          <Skeleton width="65%" height={20} />
           <Skeleton width="40%" height={14} />
           <Skeleton width="100%" height={12} />
-          <Skeleton width="100%" height={8} style={{ marginTop: 8 }} />
-        </View>
+          <Skeleton width="80%" height={8} style={{ marginTop: 8 }} />
+        </Card>
       ))}
     </View>
   );

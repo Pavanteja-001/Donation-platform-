@@ -1,4 +1,5 @@
-import { Alert, StyleSheet, TouchableOpacity } from "react-native";
+import { Alert, StyleSheet, Pressable } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,13 +21,12 @@ const TAB_ICON: Record<keyof TabParamList, keyof typeof Ionicons.glyphMap> = {
   Profile: "person",
 };
 
-// A small header button, not a screen prop — calling useNavigation() here resolves against
-// whichever navigator actually rendered it, but `navigate()` still finds "CreateNeedChooser" by
-// searching up to the parent root stack, same as every other cross-navigator navigate() call in
-// this file (React Navigation's normal route-resolution behavior, not a hack specific to this).
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 function CreateNeedButton() {
   const { user } = useAuth();
   const navigation = useNavigation<AppNavigationProp>();
+  const scale = useSharedValue(1);
 
   const handlePress = () => {
     if (!isProfileComplete(user)) {
@@ -43,10 +43,21 @@ function CreateNeedButton() {
     }
   };
 
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
   return (
-    <TouchableOpacity onPress={handlePress} style={styles.headerButton}>
-      <Ionicons name="add-circle" size={26} color={theme.color.primary} />
-    </TouchableOpacity>
+    <AnimatedPressable
+      onPress={handlePress}
+      onPressIn={() => (scale.value = withSpring(0.9, { damping: 15 }))}
+      onPressOut={() => (scale.value = withSpring(1, { damping: 15 }))}
+      style={[styles.headerButton, animatedStyle]}
+    >
+      <Ionicons name="add-circle" size={28} color={theme.color.primary} />
+    </AnimatedPressable>
   );
 }
 

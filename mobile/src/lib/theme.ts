@@ -6,14 +6,14 @@ import { Platform } from "react-native";
 // Red is reserved for danger/emergency/blood urgency only.
 export const theme = {
   color: {
-    primary: "#0E7C66",
+    primary: "#0F766E",
     onPrimary: "#FFFFFF",
     accent: "#F2A900",
     success: "#2E9E5B",
     warning: "#C98A00",
     danger: "#D7263D",
     info: "#2B6CB0",
-    background: "#F7F8F8",
+    background: "#F9FAFB",
     surface: "#FFFFFF",
     border: "#E2E5E4",
     textPrimary: "#14201D",
