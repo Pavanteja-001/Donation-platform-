@@ -534,6 +534,52 @@ export function claimGoods(token: string, needId: string, proofUrl?: string) {
   });
 }
 
+// PRD §13 — SKILL_REQUEST: post + immediately submit, same two-step as GOODS.
+export async function postSkillRequestNeed(
+  token: string,
+  data: {
+    title: string;
+    description: string;
+    role_needed: string;
+    volunteers_needed: number;
+    date: string;
+    time: string;
+    city?: string;
+    area?: string;
+  }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      type: "SKILL_REQUEST",
+      title: data.title,
+      description: data.description,
+      city: data.city,
+      area: data.area,
+      payload: {
+        role_needed: data.role_needed,
+        volunteers_needed: data.volunteers_needed,
+        date: data.date,
+        time: data.time,
+      },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// PRD §13.3 — volunteer pledge (no payment)
+export function volunteerForNeed(token: string, needId: string) {
+  return request<{ contribution: Contribution }>(`/api/needs/${needId}/contributions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  });
+}
+
 export function fetchContributions(token: string, needId: string) {
   return request<{ contributions: Contribution[] }>(`/api/needs/${needId}/contributions`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -574,3 +620,80 @@ export async function uploadProfilePhoto(token: string, fileUri: string, content
   await uploadToSignedUrl(signed.uploadUrl, fileUri, contentType);
   return signed.publicUrl;
 }
+
+// PRD §12 — Community Q&A Forum (D-023)
+export interface ForumAuthor {
+  id: string;
+  name: string | null;
+  profilePhotoUrl: string | null;
+}
+
+export interface ForumAnswer {
+  id: string;
+  body: string;
+  author: ForumAuthor;
+  createdAt: string;
+}
+
+export interface ForumQuestion {
+  id: string;
+  title: string;
+  body: string;
+  author: ForumAuthor;
+  answers?: ForumAnswer[];
+  _count?: { answers: number };
+  createdAt: string;
+}
+
+export function fetchForumQuestions(token: string, cursor?: string) {
+  const params = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return request<{ questions: ForumQuestion[]; nextCursor: string | null }>(`/api/forum${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchForumQuestion(token: string, id: string) {
+  return request<{ question: ForumQuestion }>(`/api/forum/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function askForumQuestion(token: string, data: { title: string; body: string }) {
+  return request<{ question: ForumQuestion }>("/api/forum", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+}
+
+export function answerForumQuestion(token: string, questionId: string, body: string) {
+  return request<{ answer: ForumAnswer }>(`/api/forum/${questionId}/answers`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function deleteForumQuestion(token: string, id: string) {
+  return request<{ ok: boolean }>(`/api/forum/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function deleteForumAnswer(token: string, id: string) {
+  return request<{ ok: boolean }>(`/api/forum/answers/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// PRD §13 — SKILL_REQUEST volunteering payload
+export interface SkillRequestPayload {
+  role_needed: string;
+  volunteers_needed: number;
+  volunteers_joined: number;
+  date: string;
+  time: string;
+}
+

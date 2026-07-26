@@ -23,8 +23,8 @@
 | 9 | Kit flow (grocery / education) | ✅ drafted |
 | 10 | Meal-slot booking (orphanages) | ✅ drafted |
 | 11 | Goods / unused-items flow | ✅ drafted |
-| 12 | Community Q&A forum | ⬜ to write |
-| 13 | Volunteering (scribes, career mentoring) | ⬜ to write |
+| 12 | Community Q&A forum | ✅ drafted |
+| 13 | Volunteering (scribes, career mentoring) | ✅ drafted |
 | 14 | Trust tiers & digital certificates | ✅ drafted |
 | 15 | Admin console | ⬜ to write |
 | 16 | Institution web panel | ⬜ to write |
@@ -578,6 +578,62 @@ by simultaneous pending contributions.
 
 No progress bar — a GOODS need's status badge alone communicates it (`LIVE` = still needed,
 `FULFILLED` = claimed and received). A `claimed` boolean has nothing meaningful to bar-chart.
+
+---
+
+## 12. Community Q&A forum
+
+A public forum accessible across the mobile app and web panels where users can ask questions and discuss blood donation guidelines, volunteering tasks, and donation policies.
+
+### 12.1 Purpose & Scope
+- Provide a peer-supported knowledge space.
+- Enable direct community engagement.
+- Support administrative moderation to flag or delete inappropriate posts or incorrect medical advice.
+
+### 12.2 Data Entities
+- **ForumQuestion**:
+  - `id`: unique string id.
+  - `title`: title of the question (e.g., "Donating blood after recovery from malaria").
+  - `body`: detailed text content of the question.
+  - `authorId`: ID of the posting user/institution.
+  - `createdAt` / `updatedAt`: standard timestamps.
+- **ForumAnswer**:
+  - `id`: unique string id.
+  - `body`: detailed text answer.
+  - `questionId`: ID of the linked `ForumQuestion`.
+  - `authorId`: ID of the responding user/institution.
+  - `createdAt` / `updatedAt`: standard timestamps.
+
+### 12.3 Permissions & Moderation
+- **Ask/Answer**: Any authenticated user (`USER`, `INSTITUTION`) can ask questions and write answers.
+- **Moderation**: `ADMIN` and `STAFF` roles have moderation privileges (can delete questions or answers directly via the API or Admin panel).
+
+---
+
+## 13. Volunteering (SKILL_REQUEST) flow
+
+Allows institutions (hospitals, NGOs, orphanages) to post skilled volunteering needs (e.g. board exam scribes for visually impaired students, career mentoring sessions).
+
+### 13.1 What a SKILL_REQUEST need represents
+- An institution needs skilled volunteer support for a specific date and duration.
+- Donors sign up by pledging their time to the request.
+- Fulfilment is reached once the total requested volunteer count is confirmed as completed by the institution.
+
+### 13.2 Payload fields (extends §6.4)
+
+| Field | Notes |
+|---|---|
+| `role_needed` | required at submission (e.g., `SCRIBE`, `MENTOR`, `OTHER`) |
+| `volunteers_needed` | required at submission — positive integer count of volunteers requested |
+| `volunteers_joined` | **server-computed only** — count of volunteers whose service has been confirmed |
+| `date` | required at submission — date of the volunteering task |
+| `time` | required at submission — e.g. "10:00 AM - 1:00 PM" |
+
+### 13.3 Handoff & Confirmation
+- **Sign up**: A user registers to volunteer by creating a `Contribution` with `kind: SKILL_REQUEST` (a pledge, no payment/UTR, same as GOODS/BLOOD).
+- **Coordinate**: The institution contacts the volunteer using their profile details to coordinate attendance.
+- **Confirm**: After volunteering occurred, the institution confirms the contribution (`ContributionStatus → CONFIRMED`), which increments `volunteers_joined += 1`.
+- **Close**: Once `volunteers_joined >= volunteers_needed`, the need moves `LIVE → FULFILLED`.
 
 ---
 

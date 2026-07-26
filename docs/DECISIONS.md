@@ -230,6 +230,16 @@
   confirm/reject routes must wrap their state changes in a DB transaction with the conditional
   `UPDATE`, not a plain `findUnique` + `update`.
 
+### D-023 · Q&A Forum: Dedicated ForumQuestion and ForumAnswer entities, ADMIN/STAFF moderated
+- **Decision:** Build Q&A using separate, dedicated database models: `ForumQuestion` and `ForumAnswer`. Authenticated users (`USER`, `INSTITUTION`) can ask questions and reply with answers. `ADMIN` and `STAFF` roles can delete posts for moderation.
+- **Why:** Q&A questions do not fit the `Need` entity's state lifecycle (DRAFT -> LIVE -> FULFILLED) or verification rules. Modeling them separately keeps the `Need` table clean and avoids polluting list views.
+- **Impact:** Create `ForumQuestion` and `ForumAnswer` models in Prisma schema. Expose clean REST endpoints for listing, creating, and deleting questions/answers.
+
+### D-024 · Volunteering (SKILL_REQUEST): Reuses the shared Need and Contribution engine
+- **Decision:** Model volunteering needs as a new `NeedType` (`SKILL_REQUEST`). The payload houses the volunteer count target (`volunteers_needed`), date, and role required. Joining a volunteering task creates a `Contribution` of `kind: SKILL_REQUEST` with status `PENDING_CONFIRMATION`. Once the institution verifies attendance and confirms the contribution, `volunteers_joined` increments. When target is reached, need auto-closes to `FULFILLED`.
+- **Why:** Matches the exact direction, lifecycle, and verification pattern of the existing `Need` and `Contribution` framework, making it completely zero-cost to integrate into existing listing feeds, verification queues, and transaction logs.
+- **Impact:** Add `SKILL_REQUEST` to `ContributionKind` enum in the database. Add custom validation rules for `SKILL_REQUEST` needs and contributions in the API routing layer.
+
 ---
 
 ### Open decisions (gap register — resolve before / during build)
@@ -238,3 +248,4 @@
 ### Resolved
 - **O-1 · Tech stack** → **D-011** · **O-2 · Name** → DonationPlatform · **O-3 · Over-fund/deadline** → **D-013** · **O-4 · Design system** → **D-014**.
 - **O-5 · Auth** → **D-015** · **O-6 · Notifications** → **D-016** · **O-7 · Dispute/rejection** → **D-017** · **O-8 · Admin roles** → **D-018** · **O-9 · UTR** → **D-019**.
+- **O-11 · Q&A Forum** → **D-023** · **O-12 · Volunteering** → **D-024**.

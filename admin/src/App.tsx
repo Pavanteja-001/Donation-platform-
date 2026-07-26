@@ -12,6 +12,8 @@ import { CreateKitNeedPage } from "./pages/CreateKitNeedPage";
 import { CreateBloodNeedPage } from "./pages/CreateBloodNeedPage";
 import { CreateMealSlotNeedPage } from "./pages/CreateMealSlotNeedPage";
 import { CreateGoodsNeedPage } from "./pages/CreateGoodsNeedPage";
+import { CreateSkillRequestNeedPage } from "./pages/CreateSkillRequestNeedPage";
+import { ForumModerationPage } from "./pages/ForumModerationPage";
 import { ConsoleLayout } from "./components/ConsoleLayout";
 import { ToastProvider } from "./components/ui";
 
@@ -45,6 +47,11 @@ function CreateGoodsWrapper() {
   return <CreateGoodsNeedPage onBack={() => navigate("/post")} onDone={() => navigate("/needs")} />;
 }
 
+function CreateSkillRequestWrapper() {
+  const navigate = useNavigate();
+  return <CreateSkillRequestNeedPage onBack={() => navigate("/post")} onDone={() => navigate("/needs")} />;
+}
+
 function Root() {
   const { user, isLoading } = useAuth();
 
@@ -68,7 +75,9 @@ function Root() {
         <Route path="/post/blood" element={<AdminRoute><CreateBloodWrapper /></AdminRoute>} />
         <Route path="/post/meal-slot" element={<AdminRoute><CreateMealSlotWrapper /></AdminRoute>} />
         <Route path="/post/goods" element={<AdminRoute><CreateGoodsWrapper /></AdminRoute>} />
+        <Route path="/post/skill-request" element={<AdminRoute><CreateSkillRequestWrapper /></AdminRoute>} />
         <Route path="/staff" element={<AdminRoute><StaffPage /></AdminRoute>} />
+        <Route path="/forum" element={<ForumModerationPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to={user ? "/needs" : "/login"} replace />} />

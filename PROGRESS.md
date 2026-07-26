@@ -5,6 +5,45 @@
 
 ---
 
+### Session 28 — Milestone 8: Community layer (Q&A Forum + SKILL_REQUEST Volunteering)
+
+**What was done:**
+
+1. **Database schema pushed** — `ForumQuestion`, `ForumAnswer` models and `SKILL_REQUEST` enum value synced to the Railway PostgreSQL database using `npx prisma db push` (non-interactive; `migrate dev` requires a TTY).
+
+2. **Backend — Community Q&A Forum (`/api/forum`):**
+   - `backend/src/routes/forum.ts` — CRUD for questions and answers: list (cursor-paginated), get detail, ask (POST), answer (POST), delete question (author or admin/staff), delete answer (author or admin/staff).
+   - Mounted at `/api/forum` in `backend/src/index.ts`.
+   - Full TypeScript clean (`tsc --noEmit`).
+
+3. **Backend — SKILL_REQUEST volunteering:**
+   - `backend/src/routes/needs.ts`: added `SKILL_REQUEST` to `normalizePayload` (strips `volunteers_joined` tamper-guard, initializes to 0); added submit-gating validation (`role_needed`, `volunteers_needed ≥ 1`, `date`, `time` required).
+   - `backend/src/routes/contributions.ts`: added `SKILL_REQUEST` branch in `computeFulfilment` (increments `volunteers_joined`, moves to PARTIALLY_FULFILLED / FULFILLED same as other types); added `SKILL_REQUEST` to `progressAmount` (counts as 1 per volunteer confirmation).
+   - Added volunteer pledge contribution branch in `POST /api/needs/:id/contributions` (no payment, no UTR).
+
+4. **Mobile — Community Forum UI:**
+   - `mobile/src/lib/api.ts`: `ForumQuestion`, `ForumAnswer`, `ForumAuthor` types; `fetchForumQuestions`, `fetchForumQuestion`, `askForumQuestion`, `answerForumQuestion`, `deleteForumQuestion`, `deleteForumAnswer` API helpers.
+   - `mobile/src/screens/ForumScreen.tsx`: paginated question list + "Ask a Question" modal.
+   - `mobile/src/screens/ForumQuestionDetailScreen.tsx`: question detail with all answers, reply form, moderator/author delete.
+   - Navigation: `Forum` and `ForumQuestion` routes added to `RootStackParamList` and `RootNavigator.tsx`. Forum accessible from the Home tab header via a `chatbubbles-outline` icon button (`TabNavigator.tsx`).
+
+5. **Mobile — SKILL_REQUEST Volunteering UI:**
+   - `mobile/src/lib/api.ts`: `SkillRequestPayload` type; `postSkillRequestNeed` and `volunteerForNeed` API helpers.
+   - `mobile/src/screens/CreateSkillRequestNeedScreen.tsx`: form for role/volunteers/date/time/city/area.
+   - `CreateNeedChooserScreen.tsx`: "Volunteer" card added (6th option, `users` icon).
+   - `CreateSkillRequest` route added to `RootStackParamList` and `RootNavigator.tsx`.
+
+6. **Web Panel & Admin Console — Volunteering & Moderation Wiring:**
+   - `web-panel`: added `postSkillRequestNeed`, `CreateSkillRequestNeedPage.tsx` (auto-linked institution for self-verification fast-track), `/post/skill-request` route in `App.tsx`, and "+ Volunteer need" card on `PostNeedPage.tsx`.
+   - `admin`: added `postSkillRequestNeed`, `CreateSkillRequestNeedPage.tsx` (on behalf of partner/beneficiary), `/post/skill-request` route in `App.tsx`, and "+ Volunteer need" card on `PostNeedPage.tsx`.
+   - `admin`: added `ForumModerationPage.tsx` (cursor-paginated Q&A list with expand details and question/answer deletion), `/forum` route in `App.tsx`, and "Forum Moderation" link in `ConsoleLayout.tsx` sidebar.
+
+**Verified:** Clean builds across all components (`backend` tsc clean, `web-panel` vite build clean, `admin` vite build clean, `mobile` tsc clean).
+
+**Next:** Cross-cutting items — admin console forum moderation UI, web-panel SKILL_REQUEST posting, or Notifications system (PRD §17) per user direction.
+
+---
+
 ### Session 27 — Milestone 9 Chunk 7: Screen-by-screen visual polish
 This session completed Chunk 7 - implementing proper custom skeleton loading placeholders, clean EmptyState views, ErrorState views, and premium Badge status indicators in the mobile feed screens, the Admin Console, and the Web Panel.
 

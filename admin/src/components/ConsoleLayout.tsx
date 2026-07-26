@@ -57,6 +57,13 @@ export function ConsoleLayout() {
               Staff Accounts
             </NavLink>
           )}
+
+          <NavLink
+            to="/forum"
+            className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+          >
+            Forum Moderation
+          </NavLink>
         </nav>
 
         <div className="sidebar-footer">

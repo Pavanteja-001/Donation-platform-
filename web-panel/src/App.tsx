@@ -11,6 +11,7 @@ import { CreateKitNeedPage } from "./pages/CreateKitNeedPage";
 import { CreateBloodNeedPage } from "./pages/CreateBloodNeedPage";
 import { CreateMealSlotNeedPage } from "./pages/CreateMealSlotNeedPage";
 import { CreateGoodsNeedPage } from "./pages/CreateGoodsNeedPage";
+import { CreateSkillRequestNeedPage } from "./pages/CreateSkillRequestNeedPage";
 import { VerificationStatusPage } from "./pages/VerificationStatusPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { ToastProvider } from "./components/ui";
@@ -40,6 +41,11 @@ function CreateGoodsWrapper() {
   return <CreateGoodsNeedPage onBack={() => navigate("/post")} onDone={() => navigate("/needs")} />;
 }
 
+function CreateSkillRequestWrapper() {
+  const navigate = useNavigate();
+  return <CreateSkillRequestNeedPage onBack={() => navigate("/post")} onDone={() => navigate("/needs")} />;
+}
+
 function Root() {
   const { user, isLoading } = useAuth();
 
@@ -60,6 +66,7 @@ function Root() {
         <Route path="/post/blood" element={<CreateBloodWrapper />} />
         <Route path="/post/meal-slot" element={<CreateMealSlotWrapper />} />
         <Route path="/post/goods" element={<CreateGoodsWrapper />} />
+        <Route path="/post/skill-request" element={<CreateSkillRequestWrapper />} />
         <Route path="/verification" element={<VerificationStatusPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>

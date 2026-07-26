@@ -48,6 +48,12 @@ function normalizePayload(type: NeedType, payload: Record<string, unknown> | und
     const { slots_confirmed: _ignored, dates: _datesIgnored, slots_total, ...rest } = payload ?? {};
     return { ...rest, slots_total: typeof slots_total === "number" ? slots_total : 0, slots_confirmed: 0 };
   }
+  if (type === NeedType.SKILL_REQUEST) {
+    // volunteers_joined is server-computed — strip any client-supplied value (same tamper-guard
+    // as raised_amount / kits_funded / slots_confirmed).
+    const { volunteers_joined: _ignored, ...rest } = payload ?? {};
+    return { ...rest, volunteers_joined: 0 };
+  }
   return payload;
 }
 
@@ -246,6 +252,21 @@ router.post("/:id/submit", async (req, res) => {
     if (!goodsCheck.success) {
       return res.status(400).json({
         error: "A GOODS need needs item and condition set before it can be submitted",
+      });
+    }
+  }
+  if (need.type === NeedType.SKILL_REQUEST) {
+    const skillPayload = need.payload as Record<string, unknown> | null;
+    const valid =
+      skillPayload &&
+      typeof skillPayload.role_needed === "string" &&
+      typeof skillPayload.volunteers_needed === "number" &&
+      skillPayload.volunteers_needed >= 1 &&
+      typeof skillPayload.date === "string" &&
+      typeof skillPayload.time === "string";
+    if (!valid) {
+      return res.status(400).json({
+        error: "A SKILL_REQUEST need needs role_needed, volunteers_needed, date, and time set before it can be submitted",
       });
     }
   }
@@ -590,7 +611,17 @@ router.post("/:id/contributions", async (req, res) => {
     });
   }
 
-  return res.status(400).json({ error: "Only MONEY, KIT, BLOOD, and GOODS needs accept contributions" });
+  if (need.type === NeedType.SKILL_REQUEST) {
+    // PRD §13.3 — volunteering is a pledge, never a payment. No amount/kits/units/utr.
+    // Volunteer's contact info visible to the institution once they confirm.
+    return createContribution(res, {
+      kind: "SKILL_REQUEST",
+      needId: need.id,
+      donorId: req.user!.sub,
+    });
+  }
+
+  return res.status(400).json({ error: "Only MONEY, KIT, BLOOD, GOODS, and SKILL_REQUEST needs accept contributions" });
 });
 
 // MEAL_SLOT donations (§10.4): `utr` required for mode=MONEY, forbidden for mode=DELIVER — same

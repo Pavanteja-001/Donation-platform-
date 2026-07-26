@@ -47,6 +47,13 @@ export function PostNeedPage() {
             <p className="hint" style={{ margin: 0 }}>Request unused items or equipment.</p>
           </Card>
         </div>
+
+        <div style={{ cursor: "pointer" }} onClick={() => navigate("/post/skill-request")}>
+          <Card>
+            <h3 style={{ marginTop: 0, color: "var(--color-primary)" }}>+ Volunteer need</h3>
+            <p className="hint" style={{ margin: 0 }}>Request skilled volunteers for an event, camp, or task.</p>
+          </Card>
+        </div>
       </div>
     </div>
   );

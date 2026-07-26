@@ -11,6 +11,7 @@ const TYPES: { route: keyof RootStackParamList; label: string; hint: string; ico
   { route: "CreateBlood", label: "Blood", hint: "Request a blood group, eligibility-matched", icon: "droplet" },
   { route: "CreateMealSlot", label: "Meal Slot", hint: "Sponsor specific calendar dates", icon: "calendar" },
   { route: "CreateGoods", label: "Goods", hint: "A specific item someone can claim and give", icon: "gift" },
+  { route: "CreateSkillRequest", label: "Volunteer", hint: "Request skilled volunteers for a task or event", icon: "users" },
 ];
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);

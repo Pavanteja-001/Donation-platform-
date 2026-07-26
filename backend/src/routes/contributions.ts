@@ -138,6 +138,23 @@ function computeFulfilment(need: Need, contributionAmountOrKits: number): Fulfil
     // them once satisfied.
     return { ok: true, status: NeedStatus.FULFILLED, payload: { ...goods, claimed: true } as Prisma.InputJsonValue };
   }
+  if (need.type === NeedType.SKILL_REQUEST) {
+    const payload = need.payload as Record<string, unknown> | null;
+    if (!payload || typeof payload.volunteers_needed !== "number") {
+      return { ok: false, error: "This need's SKILL_REQUEST payload is malformed — cannot confirm" };
+    }
+    const volunteersJoined = Math.min(
+      ((payload.volunteers_joined as number) ?? 0) + 1,
+      payload.volunteers_needed
+    );
+    const status =
+      volunteersJoined >= payload.volunteers_needed
+        ? NeedStatus.FULFILLED
+        : volunteersJoined > 0
+          ? NeedStatus.PARTIALLY_FULFILLED
+          : need.status;
+    return { ok: true, status, payload: { ...payload, volunteers_joined: volunteersJoined } as Prisma.InputJsonValue };
+  }
   return { ok: false, error: `Confirming a ${need.type} contribution isn't supported yet` };
 }
 
@@ -160,7 +177,7 @@ router.post("/:id/confirm", async (req, res) => {
       ? contribution.kits
       : contribution.kind === "BLOOD"
         ? contribution.units
-        : contribution.kind === "MEAL_SLOT" || contribution.kind === "GOODS"
+        : contribution.kind === "MEAL_SLOT" || contribution.kind === "GOODS" || contribution.kind === "SKILL_REQUEST"
           ? 1
           : contribution.amount;
   if (progressAmount == null) {

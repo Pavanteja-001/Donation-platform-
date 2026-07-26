@@ -10,6 +10,9 @@ import { CreateGoodsNeedScreen } from "../screens/CreateGoodsNeedScreen";
 import { CertificateScreen } from "../screens/CertificateScreen";
 import { BloodProfileScreen } from "../screens/BloodProfileScreen";
 import { RegisterScreen } from "../screens/RegisterScreen";
+import { ForumScreen } from "../screens/ForumScreen";
+import { ForumQuestionDetailScreen } from "../screens/ForumQuestionDetailScreen";
+import { CreateSkillRequestNeedScreen } from "../screens/CreateSkillRequestNeedScreen";
 import { theme } from "../lib/theme";
 import { useAuth } from "../context/AuthContext";
 import { isProfileComplete } from "../lib/profile";
@@ -50,6 +53,15 @@ function RegisterRoute({ navigation, route }: Props<"Register">) {
   const isSkippable = route.params?.isSkippable ?? true;
   return <RegisterScreen isSkippable={isSkippable} onDone={() => navigation.navigate("Tabs")} />;
 }
+function ForumRoute({ navigation }: Props<"Forum">) {
+  return <ForumScreen onSelectQuestion={(q) => navigation.navigate("ForumQuestion", { questionId: q.id, initialQuestion: q })} />;
+}
+function ForumQuestionRoute({ route }: Props<"ForumQuestion">) {
+  return <ForumQuestionDetailScreen questionId={route.params.questionId} initialQuestion={route.params.initialQuestion} />;
+}
+function CreateSkillRequestRoute({ navigation }: Props<"CreateSkillRequest">) {
+  return <CreateSkillRequestNeedScreen onDone={() => navigation.goBack()} />;
+}
 
 // Chunk 2 & 3 (Milestone 9) — the root stack: conditional initialRouteName based on profile completeness,
 // containing the TabNavigator, detail/create/certificate/blood-profile/Register screens.
@@ -73,6 +85,9 @@ export function RootNavigator() {
       <Stack.Screen name="CreateGoods" component={CreateGoodsRoute} options={{ title: "Goods need" }} />
       <Stack.Screen name="Certificate" component={CertificateRoute} options={{ title: "Certificate" }} />
       <Stack.Screen name="BloodProfile" component={BloodProfileRoute} options={{ title: "Blood donor profile" }} />
+      <Stack.Screen name="Forum" component={ForumRoute} options={{ title: "Community Forum" }} />
+      <Stack.Screen name="ForumQuestion" component={ForumQuestionRoute} options={{ title: "Question" }} />
+      <Stack.Screen name="CreateSkillRequest" component={CreateSkillRequestRoute} options={{ title: "Volunteering need" }} />
     </Stack.Navigator>
   );
 }

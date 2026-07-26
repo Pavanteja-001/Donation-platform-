@@ -61,6 +61,15 @@ function CreateNeedButton() {
   );
 }
 
+function ForumButton() {
+  const navigation = useNavigation<AppNavigationProp>();
+  return (
+    <Pressable onPress={() => navigation.navigate("Forum")} style={styles.forumButton}>
+      <Ionicons name="chatbubbles-outline" size={24} color={theme.color.primary} />
+    </Pressable>
+  );
+}
+
 function HomeTabScreen() {
   const navigation = useNavigation<AppNavigationProp>();
   return <NeedsFeedScreen onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id, initialNeed: need })} />;
@@ -96,7 +105,11 @@ export function TabNavigator() {
       <Tab.Screen
         name="Home"
         component={HomeTabScreen}
-        options={{ title: "Live needs", headerRight: () => <CreateNeedButton /> }}
+        options={{
+          title: "Live needs",
+          headerRight: () => <CreateNeedButton />,
+          headerLeft: () => <ForumButton />,
+        }}
       />
       <Tab.Screen
         name="MyNeeds"
@@ -111,4 +124,5 @@ export function TabNavigator() {
 
 const styles = StyleSheet.create({
   headerButton: { marginRight: theme.spacing.md },
+  forumButton: { marginLeft: theme.spacing.md },
 });

@@ -469,3 +469,88 @@ export function rejectContribution(token: string, contributionId: string) {
     headers: authHeaders(token),
   });
 }
+
+// PRD §13 — SKILL_REQUEST: post a volunteering need (institution auto-linked for fast-track).
+export async function postSkillRequestNeed(
+  token: string,
+  data: {
+    title: string;
+    description: string;
+    role_needed: string;
+    volunteers_needed: number;
+    date: string;
+    time: string;
+    linkedInstitutionId?: string;
+    city?: string;
+    area?: string;
+  }
+) {
+  const { need } = await request<{ need: Need }>("/api/needs", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      type: "SKILL_REQUEST",
+      title: data.title,
+      description: data.description,
+      city: data.city,
+      area: data.area,
+      linkedInstitutionId: data.linkedInstitutionId,
+      payload: {
+        role_needed: data.role_needed,
+        volunteers_needed: data.volunteers_needed,
+        date: data.date,
+        time: data.time,
+      },
+    }),
+  });
+  return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// PRD §12 — Community Q&A Forum (D-023)
+export interface ForumAuthor {
+  id: string;
+  name: string | null;
+  profilePhotoUrl: string | null;
+}
+
+export interface ForumAnswer {
+  id: string;
+  body: string;
+  author: ForumAuthor;
+  createdAt: string;
+}
+
+export interface ForumQuestion {
+  id: string;
+  title: string;
+  body: string;
+  author: ForumAuthor;
+  answers?: ForumAnswer[];
+  _count?: { answers: number };
+  createdAt: string;
+}
+
+export function fetchForumQuestions(token: string, cursor?: string) {
+  const params = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return request<{ questions: ForumQuestion[]; nextCursor: string | null }>(`/api/forum${params}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function deleteForumQuestion(token: string, id: string) {
+  return request<{ ok: boolean }>(`/api/forum/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export function deleteForumAnswer(token: string, id: string) {
+  return request<{ ok: boolean }>(`/api/forum/answers/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+

@@ -112,8 +112,8 @@
   contribution; admin's `/users` list shows the same tier computation
 
 ## Milestone 8 — Community layer  *(write PRD §12–13 first)*
-- [ ] Q&A forum (ask/answer, admin moderation)
-- [ ] Volunteering: scribe requests + career mentoring
+- [x] Q&A forum (ask/answer, admin moderation)
+- [x] Volunteering: SKILL_REQUEST need type + volunteer pledge flow
 
 ## Milestone 9 — Professional UX, Registration & Hardening
 User-authored milestone spec (not written against a new PRD section — it hardens/polishes
