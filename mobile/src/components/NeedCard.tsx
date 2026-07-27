@@ -17,6 +17,7 @@ import {
   type IconName,
 } from "../lib/needMeta";
 import { ProgressBar, type ProgressTone } from "./ProgressBar";
+import { EmergencyPulse } from "./EmergencyPulse";
 import { Badge, PressableScale } from "./ui";
 
 // PRD Appendix A: red is reserved for danger/emergency/blood urgency only.
@@ -115,10 +116,14 @@ function NeedCardComponent({ need, onPress }: { need: Need; onPress?: () => void
         {blood && (
           <View style={styles.stats}>
             <View style={styles.amountRow}>
-              <View style={styles.bloodGroup}>
-                <Feather name="droplet" size={13} color={theme.color.onBlood} />
-                <Text style={styles.bloodGroupText}>{formatBloodGroup(blood.blood_group)}</Text>
-              </View>
+              {/* Pulses only on EMERGENCY (D-012), so the effect stays rare enough to mean
+                  something in a scrolling feed. */}
+              <EmergencyPulse active={isEmergency}>
+                <View style={styles.bloodGroup}>
+                  <Feather name="droplet" size={13} color={theme.color.onBlood} />
+                  <Text style={styles.bloodGroupText}>{formatBloodGroup(blood.blood_group)}</Text>
+                </View>
+              </EmergencyPulse>
               <Text style={styles.unitsText}>
                 {blood.units_fulfilled} of {blood.units_needed} units
               </Text>

@@ -12,7 +12,15 @@ import {
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  useAnimatedScrollHandler,
+  interpolate,
+  Extrapolation,
+} from "react-native-reanimated";
 import {
   bookMealSlot,
   claimGoods,
@@ -53,7 +61,12 @@ import {
   type IconName,
 } from "../lib/needMeta";
 import { ProgressBar, type ProgressTone } from "../components/ProgressBar";
+import { AnimatedCounter } from "../components/AnimatedCounter";
+import { EmergencyPulse } from "../components/EmergencyPulse";
+import { SuccessCelebration } from "../components/SuccessCelebration";
 import { ErrorState, Button, Input, Chip, Card, Badge, Skeleton, PressableScale } from "../components/ui";
+
+const HERO_HEIGHT = 260;
 
 function formatContributionAmount(c: Contribution): string {
   if (c.kind === "BLOOD") return `${c.units} unit${c.units === 1 ? "" : "s"}`;
@@ -150,6 +163,28 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
   const [isClaiming, setIsClaiming] = useState(false);
   const [hasClaimed, setHasClaimed] = useState(false);
 
+  // Replaces the Alert.alert() that used to close out every contribution flow.
+  const [celebration, setCelebration] = useState<{ title: string; message: string } | null>(null);
+
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+
+  // Hero drifts at half scroll speed and scales up when over-scrolled downward, so pulling the
+  // screen down stretches the photo instead of revealing a blank gap.
+  const heroStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(scrollY.value, [-HERO_HEIGHT, 0, HERO_HEIGHT], [-HERO_HEIGHT / 2, 0, HERO_HEIGHT * 0.5], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [-HERO_HEIGHT, 0], [1.6, 1], Extrapolation.CLAMP) },
+    ],
+  }));
+
+  // Badges fade out as the sheet rises over them — they'd otherwise clip awkwardly under it.
+  const heroOverlayStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, HERO_HEIGHT * 0.5], [1, 0], Extrapolation.CLAMP),
+  }));
+
   const isOwner = need && user && need.postedBy.id === user.id;
 
   const load = useCallback(async () => {
@@ -237,7 +272,10 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
       setAmount("");
       setUtr("");
       setProofImage(null);
-      Alert.alert("Thanks!", "Your contribution is pending the beneficiary's confirmation.");
+      setCelebration({
+        title: "Thank you!",
+        message: "Your donation is recorded and pending the beneficiary's confirmation.",
+      });
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit your contribution");
@@ -307,12 +345,13 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
       setKitsInput("");
       setKitUtr("");
       setKitProofImage(null);
-      Alert.alert(
-        "Thanks!",
-        kit.mode === "MONEY"
-          ? "Your contribution is pending the beneficiary's confirmation."
-          : "Your delivery pledge is pending the beneficiary's confirmation."
-      );
+      setCelebration({
+        title: "Thank you!",
+        message:
+          kit.mode === "MONEY"
+            ? "Your contribution is pending the beneficiary's confirmation."
+            : "Your delivery pledge is pending the beneficiary's confirmation.",
+      });
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit your contribution");
@@ -327,7 +366,10 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
     try {
       await claimGoods(token, needId);
       setHasClaimed(true);
-      Alert.alert("Thanks!", "The beneficiary can now see your claim to coordinate handover.");
+      setCelebration({
+        title: "Claim submitted",
+        message: "The beneficiary can now see your claim and will reach out to coordinate handover.",
+      });
       load();
     } catch (err) {
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to claim this item");
@@ -353,7 +395,10 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
     try {
       await respondToBloodNeed(token, needId);
       setHasResponded(true);
-      Alert.alert("Thanks!", "The beneficiary/hospital can now see your response to coordinate.");
+      setCelebration({
+        title: "You could save a life",
+        message: "The beneficiary or hospital can now see your response and will coordinate with you.",
+      });
       load();
     } catch (err) {
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to respond");
@@ -376,7 +421,10 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
       });
       setSelectedSlotId(null);
       setMealSlotUtr("");
-      Alert.alert("Thanks!", "Your booking is pending the institution's confirmation.");
+      setCelebration({
+        title: "Date booked",
+        message: "Your booking is pending the institution's confirmation.",
+      });
       load();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to book this date";
@@ -440,15 +488,17 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
   const hasPhotos = need.photos.length > 0;
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
     >
-      {/* Full-bleed photo pager. Badges sit on solid fills rather than over a scrim, so they stay
-          legible on any photo without faking a gradient. */}
+      {/* Full-bleed photo pager with a parallax drift. Badges sit on solid fills rather than over
+          a scrim, so they stay legible on any photo without faking a gradient. */}
       {hasPhotos && (
-        <View style={styles.hero}>
+        <Animated.View style={[styles.hero, heroStyle]}>
           <ScrollView
             horizontal
             pagingEnabled
@@ -460,7 +510,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
               <ExpoImage
                 key={url}
                 source={{ uri: url }}
-                style={{ width: screenWidth, height: 260 }}
+                style={{ width: screenWidth, height: HERO_HEIGHT }}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 transition={250}
@@ -468,19 +518,23 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
             ))}
           </ScrollView>
 
-          <View style={styles.heroBadges} pointerEvents="none">
+          <Animated.View style={[styles.heroBadges, heroOverlayStyle]} pointerEvents="none">
             <Badge label={meta.label} icon={meta.icon} tone={isBloodNeed ? "blood" : "primary"} solid />
-            {isEmergency && <Badge label="Emergency" icon="alert-triangle" tone="blood" solid />}
-          </View>
+            {isEmergency && (
+              <EmergencyPulse>
+                <Badge label="Emergency" icon="alert-triangle" tone="blood" solid />
+              </EmergencyPulse>
+            )}
+          </Animated.View>
 
           {need.photos.length > 1 && (
-            <View style={styles.heroDots} pointerEvents="none">
+            <Animated.View style={[styles.heroDots, heroOverlayStyle]} pointerEvents="none">
               {need.photos.map((url, i) => (
                 <View key={url} style={[styles.heroDot, i === activePhoto && styles.heroDotActive]} />
               ))}
-            </View>
+            </Animated.View>
           )}
-        </View>
+        </Animated.View>
       )}
 
       {/* Pulled up over the hero so the content sheet reads as a layer above the photo. */}
@@ -533,7 +587,9 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
             {money && (
               <View style={styles.statBlock}>
                 <View style={styles.amountRow}>
-                  <Text style={styles.amount}>{formatAmount(money.raised_amount)}</Text>
+                  {/* Counts up on the UI thread — a static figure reads as a record, a rising one
+                      reads as momentum. */}
+                  <AnimatedCounter value={money.raised_amount} prefix="₹" style={styles.amount} />
                   <Text style={styles.amountTarget}>raised of {formatAmount(money.target_amount)}</Text>
                 </View>
                 <ProgressBar raised={money.raised_amount} target={money.target_amount} showLabel={false} height={10} />
@@ -558,10 +614,14 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
             {blood && (
               <View style={styles.statBlock}>
                 <View style={styles.amountRow}>
-                  <View style={styles.bloodGroupPill}>
-                    <Feather name="droplet" size={15} color={theme.color.onBlood} />
-                    <Text style={styles.bloodGroupText}>{formatBloodGroup(blood.blood_group)}</Text>
-                  </View>
+                  {/* The pulse marks time-critical cases only (D-012) — a normal blood request
+                      shows the same pill, still. */}
+                  <EmergencyPulse active={isEmergency}>
+                    <View style={styles.bloodGroupPill}>
+                      <Feather name="droplet" size={15} color={theme.color.onBlood} />
+                      <Text style={styles.bloodGroupText}>{formatBloodGroup(blood.blood_group)}</Text>
+                    </View>
+                  </EmergencyPulse>
                   <Text style={styles.amountTarget}>
                     {blood.units_fulfilled} of {blood.units_needed} units
                   </Text>
@@ -913,7 +973,14 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
           </Animated.View>
         )}
       </View>
-    </ScrollView>
+
+      <SuccessCelebration
+        visible={celebration !== null}
+        title={celebration?.title ?? ""}
+        message={celebration?.message ?? ""}
+        onDismiss={() => setCelebration(null)}
+      />
+    </Animated.ScrollView>
   );
 }
 

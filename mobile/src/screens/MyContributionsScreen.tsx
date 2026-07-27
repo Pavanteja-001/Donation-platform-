@@ -8,6 +8,7 @@ import { fetchMyContributions, type Contribution, type ContributionKind } from "
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { formatAmount, formatDate, timeAgo, type IconName } from "../lib/needMeta";
+import { AnimatedCounter } from "../components/AnimatedCounter";
 import { EmptyState, ErrorState, Skeleton, Badge, Button, Chip, type BadgeTone } from "../components/ui";
 
 const STATUS_BADGE_TONE: Record<Contribution["status"], BadgeTone> = {
@@ -255,19 +256,19 @@ export function MyContributionsScreen({
     <View style={styles.screen}>
       <Animated.View entering={FadeInDown.duration(360)} style={[styles.impactCard, theme.elevation.level2]}>
         <View style={styles.impactStat}>
-          <Text style={styles.impactValue}>{impact.count}</Text>
+          <AnimatedCounter value={impact.count} style={styles.impactValue} />
           <Text style={styles.impactLabel}>Confirmed</Text>
         </View>
         <View style={styles.impactDivider} />
         <View style={styles.impactStat}>
-          <Text style={styles.impactValue}>{formatAmount(impact.amount)}</Text>
+          <AnimatedCounter value={impact.amount} prefix="₹" style={styles.impactValue} />
           <Text style={styles.impactLabel}>Donated</Text>
         </View>
         {impact.bloodUnits > 0 && (
           <>
             <View style={styles.impactDivider} />
             <View style={styles.impactStat}>
-              <Text style={[styles.impactValue, { color: theme.color.blood }]}>{impact.bloodUnits}</Text>
+              <AnimatedCounter value={impact.bloodUnits} style={[styles.impactValue, { color: theme.color.blood }]} />
               <Text style={styles.impactLabel}>Blood units</Text>
             </View>
           </>

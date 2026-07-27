@@ -8,6 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { Avatar, Badge, Button, Chip, PressableScale, type TrustTier } from "../components/ui";
 import { ProgressBar } from "../components/ProgressBar";
+import { AnimatedCounter } from "../components/AnimatedCounter";
 import { useTranslation } from "../lib/i18n";
 import { updateMe, uploadProfilePhoto } from "../lib/api";
 import type { AppNavigationProp } from "../navigation/types";
@@ -139,7 +140,7 @@ export function ProfileScreen() {
             <>
               <View style={styles.statsStrip}>
                 <View style={styles.stat}>
-                  <Text style={styles.statValue}>{trustTierInfo.confirmedContributionsCount}</Text>
+                  <AnimatedCounter value={trustTierInfo.confirmedContributionsCount} style={styles.statValue} />
                   <Text style={styles.statLabel}>Confirmed contributions</Text>
                 </View>
                 <View style={styles.statDivider} />

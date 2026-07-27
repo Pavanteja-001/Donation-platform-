@@ -1,6 +1,13 @@
-import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, cancelAnimation } from "react-native-reanimated";
+import { useEffect, useState } from "react";
+import { StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+  Easing,
+  cancelAnimation,
+} from "react-native-reanimated";
 import { theme } from "../lib/theme";
 
 export type ProgressTone = "primary" | "blood" | "accent" | "success";
@@ -40,6 +47,8 @@ export function ProgressBar({
   const isComplete = pct >= 1;
 
   const progress = useSharedValue(0);
+  // Width of the filled portion, so the sheen can sweep across it in pixels.
+  const [fillWidth, setFillWidth] = useState(0);
 
   useEffect(() => {
     progress.value = withTiming(pct, { duration: 900, easing: Easing.out(Easing.cubic) });
@@ -50,6 +59,14 @@ export function ProgressBar({
     width: `${progress.value * 100}%`,
   }));
 
+  function handleFillLayout(e: LayoutChangeEvent) {
+    const next = Math.round(e.nativeEvent.layout.width);
+    if (next !== fillWidth) setFillWidth(next);
+  }
+
+  // A sheen on a finished bar would suggest it's still working, so it stops at 100%.
+  const showSheen = !isComplete && pct > 0 && fillWidth > 24;
+
   // A fully funded need reads as success regardless of its type — reaching the goal is the
   // message at that point, not which category it belongs to.
   const fillColor = isComplete ? theme.color.success : TONE_COLOR[tone];
@@ -57,7 +74,12 @@ export function ProgressBar({
   return (
     <View>
       <View style={[styles.track, { height, borderRadius: height }]}>
-        <Animated.View style={[styles.fill, { backgroundColor: fillColor, borderRadius: height }, animatedStyle]} />
+        <Animated.View
+          onLayout={handleFillLayout}
+          style={[styles.fill, { backgroundColor: fillColor, borderRadius: height }, animatedStyle]}
+        >
+          {showSheen && <Sheen width={fillWidth} />}
+        </Animated.View>
       </View>
       {showLabel && (
         <View style={styles.labelRow}>
@@ -71,13 +93,49 @@ export function ProgressBar({
   );
 }
 
+/**
+ * A slow highlight sweeping across the filled portion — signals "this is still being funded"
+ * without adding another element to the layout. Same stacked-slice trick as `Skeleton`, so it
+ * needs no gradient dependency.
+ */
+function Sheen({ width }: { width: number }) {
+  const progress = useSharedValue(0);
+  const bandWidth = Math.max(width * 0.35, 28);
+
+  useEffect(() => {
+    progress.value = 0;
+    progress.value = withRepeat(
+      withTiming(1, { duration: 1600, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(progress);
+  }, [width, progress]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -bandWidth + progress.value * (width + bandWidth) }],
+  }));
+
+  return (
+    <Animated.View pointerEvents="none" style={[styles.sheen, { width: bandWidth }, animatedStyle]}>
+      <View style={[styles.sheenSlice, styles.sheenEdge]} />
+      <View style={[styles.sheenSlice, styles.sheenCore]} />
+      <View style={[styles.sheenSlice, styles.sheenEdge]} />
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   track: {
     backgroundColor: theme.color.surfaceSunken,
     overflow: "hidden",
     width: "100%",
   },
-  fill: { height: "100%" },
+  fill: { height: "100%", overflow: "hidden" },
+  sheen: { position: "absolute", top: 0, bottom: 0, left: 0, flexDirection: "row" },
+  sheenSlice: { flex: 1, height: "100%" },
+  sheenEdge: { backgroundColor: "rgba(255,255,255,0.10)" },
+  sheenCore: { backgroundColor: "rgba(255,255,255,0.32)" },
   labelRow: {
     flexDirection: "row",
     alignItems: "center",

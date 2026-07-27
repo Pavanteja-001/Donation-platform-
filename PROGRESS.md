@@ -5,6 +5,86 @@
 
 ---
 
+### Session 34 — Mobile UI Overhaul (full design-system rebuild, all 20 screens)
+
+**What was done:**
+
+A complete visual + interaction rebuild of the mobile app against a "world-class Dribbble-grade"
+brief, done in 8 verified steps. **Zero new dependencies** — `expo-linear-gradient`, `expo-blur`,
+`expo-haptics` and `react-native-svg` are all absent, so shimmer/gradients are built from
+Reanimated + stacked views and nothing requires a native rebuild. Every step ended with a clean
+`tsc --noEmit` **and** a successful `expo export` (bundle compiles, ~3.9MB Hermes).
+
+1. **Design foundation (`src/lib/theme.ts`)** — rebuilt token layer: slate canvas (`#F8FAFC`),
+   white cards on `rgba(15,23,42,0.05)` hairlines, `radii` scale (8→28 + pill), elevation
+   `level1–3`, `glow.primary`/`glow.blood`, spring presets, type scale with negative tracking.
+   Crimson split into **two token families**: `blood.*` (domain) and `danger.*` (state), so
+   restyling error states can never silently repaint blood needs.
+   - `theme.radius` deliberately kept a **number** (24 call sites do arithmetic on it); bumping
+     `12 → 16` moved the whole app onto the new geometry with zero breaking changes.
+
+2. **Shared primitives** — new `PressableScale` (one press spring for the whole app); `Button`
+   (5 variants incl. first-class `blood`, 3 sizes, icons, glow, animated loading dots instead of
+   `ActivityIndicator`); `Card`, `Badge`, `Chip`, `ProgressBar` (tone-aware), `Input`,
+   `Avatar` (trust-tier ring), `EmptyState`/`ErrorState`, `Toast` (migrated off legacy RN
+   `Animated` → Reanimated, safe-area aware, now tap-to-dismiss), `Skeleton` (directional
+   shimmer sweep, with `cancelAnimation` cleanup — the old one leaked an infinite UI-thread
+   animation after unmount).
+
+3. **All 20 screens rebuilt** — feed, need detail, my needs, my contributions, profile, login,
+   register, 7 create forms + chooser, forum, forum detail, certificate, blood profile, and a
+   custom floating animated **tab bar**.
+
+4. **New shared modules** — `src/lib/needMeta.ts` (type/status tables, payload guards,
+   formatters; killed ~90 lines duplicated across 4 files) and
+   `src/components/CreateNeedScaffold.tsx` (the ~40-line shell that was copy-pasted across all
+   7 create forms).
+
+**Bugs / gaps found and fixed along the way:**
+- **Client/server type drift:** backend `ContributionKind` enum has `SKILL_REQUEST`; mobile's
+  type didn't — a valid API response was untypeable. Fixed in `mobile/src/lib/api.ts`.
+- **Trust tier thresholds were unreachable by any client.** Added `computeTrustTierProgress` in
+  `backend/src/lib/trustTier.ts` (returns `nextTier`/`nextTierAt`/`contributionsToNextTier`),
+  wired into `/auth/otp/verify` and `/auth/me`. Profile now shows "3 more to Silver". Mobile
+  treats the fields as **optional** so it degrades gracefully against an older backend.
+- `CreateSkillRequestNeedScreen` faked its loading state (disabled button + changing label) so it
+  never showed a spinner — normalised by the scaffold.
+- Duplicate "Photos" label rendered on 4 create screens (screen + PhotoPicker both drew one).
+- `Input` carried an intrinsic `marginBottom` that double-spaced every `gap`-based form; removed,
+  with `CreateSkillRequestNeedScreen` given `gap` in the same pass (the only screen that relied
+  on it).
+- `need.deadline`, `need.postedBy` and `institutionVerified` existed on the model but were never
+  rendered anywhere — now shown on the detail screen.
+
+**Stack-rule compliance (verified by sweep):** no `FlatList` (all FlashList), no
+`ActivityIndicator` anywhere incl. app boot, no `react-native` `Image` (all `expo-image`), no
+legacy RN `Animated`.
+
+**PRD verification (§6, §8, §10, §11, §12, §14) — no violations found:**
+- §6.8/D-012 urgency is admin-verified: confirmed no create form exposes it (comment added so
+  nobody "helpfully" adds one).
+- §6.1 five-photo cap, §6.3 admin verification, §10.2/10.3 meal slots, §11.3 goods has no partial
+  state, §14.2/D-006 certificate disclaimer always shown — all correct.
+
+**Next (do this next session):**
+1. **Location on create forms (user deferred this — "later we change that city").** PRD §6.1/§6.7
+   list `location` as a shared Need field, but only `CreateSkillRequestNeedScreen` collects
+   city/area; the other 6 inherit it from the poster's profile server-side. That blocks posting on
+   behalf of someone in another city, which matters because blood matching is city-based (§8.4).
+   Decide: inherit silently / show inherited + override / add optional city+area to all 6.
+2. **`GET /needs` has no pagination** — loads every LIVE need, expires them all, sorts in memory.
+   D-011 requires pagination; this is the biggest scaling risk in the codebase. `GET /needs/mine`
+   too. Suggested: additive cursor pagination (`?limit&cursor` → keep `needs`, add `nextCursor`)
+   so admin + web-panel don't break.
+3. **No WebP thumbnails** — CLAUDE.md mandates backend-generated thumbnails and "never send
+   full-res to a list", but `photos` is a raw `string[]` and the feed renders `photos[0]` full-res.
+4. Optional: install `expo-haptics` + `expo-linear-gradient` for haptic feedback on donate/confirm
+   and true gradients — costs a prebuild, deliberately avoided so far.
+5. Web panel + admin console still use the **old** token values. D-014 requires one shared design
+   system across all three surfaces, so they now visually lag the mobile app.
+
+---
+
 ### Session 33 — Performance & Security Hardening (QA Audit & Indexing Pass)
 
 **What was done:**

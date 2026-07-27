@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { fetchNeeds, type Need } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -120,8 +120,25 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
     setIsRefreshing(false);
   }
 
+  // Cards cascade in the first time they're seen, but never again. FlashList recycles rows, so an
+  // unconditional entering animation would replay the cascade every time you scrolled back up —
+  // the exact jank the animation is supposed to hide.
+  const seenIds = useRef(new Set<string>());
+
   const renderItem = useCallback(
-    ({ item }: { item: Need }) => <NeedCard need={item} onPress={() => onSelectNeed(item)} />,
+    ({ item, index }: { item: Need; index: number }) => {
+      const isFirstSight = !seenIds.current.has(item.id);
+      seenIds.current.add(item.id);
+
+      const card = <NeedCard need={item} onPress={() => onSelectNeed(item)} />;
+      if (!isFirstSight) return card;
+
+      return (
+        <Animated.View entering={FadeInDown.delay(Math.min(index, 6) * 55).duration(360)}>
+          {card}
+        </Animated.View>
+      );
+    },
     [onSelectNeed]
   );
 
