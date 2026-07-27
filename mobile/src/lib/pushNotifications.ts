@@ -39,14 +39,30 @@ export async function scheduleLocalNotification(title: string, body: string, dat
 export async function registerForPushNotificationsAsync(token: string): Promise<void> {
   try {
     if (Platform.OS === "android") {
+      // On Android 8+ the **channel** decides sound, vibration and heads-up — the `sound` field
+      // on the push message itself is an iOS concept and is ignored here. Both of these were
+      // created without an explicit `sound`, which is why notifications arrived silently.
+      //
+      // Channels are IMMUTABLE once created: editing this block does nothing on a device where
+      // the app is already installed. Either bump the channel id or uninstall/reinstall.
+      // `name` is what the user sees in Android's notification settings, so it must read like a
+      // category, not a slug.
       await Notifications.setNotificationChannelAsync("default", {
-        name: "default",
-        importance: Notifications.AndroidImportance.DEFAULT,
+        name: "General updates",
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: "default",
+        enableVibrate: true,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#B91C1C",
       });
       // High-priority channel for Emergency blood requests (D-016) — heads-up + sound.
       await Notifications.setNotificationChannelAsync("emergency", {
-        name: "Emergency",
+        name: "Emergency blood requests",
         importance: Notifications.AndroidImportance.MAX,
+        sound: "default",
+        enableVibrate: true,
+        vibrationPattern: [0, 400, 200, 400],
+        lightColor: "#DC2626",
       });
     }
 

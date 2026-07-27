@@ -39,6 +39,9 @@ export async function notifyEligibleBloodDonors(need: Need): Promise<{ notified:
       title: need.urgency === "EMERGENCY" ? "🚨 Emergency blood request nearby" : "Blood request nearby",
       body: `${need.title} — ${blood.blood_group.replace("_", " ")} needed in ${need.area ?? need.city}`,
       priority: need.urgency === "EMERGENCY" ? "high" : "default",
+      // Routes Android to the MAX-importance channel (louder pattern, always heads-up) for
+      // Emergency; both channels play the default sound.
+      channelId: need.urgency === "EMERGENCY" ? "emergency" : "default",
       data: { needId: need.id },
     }))
   );

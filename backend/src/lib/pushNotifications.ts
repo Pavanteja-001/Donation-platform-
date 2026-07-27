@@ -15,6 +15,15 @@ export interface PushMessage {
   // Emergency uses Expo's "high" priority (D-016 — heads-up + sound) so it stands out;
   // everything else uses the default.
   priority?: "default" | "high";
+  // ANDROID ONLY, and required for sound to play at all.
+  //
+  // From Android 8 the notification *channel* owns sound, vibration and heads-up behaviour —
+  // the `sound: "default"` field below is honoured on iOS but ignored on Android. Omitting
+  // channelId meant every push landed on a fallback channel instead of the "default"/
+  // "emergency" channels the app configures at login, so they arrived silently.
+  //
+  // Must match a channel id created in mobile/src/lib/pushNotifications.ts.
+  channelId?: "default" | "emergency";
   data?: Record<string, unknown>;
 }
 
@@ -41,6 +50,7 @@ export async function sendPushNotifications(messages: PushMessage[]): Promise<vo
           body: m.body,
           sound: "default",
           priority: m.priority === "high" ? "high" : "default",
+          channelId: m.channelId ?? "default",
           data: m.data,
         }))
       ),
