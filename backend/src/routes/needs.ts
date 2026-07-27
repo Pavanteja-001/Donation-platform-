@@ -11,6 +11,7 @@ import { parseMealSlotPayload, dedupeDates } from "../lib/mealSlotNeed";
 import { goodsPayloadInputSchema, parseGoodsPayload } from "../lib/goodsNeed";
 import { expireIfPastDeadline, expireManyIfPastDeadline } from "../lib/needExpiry";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
+import { cached, CacheKey, CacheTtl, invalidateNeedCaches } from "../lib/cache";
 
 const router = Router();
 router.use(requireAuth);
@@ -352,6 +353,7 @@ router.patch("/:id/location", async (req, res) => {
       longitude: coordinates.longitude,
     },
   });
+  invalidateNeedCaches();
   res.json({ need: updated });
 });
 
@@ -470,6 +472,7 @@ router.post("/:id/cancel", async (req, res) => {
     where: { id: need.id },
     data: { status: NeedStatus.CANCELLED },
   });
+  invalidateNeedCaches();
   res.json({ need: updated });
 });
 
@@ -499,6 +502,7 @@ router.post("/:id/institution-verify", async (req, res) => {
       console.error("[blood] Failed to notify eligible donors:", err);
     });
   }
+  invalidateNeedCaches();
   res.json({ need: updated });
 });
 
@@ -540,6 +544,7 @@ router.post("/:id/urgency", async (req, res) => {
       console.error("[blood] Failed to notify eligible donors:", err);
     });
   }
+  invalidateNeedCaches();
   res.json({ need: updated });
 });
 
@@ -552,24 +557,36 @@ const listQuerySchema = z.object({
 // isn't fully met yet.
 const URGENCY_RANK: Record<Urgency, number> = { EMERGENCY: 0, URGENT: 1, NORMAL: 2 };
 
+// Cached for 30s per `type` filter, and invalidated explicitly by every write that can change
+// what's live (submit, verify, reject, cancel, urgency change, contribution, location edit).
+//
+// The response is identical for every caller — the feed is public and carries no per-user state
+// — which is what makes it safe to share a cache entry across users. Anything user-scoped
+// (`/mine`, `/:id` with `myContribution`) is deliberately NOT cached: one donor seeing another's
+// contribution state would be a privacy bug, not just a stale read.
+//
+// 30s is short on purpose: this feed carries emergency blood requests.
 router.get("/", async (req, res) => {
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid query" });
   }
-  const candidates = await prisma.need.findMany({
-    where: {
-      status: { in: [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED] },
-      ...(parsed.data.type ? { type: parsed.data.type } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    include: { postedBy: { select: { id: true, name: true, role: true } } },
+  const payload = await cached(CacheKey.needsFeed(parsed.data.type), CacheTtl.needsFeed, async () => {
+    const candidates = await prisma.need.findMany({
+      where: {
+        status: { in: [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED] },
+        ...(parsed.data.type ? { type: parsed.data.type } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      include: { postedBy: { select: { id: true, name: true, role: true } } },
+    });
+    // Lazily expire past-deadline needs (§7.4) before deciding what's actually still live.
+    const checked = await expireManyIfPastDeadline(candidates);
+    const needs = checked.filter((n) => n.status === NeedStatus.LIVE || n.status === NeedStatus.PARTIALLY_FULFILLED);
+    needs.sort((a, b) => URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency]);
+    return { needs };
   });
-  // Lazily expire past-deadline needs (§7.4) before deciding what's actually still live.
-  const checked = await expireManyIfPastDeadline(candidates);
-  const needs = checked.filter((n) => n.status === NeedStatus.LIVE || n.status === NeedStatus.PARTIALLY_FULFILLED);
-  needs.sort((a, b) => URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency]);
-  res.json({ needs });
+  res.json(payload);
 });
 
 // Must come before GET /:id (Express matches route order — "/:id" would otherwise swallow
@@ -652,6 +669,9 @@ const goodsClaimSchema = z.object({
 async function createContribution(res: import("express").Response, data: Prisma.ContributionUncheckedCreateInput) {
   try {
     const contribution = await prisma.contribution.create({ data });
+    // A pledge doesn't move the progress bar until it's confirmed, but it does change what the
+    // donor sees on the need — and the analytics totals count contributions. Cheap to drop.
+    invalidateNeedCaches();
     res.status(201).json({ contribution });
   } catch (err) {
     // D-019: UTR uniqueness is a hard DB constraint (Prisma P2002 on the unique `utr` column).
@@ -854,6 +874,7 @@ router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
       }
       return created;
     });
+    invalidateNeedCaches();
     res.status(201).json({ contribution });
   } catch (err) {
     if (err instanceof SlotAlreadyBookedError) {

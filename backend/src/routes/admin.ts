@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 import { computeTrustTier } from "../lib/trustTier";
+import { cached, CacheKey, CacheTtl, invalidateLocationsCache, invalidateNeedCaches } from "../lib/cache";
 
 // Admin console RBAC (D-018):
 //   ADMIN — full access, including creating/removing STAFF and editing users.
@@ -43,7 +44,13 @@ router.get("/users", async (_req, res) => {
 });
 
 // PRD §21 / Admin Console §15 — Platform Analytics & Metrics
+//
+// Six COUNT queries plus a full scan of every live/fulfilled need, summed in JS — the most
+// expensive read in the API, and it runs on every dashboard load and refresh. Cached for 60s and
+// dropped by `invalidateNeedCaches()` on every need/contribution write, so the numbers still
+// move as soon as something actually changes.
 router.get("/analytics", async (_req, res) => {
+  const payload = await cached(CacheKey.analytics, CacheTtl.analytics, async () => {
   const [
     totalUsers,
     totalInstitutions,
@@ -81,21 +88,23 @@ router.get("/analytics", async (_req, res) => {
     if (n.type === "SKILL_REQUEST" && typeof p.volunteers_joined === "number") totalVolunteersPledged += p.volunteers_joined;
   }
 
-  res.json({
-    analytics: {
-      totalUsers,
-      totalInstitutions,
-      totalNeeds,
-      totalLiveNeeds,
-      totalFulfilledNeeds,
-      totalConfirmedContributions: confirmedContributions,
-      totalMoneyRaised,
-      totalKitsFunded,
-      totalBloodUnitsFulfilled,
-      totalMealSlotsConfirmed,
-      totalVolunteersPledged,
-    },
+    return {
+      analytics: {
+        totalUsers,
+        totalInstitutions,
+        totalNeeds,
+        totalLiveNeeds,
+        totalFulfilledNeeds,
+        totalConfirmedContributions: confirmedContributions,
+        totalMoneyRaised,
+        totalKitsFunded,
+        totalBloodUnitsFulfilled,
+        totalMealSlotsConfirmed,
+        totalVolunteersPledged,
+      },
+    };
   });
+  res.json(payload);
 });
 
 const needsQueryStatusSchema = z.union([z.nativeEnum(NeedStatus), z.literal("ALL")]).optional();
@@ -138,6 +147,7 @@ router.post("/needs/:id/verify", async (req, res) => {
     });
   }
 
+  invalidateNeedCaches();
   res.json({ need: updated });
 });
 
@@ -163,6 +173,7 @@ router.post("/needs/:id/reject", async (req, res) => {
     where: { id: need.id },
     data: { status: NeedStatus.REJECTED, rejectionReason: parsed.data.reason },
   });
+  invalidateNeedCaches();
   res.json({ need: updated });
 });
 
@@ -187,6 +198,7 @@ router.post("/needs/:id/cancel", async (req, res) => {
     where: { id: need.id },
     data: { status: NeedStatus.CANCELLED },
   });
+  invalidateNeedCaches();
   res.json({ need: updated });
 });
 
@@ -265,6 +277,7 @@ router.delete("/needs/:id", adminOnly, async (req, res) => {
     prisma.mealSlot.deleteMany({ where: { needId: need.id } }),
     prisma.need.delete({ where: { id: need.id } }),
   ]);
+  invalidateNeedCaches();
   res.status(204).send();
 });
 
@@ -364,6 +377,7 @@ router.post("/locations/districts", async (req, res) => {
         longitude: parsed.data.longitude ?? null,
       },
     });
+    invalidateLocationsCache();
     res.status(201).json({ district });
   } catch (err) {
     res.status(409).json({ error: "District already exists" });
@@ -394,6 +408,7 @@ router.patch("/locations/districts/:id", async (req, res) => {
           : {}),
       },
     });
+    invalidateLocationsCache();
     res.json({ district });
   } catch (err) {
     res.status(404).json({ error: "District not found" });
@@ -430,6 +445,7 @@ router.post("/locations/areas", async (req, res) => {
         longitude: parsed.data.longitude ?? null,
       },
     });
+    invalidateLocationsCache();
     res.status(201).json({ area });
   } catch (err) {
     res.status(409).json({ error: "Area already exists in this district" });
@@ -458,6 +474,7 @@ router.patch("/locations/areas/:id", async (req, res) => {
           : {}),
       },
     });
+    invalidateLocationsCache();
     res.json({ area });
   } catch (err) {
     res.status(404).json({ error: "Area not found" });

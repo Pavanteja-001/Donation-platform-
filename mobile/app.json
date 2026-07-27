@@ -47,7 +47,8 @@
           "icon": "./assets/icon.png",
           "color": "#B91C1C"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

@@ -11,5 +11,16 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # Read cache (lib/cache.ts). Optional in every environment: the backend degrades to
+  # Postgres-only reads when REDIS_URL is unset or Redis is unreachable.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    # `allkeys-lru` because everything stored here is a rebuildable cache entry, never the source
+    # of truth — under memory pressure Redis should evict rather than start refusing writes.
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+
 volumes:
   postgres_data:

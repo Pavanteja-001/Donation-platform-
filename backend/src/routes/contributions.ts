@@ -3,6 +3,7 @@ import { NeedStatus, NeedType, Prisma } from "@prisma/client";
 import type { Need } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
+import { invalidateNeedCaches } from "../lib/cache";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
 import { parseMoneyPayload } from "../lib/moneyNeed";
 import { parseKitPayload } from "../lib/kitNeed";
@@ -231,6 +232,7 @@ router.post("/:id/confirm", async (req, res) => {
     ]);
   }
 
+  invalidateNeedCaches();
   res.json({ contribution: updatedContribution });
 });
 
@@ -263,6 +265,7 @@ router.post("/:id/reject", async (req, res) => {
         ]
       : []),
   ]);
+  invalidateNeedCaches();
   res.json({ contribution: updated });
 });
 

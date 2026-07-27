@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuth } from "../context/AuthContext";
-import { fetchLocations, updateMe, type BloodGroup, type DistrictLocation, type Gender } from "../lib/api";
+import { fetchLocations, updateMe, type AreaLocation, type BloodGroup, type DistrictLocation, type Gender } from "../lib/api";
 import { getCurrentGpsLocation } from "../lib/locationUtils";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "../components/ProgressBar";
@@ -73,125 +74,161 @@ export function RegisterScreen({
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [dob, setDob] = useState(user?.dateOfBirth ? user.dateOfBirth.slice(0, 10) : "");
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [city, setCity] = useState(user?.city ?? "");
   const [area, setArea] = useState(user?.area ?? "");
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | null>(user?.bloodGroup ?? null);
   const [gender, setGender] = useState<Gender | null>(user?.gender ?? null);
 
-  const [isFetchingGps, setIsFetchingGps] = useState(false);
-
   const [districts, setDistricts] = useState<DistrictLocation[]>([]);
-
-  useEffect(() => {
-    fetchLocations()
-      .then(({ districts }) => setDistricts(districts))
-      .catch(() => {});
-  }, []);
-
-  async function handleGpsDetect() {
-    setIsFetchingGps(true);
-    const loc = await getCurrentGpsLocation();
-    setIsFetchingGps(false);
-    if (loc) {
-      if (loc.city) setCity(loc.city);
-      if (loc.area) setArea(loc.area);
-    }
-  }
-
-  const currentDistrictObj = districts.find((d) => d.name.toLowerCase() === city.trim().toLowerCase());
-  const availableAreas = currentDistrictObj ? currentDistrictObj.areas : [];
+  const [showDistrictSelector, setShowDistrictSelector] = useState(false);
+  const [showAreaSelector, setShowAreaSelector] = useState(false);
+  const [isFetchingGps, setIsFetchingGps] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Live completion of the six required fields (email is optional). This screen blocks posting
-  // and blood response, so showing how close you are is worth the few lines.
-  const completed = useMemo(
-    () => [name.trim(), dob.trim(), gender, bloodGroup, city.trim(), area.trim()].filter(Boolean).length,
-    [name, dob, gender, bloodGroup, city, area]
-  );
-  const totalRequired = 6;
-  const isComplete = completed === totalRequired;
+  useEffect(() => {
+    fetchLocations()
+      .then(({ districts: fetched }) => {
+        if (fetched && fetched.length > 0) setDistricts(fetched);
+      })
+      .catch(() => {});
+  }, []);
 
-  function clearFieldError(key: string) {
-    setErrors((prev) => (prev[key] ? { ...prev, [key]: "" } : prev));
+  const selectedDistrictObj = districts.find((d) => d.name.toLowerCase() === city.trim().toLowerCase());
+  const availableAreas: AreaLocation[] = selectedDistrictObj ? selectedDistrictObj.areas : [];
+
+  function clearFieldError(field: string) {
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   }
 
-  const handleSave = async () => {
+  function handleSelectDistrict(district: DistrictLocation) {
+    setCity(district.name);
+    setArea("");
+    setShowDistrictSelector(false);
+    clearFieldError("city");
+  }
+
+  function handleSelectArea(areaItem: string | AreaLocation) {
+    const areaName = typeof areaItem === "string" ? areaItem : areaItem.name;
+    setArea(areaName);
+    setShowAreaSelector(false);
+    clearFieldError("area");
+  }
+
+  const completionPercent = useMemo(() => {
+    let filled = 0;
+    const total = 6;
+    if (name.trim()) filled++;
+    if (email.trim()) filled++;
+    if (dob.trim()) filled++;
+    if (gender) filled++;
+    if (city.trim()) filled++;
+    if (bloodGroup) filled++;
+    return Math.round((filled / total) * 100);
+  }, [name, email, dob, gender, city, bloodGroup]);
+
+  async function handleGpsDetect() {
+    setIsFetchingGps(true);
+    try {
+      const loc = await getCurrentGpsLocation();
+      if (loc && loc.city) {
+        setCity(loc.city);
+        clearFieldError("city");
+      }
+    } catch (e) {
+      // Best effort
+    } finally {
+      setIsFetchingGps(false);
+    }
+  }
+
+  function validate(): boolean {
+    const next: Record<string, string> = {};
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      next.email = "Enter a valid email address";
+    }
+    if (dob.trim()) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dob.trim())) {
+        next.dob = "Select a valid Date of Birth";
+      } else {
+        const parsed = new Date(dob.trim());
+        if (isNaN(parsed.getTime())) {
+          next.dob = "Date does not exist";
+        } else {
+          const age = new Date().getFullYear() - parsed.getFullYear();
+          if (age < 18 || age > 65) {
+            next.dob = `Age ${age} is outside the 18–65 donor range (PRD §8.2)`;
+          }
+        }
+      }
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }
+
+  async function handleSave() {
     if (!token) return;
-
-    const newErrors: Record<string, string> = {};
-    if (!name.trim()) newErrors.name = "Enter your full name";
-    if (!dob.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
-      newErrors.dob = "Enter your date of birth as YYYY-MM-DD";
-    }
-    if (!gender) newErrors.gender = "Select your gender";
-    if (!bloodGroup) newErrors.bloodGroup = "Select your blood group";
-    if (!city.trim()) newErrors.city = "Enter your permanent city";
-    if (!area.trim()) newErrors.area = "Enter your permanent area";
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = "Enter a valid email address";
-    }
-
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) {
-      setError("Please fix the highlighted fields below.");
-      return;
-    }
+    if (!validate()) return;
 
     setError(null);
     setIsSaving(true);
     try {
       await updateMe(token, {
-        name: name.trim(),
-        email: email.trim() || null,
-        dateOfBirth: dob,
-        gender: gender || undefined,
-        bloodGroup: bloodGroup || undefined,
-        city: city.trim(),
-        area: area.trim(),
+        name: name.trim() || undefined,
+        email: email.trim() || undefined,
+        dateOfBirth: dob.trim() ? new Date(dob.trim()).toISOString() : undefined,
+        city: city.trim() || undefined,
+        area: area.trim() || undefined,
+        bloodGroup: bloodGroup ?? undefined,
+        gender: gender ?? undefined,
       });
       await refreshUser();
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to register profile");
+      setError(err instanceof Error ? err.message : "Failed to update profile");
     } finally {
       setIsSaving(false);
     }
-  };
+  }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.flex}
+    >
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown.duration(360)} style={styles.intro}>
-          <Text style={styles.title}>Complete your profile</Text>
+          <Text style={styles.title}>Your donor profile</Text>
           <Text style={styles.hint}>
-            India's blood-donation eligibility rules require these details before you can post a need or respond to a
-            blood request.
+            Help us match you with blood requests in your area. Everything below is optional and can be updated anytime.
           </Text>
 
           <View style={styles.progressWrap}>
             <View style={styles.progressLabelRow}>
-              <Text style={styles.progressLabel}>
-                {completed} of {totalRequired} required details
-              </Text>
-              {isComplete && (
-                <Animated.View entering={FadeIn.duration(theme.motion.normal)} style={styles.readyChip}>
-                  <Feather name="check" size={11} color={theme.color.success} />
-                  <Text style={styles.readyChipText}>Ready</Text>
-                </Animated.View>
-              )}
+              <Text style={styles.progressLabel}>Profile completion</Text>
+              <View style={styles.readyChip}>
+                <Feather name="check-circle" size={12} color={theme.color.success} />
+                <Text style={styles.readyChipText}>{completionPercent}% ready</Text>
+              </View>
             </View>
-            <ProgressBar raised={completed} target={totalRequired} showLabel={false} height={6} />
+            <ProgressBar raised={completionPercent} target={100} height={6} tone="blood" />
           </View>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(60).duration(360)}>
-          <Section icon="user" title="About you" subtitle="Your name as it should appear on records">
+          <Section icon="user" title="Personal details" subtitle="Visible to organizers when you donate">
             <Input
               label="Full name"
-              placeholder="Enter your full name"
+              placeholder="e.g. Priya Sharma"
               icon="user"
               value={name}
               onChangeText={(txt) => {
@@ -216,17 +253,42 @@ export function RegisterScreen({
               error={errors.email || undefined}
             />
 
-            <Input
-              label="Date of birth"
-              placeholder="YYYY-MM-DD"
-              icon="calendar"
-              value={dob}
-              onChangeText={(txt) => {
-                setDob(txt);
-                clearFieldError("dob");
-              }}
-              error={errors.dob || undefined}
-            />
+            <View>
+              <Text style={styles.label}>Date of birth</Text>
+              <TouchableOpacity
+                style={[
+                  styles.dobPickerButton,
+                  errors.dob ? styles.dobPickerError : null,
+                ]}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Feather name="calendar" size={16} color={theme.color.primary} />
+                <Text style={dob ? styles.dobText : styles.dobPlaceholder}>
+                  {dob ? dob : "Select Date of Birth"}
+                </Text>
+              </TouchableOpacity>
+              {errors.dob ? <FieldError message={errors.dob} /> : null}
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={dob ? new Date(dob) : new Date(2000, 0, 1)}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1930, 0, 1)}
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(Platform.OS === "ios");
+                    if (selectedDate) {
+                      const yyyy = selectedDate.getFullYear();
+                      const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
+                      const dd = String(selectedDate.getDate()).padStart(2, "0");
+                      setDob(`${yyyy}-${mm}-${dd}`);
+                      clearFieldError("dob");
+                    }
+                  }}
+                />
+              )}
+            </View>
 
             <View>
               <Text style={styles.label}>Gender</Text>
@@ -257,66 +319,100 @@ export function RegisterScreen({
             tone={theme.color.info}
             tint={theme.color.infoSoft}
           >
-            <View>
+            {/* District / City Select Dropdown */}
+            <View style={{ marginBottom: 12 }}>
               <Text style={styles.label}>District / City</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-                {districts.map((d) => (
-                  <Chip
-                    key={d.id}
-                    label={d.name}
-                    active={city.toLowerCase() === d.name.toLowerCase()}
-                    onPress={() => {
-                      setCity(d.name);
-                      setArea("");
-                      clearFieldError("city");
-                    }}
-                  />
-                ))}
-              </ScrollView>
-              <Input
-                label=""
-                placeholder="Or type city if not listed"
-                icon="map-pin"
-                value={city}
-                onChangeText={(txt) => {
-                  setCity(txt);
-                  clearFieldError("city");
+              <TouchableOpacity
+                style={styles.dropdownBtn}
+                onPress={() => {
+                  setShowDistrictSelector(!showDistrictSelector);
+                  setShowAreaSelector(false);
                 }}
-                error={errors.city || undefined}
-              />
+                activeOpacity={0.7}
+              >
+                <View style={styles.dropdownLeft}>
+                  <Feather name="map-pin" size={16} color={theme.color.primary} />
+                  <Text style={styles.dropdownText}>{city || "Select District / City"}</Text>
+                </View>
+                <Feather name={showDistrictSelector ? "chevron-up" : "chevron-down"} size={20} color={theme.color.primary} />
+              </TouchableOpacity>
+
+              {showDistrictSelector && (
+                <View style={styles.dropdownMenu}>
+                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                    {districts.map((d) => (
+                      <TouchableOpacity
+                        key={d.id}
+                        style={[styles.dropdownItem, city.toLowerCase() === d.name.toLowerCase() && styles.dropdownItemActive]}
+                        onPress={() => handleSelectDistrict(d)}
+                      >
+                        <Feather
+                          name={city.toLowerCase() === d.name.toLowerCase() ? "check-circle" : "circle"}
+                          size={15}
+                          color={city.toLowerCase() === d.name.toLowerCase() ? theme.color.primary : "#94A3B8"}
+                        />
+                        <Text style={[styles.itemText, city.toLowerCase() === d.name.toLowerCase() && styles.itemTextActive]}>
+                          {d.name} ({d.state})
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+              {errors.city ? <FieldError message={errors.city} /> : null}
             </View>
 
-            <View style={{ marginTop: 12 }}>
+            {/* Area / Locality Select Dropdown */}
+            <View>
               <Text style={styles.label}>Area / Locality</Text>
-              {availableAreas.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4, marginBottom: 8 }}>
-                  {availableAreas.map((a) => {
-                    const areaName = typeof a === "string" ? a : a.name;
-                    return (
-                      <Chip
-                        key={areaName}
-                        label={areaName}
-                        active={area.toLowerCase() === areaName.toLowerCase()}
-                        onPress={() => {
-                          setArea(areaName);
-                          clearFieldError("area");
-                        }}
-                      />
-                    );
-                  })}
-                </ScrollView>
-              )}
-              <Input
-                label=""
-                placeholder="e.g. Gajuwaka, Madhurawada"
-                icon="navigation"
-                value={area}
-                onChangeText={(txt) => {
-                  setArea(txt);
-                  clearFieldError("area");
+              <TouchableOpacity
+                style={styles.dropdownBtn}
+                onPress={() => {
+                  setShowAreaSelector(!showAreaSelector);
+                  setShowDistrictSelector(false);
                 }}
-                error={errors.area || undefined}
-              />
+                activeOpacity={0.7}
+              >
+                <View style={styles.dropdownLeft}>
+                  <Feather name="navigation" size={16} color={theme.color.primary} />
+                  <Text style={styles.dropdownText}>{area || "Select Area / Locality"}</Text>
+                </View>
+                <Feather name={showAreaSelector ? "chevron-up" : "chevron-down"} size={20} color={theme.color.primary} />
+              </TouchableOpacity>
+
+              {showAreaSelector && (
+                <View style={styles.dropdownMenu}>
+                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                    {availableAreas.length > 0 ? (
+                      availableAreas.map((a) => {
+                        const areaName = typeof a === "string" ? a : a.name;
+                        const isSelected = area.toLowerCase() === areaName.toLowerCase();
+                        return (
+                          <TouchableOpacity
+                            key={areaName}
+                            style={[styles.dropdownItem, isSelected && styles.dropdownItemActive]}
+                            onPress={() => handleSelectArea(a)}
+                          >
+                            <Feather
+                              name={isSelected ? "check-circle" : "circle"}
+                              size={15}
+                              color={isSelected ? theme.color.primary : "#94A3B8"}
+                            />
+                            <Text style={[styles.itemText, isSelected && styles.itemTextActive]}>
+                              {areaName}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })
+                    ) : (
+                      <Text style={{ padding: 12, color: theme.color.textSecondary, fontSize: 13 }}>
+                        Select a district first
+                      </Text>
+                    )}
+                  </ScrollView>
+                </View>
+              )}
+              {errors.area ? <FieldError message={errors.area} /> : null}
             </View>
 
             <Button
@@ -378,15 +474,15 @@ export function RegisterScreen({
 
 function FieldError({ message }: { message: string }) {
   return (
-    <Animated.View entering={FadeIn.duration(theme.motion.fast)} style={styles.fieldErrorRow}>
+    <View style={styles.fieldErrorRow}>
       <Feather name="alert-circle" size={12} color={theme.color.danger} />
       <Text style={styles.fieldErrorText}>{message}</Text>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.color.background },
+  flex: { flex: 1, backgroundColor: theme.color.background },
   content: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl, gap: theme.spacing.md },
 
   intro: { paddingHorizontal: theme.spacing.xs, paddingTop: theme.spacing.sm, gap: theme.spacing.sm },
@@ -422,6 +518,86 @@ const styles = StyleSheet.create({
 
   label: { ...theme.typography.caption, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+
+  dobPickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.borderSubtle,
+    borderRadius: theme.radii.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+  },
+  dobPickerError: {
+    borderColor: theme.color.danger,
+  },
+  dobText: {
+    ...theme.typography.body,
+    color: theme.color.textPrimary,
+    fontWeight: "600",
+  },
+  dobPlaceholder: {
+    ...theme.typography.bodySmall,
+    color: theme.color.textTertiary,
+  },
+
+  dropdownBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  dropdownLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dropdownText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  dropdownMenu: {
+    marginTop: 6,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  dropdownItemActive: {
+    backgroundColor: "#FFF1F2",
+  },
+  itemText: {
+    fontSize: 14,
+    color: "#334155",
+    fontWeight: "500",
+  },
+  itemTextActive: {
+    color: theme.color.primary,
+    fontWeight: "700",
+  },
 
   fieldErrorRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: theme.spacing.sm },
   fieldErrorText: { ...theme.typography.caption, color: theme.color.danger, fontWeight: "600", flex: 1 },
