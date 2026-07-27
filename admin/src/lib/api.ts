@@ -338,7 +338,17 @@ export async function postKitNeed(
 // for an institution's own self-verify fast-track (D-008), which doesn't apply to admin posts.
 export async function postBloodNeed(
   token: string,
-  data: { title: string; description: string; bloodGroup: BloodGroup; unitsNeeded: number; photos?: string[] }
+  data: {
+    title: string;
+    description: string;
+    bloodGroup: BloodGroup;
+    unitsNeeded: number;
+    city?: string;
+    area?: string;
+    latitude?: number;
+    longitude?: number;
+    photos?: string[];
+  }
 ) {
   const { need } = await request<{ need: Need }>("/api/needs", {
     method: "POST",
@@ -347,6 +357,10 @@ export async function postBloodNeed(
       type: "BLOOD",
       title: data.title,
       description: data.description,
+      city: data.city,
+      area: data.area,
+      latitude: data.latitude,
+      longitude: data.longitude,
       photos: data.photos,
       payload: { blood_group: data.bloodGroup, units_needed: data.unitsNeeded },
     }),

@@ -21,7 +21,14 @@ const app = express();
 
 // PRD §20 — Security & Privacy Pass: HTTP security headers & rate limiting
 app.use(helmet({ crossOriginResourcePolicy: false }));
-app.use(cors());
+app.use(
+  cors({
+    origin: true, // Reflect request origin
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+    credentials: true,
+  })
+);
 
 // Rate limit: 200 requests per 15-minute window per IP for general API
 const apiLimiter = rateLimit({

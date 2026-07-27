@@ -25,6 +25,14 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
 }
 
 /**
+ * Calculates estimated driving / road travel distance (accounting for urban route curvature).
+ */
+export function calculateRoadDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const directKm = calculateDistanceKm(lat1, lon1, lat2, lon2);
+  return Math.round(directKm * 1.28 * 10) / 10;
+}
+
+/**
  * Requests location permissions and fetches current GPS position + reverse geocoded city/area.
  */
 export async function getCurrentGpsLocation(): Promise<GpsLocationResult | null> {

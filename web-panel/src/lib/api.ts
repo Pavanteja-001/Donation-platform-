@@ -317,6 +317,10 @@ export async function postBloodNeed(
     description: string;
     bloodGroup: BloodGroup;
     unitsNeeded: number;
+    city?: string;
+    area?: string;
+    latitude?: number;
+    longitude?: number;
     linkedInstitutionId?: string;
     photos?: string[];
   }
@@ -328,6 +332,10 @@ export async function postBloodNeed(
       type: "BLOOD",
       title: data.title,
       description: data.description,
+      city: data.city,
+      area: data.area,
+      latitude: data.latitude,
+      longitude: data.longitude,
       photos: data.photos,
       linkedInstitutionId: data.linkedInstitutionId,
       payload: { blood_group: data.bloodGroup, units_needed: data.unitsNeeded },
