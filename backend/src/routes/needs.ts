@@ -89,6 +89,8 @@ const createSchema = z.object({
   description: z.string().min(1),
   city: z.string().min(1).optional(),
   area: z.string().min(1).optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
   deadline: z.coerce.date().optional(),
   // Uploaded via POST /api/uploads/sign (folder: "need-photos") beforehand — these are the
   // resulting public URLs, capped so a need can't carry an unbounded gallery.

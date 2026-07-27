@@ -2,6 +2,7 @@ import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@expo/vector-icons";
+import { calculateDistanceKm } from "../lib/locationUtils";
 import type { Need, Urgency } from "../lib/api";
 import { theme } from "../lib/theme";
 import {
@@ -30,11 +31,29 @@ const URGENCY: Record<Urgency, { label: string; icon: IconName } | null> = {
   NORMAL: null,
 };
 
-function NeedCardComponent({ need, onPress }: { need: Need; onPress?: () => void }) {
+function NeedCardComponent({
+  need,
+  userLat,
+  userLng,
+  onPress,
+}: {
+  need: Need;
+  userLat?: number | null;
+  userLng?: number | null;
+  onPress?: () => void;
+}) {
   const urgency = URGENCY[need.urgency];
   const isEmergency = need.urgency === "EMERGENCY";
   const meta = TYPE_META[need.type];
-  const location = [need.area, need.city].filter(Boolean).join(", ");
+
+  let distanceStr: string | null = null;
+  if (userLat && userLng && need.latitude && need.longitude) {
+    const km = calculateDistanceKm(userLat, userLng, need.latitude, need.longitude);
+    distanceStr = `${km} km away`;
+  }
+
+  const rawLocation = [need.area, need.city].filter(Boolean).join(", ");
+  const location = distanceStr ? `${rawLocation ? rawLocation + " · " : ""}${distanceStr}` : rawLocation;
   const posted = timeAgo(need.createdAt);
   const cover = need.photos.length > 0 ? need.photos[0] : null;
 

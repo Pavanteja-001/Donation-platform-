@@ -170,6 +170,9 @@ model Need {
   city String?
   area String?
 
+  latitude  Float?
+  longitude Float?
+
   // Optional hospital/blood bank/NGO that can co-verify (D-008) — full institution-assisted
   // verification flow (fast-track, BLOOD-specific) lands with the Blood module (Milestone 4).
   linkedInstitutionId String?

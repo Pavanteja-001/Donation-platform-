@@ -179,6 +179,22 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
       </div>
       <p>{need.description}</p>
 
+      {(need.city || need.area || (need.latitude && need.longitude)) && (
+        <div style={{ margin: "12px 0", fontSize: "14px", color: "var(--color-text-secondary)" }}>
+          📍 <strong>Location:</strong> {[need.area, need.city].filter(Boolean).join(", ")}
+          {need.latitude && need.longitude && (
+            <a
+              href={`https://www.google.com/maps?q=${need.latitude},${need.longitude}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{ marginLeft: 12, color: "var(--color-primary)", fontWeight: 600 }}
+            >
+              🗺️ Open in Google Maps ({need.latitude.toFixed(4)}, {need.longitude.toFixed(4)})
+            </a>
+          )}
+        </div>
+      )}
+
       {need.photos.length > 0 && (
         <div className="photo-gallery">
           {need.photos.map((url) => (

@@ -8,6 +8,7 @@ import type { Need, ForumQuestion } from "../lib/api";
 
 export type TabParamList = {
   Home: undefined;
+  Map: undefined;
   MyNeeds: undefined;
   Activity: undefined;
   Profile: undefined;

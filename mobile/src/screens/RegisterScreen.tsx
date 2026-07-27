@@ -4,6 +4,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { fetchLocations, updateMe, type BloodGroup, type DistrictLocation, type Gender } from "../lib/api";
+import { getCurrentGpsLocation } from "../lib/locationUtils";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "../components/ProgressBar";
 import { Button, Input, Chip, PressableScale } from "../components/ui";
@@ -77,6 +78,8 @@ export function RegisterScreen({
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | null>(user?.bloodGroup ?? null);
   const [gender, setGender] = useState<Gender | null>(user?.gender ?? null);
 
+  const [isFetchingGps, setIsFetchingGps] = useState(false);
+
   const [districts, setDistricts] = useState<DistrictLocation[]>([]);
 
   useEffect(() => {
@@ -84,6 +87,16 @@ export function RegisterScreen({
       .then(({ districts }) => setDistricts(districts))
       .catch(() => {});
   }, []);
+
+  async function handleGpsDetect() {
+    setIsFetchingGps(true);
+    const loc = await getCurrentGpsLocation();
+    setIsFetchingGps(false);
+    if (loc) {
+      if (loc.city) setCity(loc.city);
+      if (loc.area) setArea(loc.area);
+    }
+  }
 
   const currentDistrictObj = districts.find((d) => d.name.toLowerCase() === city.trim().toLowerCase());
   const availableAreas = currentDistrictObj ? currentDistrictObj.areas : [];
@@ -302,6 +315,15 @@ export function RegisterScreen({
                 error={errors.area || undefined}
               />
             </View>
+
+            <Button
+              label={isFetchingGps ? "Detecting Location…" : "📍 Auto-detect My Location via GPS"}
+              variant="secondary"
+              size="sm"
+              onPress={handleGpsDetect}
+              disabled={isFetchingGps}
+              style={{ marginTop: 12 }}
+            />
           </Section>
         </Animated.View>
 

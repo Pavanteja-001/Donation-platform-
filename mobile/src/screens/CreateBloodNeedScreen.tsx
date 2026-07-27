@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchLocations, postBloodNeed, uploadPhotos, type BloodGroup, type DistrictLocation } from "../lib/api";
+import { getCurrentGpsLocation } from "../lib/locationUtils";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { formatBloodGroup } from "../lib/needMeta";
 import { PhotoPicker, type PickedPhoto } from "../components/PhotoPicker";
 import { CreateNeedScaffold, Field } from "../components/CreateNeedScaffold";
-import { Input, Chip } from "../components/ui";
+import { Input, Chip, Button } from "../components/ui";
 
 const BLOOD_GROUPS: BloodGroup[] = [
   "A_POSITIVE",
@@ -18,6 +19,17 @@ const BLOOD_GROUPS: BloodGroup[] = [
   "O_POSITIVE",
   "O_NEGATIVE",
 ];
+
+const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  visakhapatnam: { lat: 17.6868, lng: 83.2185 },
+  vizianagaram: { lat: 18.1066, lng: 83.3956 },
+  "vijayawada (ntr)": { lat: 16.5062, lng: 80.648 },
+  vijayawada: { lat: 16.5062, lng: 80.648 },
+  guntur: { lat: 16.3067, lng: 80.4365 },
+  srikakulam: { lat: 18.2949, lng: 83.8938 },
+  kakinada: { lat: 16.9891, lng: 82.2475 },
+  tirupati: { lat: 13.6288, lng: 79.4192 },
+};
 
 // PRD §8.3 — post a BLOOD need (group + units).
 export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
@@ -32,6 +44,10 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [customLat, setCustomLat] = useState<number | null>(null);
+  const [customLng, setCustomLng] = useState<number | null>(null);
+  const [isFetchingGps, setIsFetchingGps] = useState(false);
+
   const [districts, setDistricts] = useState<DistrictLocation[]>([]);
 
   useEffect(() => {
@@ -39,6 +55,18 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
       .then(({ districts }) => setDistricts(districts))
       .catch(() => {});
   }, []);
+
+  async function handleFetchGps() {
+    setIsFetchingGps(true);
+    const loc = await getCurrentGpsLocation();
+    setIsFetchingGps(false);
+    if (loc) {
+      setCustomLat(loc.latitude);
+      setCustomLng(loc.longitude);
+      if (loc.city) setCity(loc.city);
+      if (loc.area) setArea(loc.area);
+    }
+  }
 
   const currentDistrictObj = districts.find((d) => d.name.toLowerCase() === city.trim().toLowerCase());
   const availableAreas = currentDistrictObj ? currentDistrictObj.areas : [];
@@ -49,6 +77,12 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
     if (!title.trim() || !description.trim()) return setError("Title and description are required");
     if (!bloodGroup) return setError("Select a blood group");
     if (!units || units <= 0) return setError("Enter how many units are needed");
+
+    const cleanCity = city.trim().toLowerCase();
+    const defaultCoords = CITY_COORDINATES[cleanCity] || { lat: 17.6868, lng: 83.2185 };
+
+    const finalLat = customLat ?? defaultCoords.lat;
+    const finalLng = customLng ?? defaultCoords.lng;
 
     setError(null);
     setIsSubmitting(true);
@@ -61,6 +95,8 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
         unitsNeeded: units,
         city: city.trim() || undefined,
         area: area.trim() || undefined,
+        latitude: finalLat,
+        longitude: finalLng,
         photos: photoUrls,
       });
       onDone();
@@ -157,6 +193,15 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
           }}
         />
       </Field>
+
+      <Button
+        label={isFetchingGps ? "Fetching GPS Location…" : customLat ? "📍 GPS Location Pinned" : "📍 Use My Current GPS Location"}
+        variant="secondary"
+        size="sm"
+        onPress={handleFetchGps}
+        disabled={isFetchingGps}
+        style={{ marginBottom: 12 }}
+      />
 
       {/* D-012 — urgency is deliberately absent: it's admin/institution-verified, never
           self-declared, so there is no field for the poster to set it. */}

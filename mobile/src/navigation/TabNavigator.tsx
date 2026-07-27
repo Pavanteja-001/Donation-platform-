@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { NeedsFeedScreen } from "../screens/NeedsFeedScreen";
+import { NeedsMapScreen } from "../screens/NeedsMapScreen";
 import { MyNeedsScreen } from "../screens/MyNeedsScreen";
 import { MyContributionsScreen } from "../screens/MyContributionsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
@@ -17,6 +18,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 const TAB_ICON: Record<keyof TabParamList, keyof typeof Feather.glyphMap> = {
   Home: "home",
+  Map: "map-pin",
   MyNeeds: "file-text",
   Activity: "clock",
   Profile: "user",
@@ -152,6 +154,11 @@ function HomeTabScreen() {
   return <NeedsFeedScreen onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id, initialNeed: need })} />;
 }
 
+function MapTabScreen() {
+  const navigation = useNavigation<AppNavigationProp>();
+  return <NeedsMapScreen onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id, initialNeed: need })} />;
+}
+
 function MyNeedsTabScreen() {
   const navigation = useNavigation<AppNavigationProp>();
   return <MyNeedsScreen onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id, initialNeed: need })} />;
@@ -166,8 +173,6 @@ function ActivityTabScreen() {
   );
 }
 
-// Chunk 2 (Milestone 9) — the four bottom tabs (PRD Appendix A.4: "Home · Search · Activity ·
-// Profile" — this app has no separate Search yet, so My Needs takes that slot for now).
 export function TabNavigator() {
   return (
     <Tab.Navigator
@@ -180,12 +185,15 @@ export function TabNavigator() {
         sceneStyle: styles.scene,
       }}
     >
-      {/* No nav header on Home: FeedHero is the header, and it carries the forum/create actions
-          plus the safe-area inset itself. Stacking both would eat a third of the screen. */}
       <Tab.Screen
         name="Home"
         component={HomeTabScreen}
         options={{ title: "Home", headerShown: false }}
+      />
+      <Tab.Screen
+        name="Map"
+        component={MapTabScreen}
+        options={{ title: "Map View", headerShown: false }}
       />
       <Tab.Screen
         name="MyNeeds"

@@ -130,6 +130,8 @@ export interface Need {
   urgency: Urgency;
   city: string | null;
   area: string | null;
+  latitude: number | null;
+  longitude: number | null;
   deadline: string | null;
   rejectionReason: string | null;
   photos: string[];
@@ -384,6 +386,8 @@ export async function postBloodNeed(
     unitsNeeded: number;
     city?: string;
     area?: string;
+    latitude?: number;
+    longitude?: number;
     linkedInstitutionId?: string;
     photos?: string[];
   }
@@ -397,6 +401,8 @@ export async function postBloodNeed(
       description: data.description,
       city: data.city,
       area: data.area,
+      latitude: data.latitude,
+      longitude: data.longitude,
       photos: data.photos,
       linkedInstitutionId: data.linkedInstitutionId,
       payload: { blood_group: data.bloodGroup, units_needed: data.unitsNeeded },

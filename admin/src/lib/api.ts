@@ -136,6 +136,8 @@ export interface Need {
   urgency: Urgency;
   city: string | null;
   area: string | null;
+  latitude: number | null;
+  longitude: number | null;
   deadline: string | null;
   rejectionReason: string | null;
   photos: string[];
