@@ -15,6 +15,7 @@ import { CreateGoodsNeedPage } from "./pages/CreateGoodsNeedPage";
 import { CreateSkillRequestNeedPage } from "./pages/CreateSkillRequestNeedPage";
 import { ForumModerationPage } from "./pages/ForumModerationPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { LocationsPage } from "./pages/LocationsPage";
 import { ConsoleLayout } from "./components/ConsoleLayout";
 import { ToastProvider } from "./components/ui";
 
@@ -79,6 +80,7 @@ function Root() {
         <Route path="/post/goods" element={<AdminRoute><CreateGoodsWrapper /></AdminRoute>} />
         <Route path="/post/skill-request" element={<AdminRoute><CreateSkillRequestWrapper /></AdminRoute>} />
         <Route path="/staff" element={<AdminRoute><StaffPage /></AdminRoute>} />
+        <Route path="/locations" element={<LocationsPage />} />
         <Route path="/forum" element={<ForumModerationPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
       </Route>

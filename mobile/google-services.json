@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "348839696703",
+    "project_id": "bloodrk-ef58b",
+    "storage_bucket": "bloodrk-ef58b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:348839696703:android:d3d2671a740c405915db8a",
+        "android_client_info": {
+          "package_name": "org.donationplatform.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqXGEDEnJhewyNLLqJcDucVaAJ2GFBceY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

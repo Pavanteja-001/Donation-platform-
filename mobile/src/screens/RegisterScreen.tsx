@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
-import { updateMe, type BloodGroup, type Gender } from "../lib/api";
+import { fetchLocations, updateMe, type BloodGroup, type DistrictLocation, type Gender } from "../lib/api";
 import { theme } from "../lib/theme";
 import { ProgressBar } from "../components/ProgressBar";
 import { Button, Input, Chip, PressableScale } from "../components/ui";
@@ -76,6 +76,17 @@ export function RegisterScreen({
   const [area, setArea] = useState(user?.area ?? "");
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | null>(user?.bloodGroup ?? null);
   const [gender, setGender] = useState<Gender | null>(user?.gender ?? null);
+
+  const [districts, setDistricts] = useState<DistrictLocation[]>([]);
+
+  useEffect(() => {
+    fetchLocations()
+      .then(({ districts }) => setDistricts(districts))
+      .catch(() => {});
+  }, []);
+
+  const currentDistrictObj = districts.find((d) => d.name.toLowerCase() === city.trim().toLowerCase());
+  const availableAreas = currentDistrictObj ? currentDistrictObj.areas : [];
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -233,29 +244,64 @@ export function RegisterScreen({
             tone={theme.color.info}
             tint={theme.color.infoSoft}
           >
-            <Input
-              label="City"
-              placeholder="e.g. Visakhapatnam"
-              icon="map-pin"
-              value={city}
-              onChangeText={(txt) => {
-                setCity(txt);
-                clearFieldError("city");
-              }}
-              error={errors.city || undefined}
-            />
+            <View>
+              <Text style={styles.label}>District / City</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                {districts.map((d) => (
+                  <Chip
+                    key={d.id}
+                    label={d.name}
+                    active={city.toLowerCase() === d.name.toLowerCase()}
+                    onPress={() => {
+                      setCity(d.name);
+                      setArea("");
+                      clearFieldError("city");
+                    }}
+                  />
+                ))}
+              </ScrollView>
+              <Input
+                label=""
+                placeholder="Or type city if not listed"
+                icon="map-pin"
+                value={city}
+                onChangeText={(txt) => {
+                  setCity(txt);
+                  clearFieldError("city");
+                }}
+                error={errors.city || undefined}
+              />
+            </View>
 
-            <Input
-              label="Area / locality"
-              placeholder="e.g. Madhurawada"
-              icon="navigation"
-              value={area}
-              onChangeText={(txt) => {
-                setArea(txt);
-                clearFieldError("area");
-              }}
-              error={errors.area || undefined}
-            />
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.label}>Area / Locality</Text>
+              {availableAreas.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4, marginBottom: 8 }}>
+                  {availableAreas.map((a) => (
+                    <Chip
+                      key={a}
+                      label={a}
+                      active={area.toLowerCase() === a.toLowerCase()}
+                      onPress={() => {
+                        setArea(a);
+                        clearFieldError("area");
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              )}
+              <Input
+                label=""
+                placeholder="e.g. Gajuwaka, Madhurawada"
+                icon="navigation"
+                value={area}
+                onChangeText={(txt) => {
+                  setArea(txt);
+                  clearFieldError("area");
+                }}
+                error={errors.area || undefined}
+              />
+            </View>
           </Section>
         </Animated.View>
 

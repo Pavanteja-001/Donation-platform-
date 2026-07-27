@@ -275,4 +275,68 @@ router.delete("/staff/:id", adminOnly, async (req, res) => {
   res.status(204).send();
 });
 
+// Admin + Staff: Location Management (Districts & Areas)
+router.post("/locations/districts", async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1, "District name is required"),
+    state: z.string().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+  try {
+    const district = await prisma.district.create({
+      data: {
+        name: parsed.data.name.trim(),
+        state: parsed.data.state?.trim() || "Andhra Pradesh",
+      },
+    });
+    res.status(201).json({ district });
+  } catch (err) {
+    res.status(409).json({ error: "District already exists" });
+  }
+});
+
+router.delete("/locations/districts/:id", adminOnly, async (req, res) => {
+  try {
+    await prisma.district.delete({ where: { id: req.params.id } });
+    res.status(204).send();
+  } catch (err) {
+    res.status(404).json({ error: "District not found" });
+  }
+});
+
+router.post("/locations/areas", async (req, res) => {
+  const schema = z.object({
+    districtId: z.string().min(1, "District ID is required"),
+    name: z.string().min(1, "Area name is required"),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+  try {
+    const area = await prisma.area.create({
+      data: {
+        districtId: parsed.data.districtId,
+        name: parsed.data.name.trim(),
+      },
+    });
+    res.status(201).json({ area });
+  } catch (err) {
+    res.status(409).json({ error: "Area already exists in this district" });
+  }
+});
+
+router.delete("/locations/areas/:id", adminOnly, async (req, res) => {
+  try {
+    await prisma.area.delete({ where: { id: req.params.id } });
+    res.status(204).send();
+  } catch (err) {
+    res.status(404).json({ error: "Area not found" });
+  }
+});
+
 export default router;
+

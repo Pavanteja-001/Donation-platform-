@@ -59,6 +59,13 @@ export function ConsoleLayout() {
           )}
 
           <NavLink
+            to="/locations"
+            className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+          >
+            Locations
+          </NavLink>
+
+          <NavLink
             to="/forum"
             className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
           >

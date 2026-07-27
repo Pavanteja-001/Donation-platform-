@@ -613,3 +613,49 @@ export function fetchAnalytics(token: string) {
   });
 }
 
+export interface DistrictItem {
+  id: string;
+  name: string;
+  state: string;
+  areas: string[];
+}
+
+export function fetchLocations() {
+  return request<{ districts: DistrictItem[] }>("/api/locations");
+}
+
+export function createDistrict(token: string, name: string, state?: string) {
+  return request<{ district: DistrictItem }>("/api/admin/locations/districts", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ name, state }),
+  });
+}
+
+export function deleteDistrict(token: string, id: string) {
+  return fetch(`${API_URL}/api/admin/locations/districts/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then((res) => {
+    if (!res.ok && res.status !== 204) throw new Error(`Request failed (${res.status})`);
+  });
+}
+
+export function createArea(token: string, districtId: string, name: string) {
+  return request<{ area: { id: string; name: string } }>("/api/admin/locations/areas", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ districtId, name }),
+  });
+}
+
+export function deleteArea(token: string, id: string) {
+  return fetch(`${API_URL}/api/admin/locations/areas/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then((res) => {
+    if (!res.ok && res.status !== 204) throw new Error(`Request failed (${res.status})`);
+  });
+}
+
+

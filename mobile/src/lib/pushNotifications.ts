@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { updateMe } from "./api";
 
 // Configure foreground notification behavior (D-016)
@@ -78,7 +79,8 @@ export async function registerForPushNotificationsAsync(token: string): Promise<
       }
       if (finalStatus !== "granted" && !__DEV__) return;
 
-      const { data } = await Notifications.getExpoPushTokenAsync();
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      const { data } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : {});
       expoPushToken = data;
     } catch (e) {
       if (__DEV__) {

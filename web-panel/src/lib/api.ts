@@ -563,3 +563,15 @@ export function deleteForumAnswer(token: string, id: string) {
   });
 }
 
+export interface DistrictLocation {
+  id: string;
+  name: string;
+  state: string;
+  areas: string[];
+}
+
+export function fetchLocations() {
+  return request<{ districts: DistrictLocation[] }>("/api/locations");
+}
+
+

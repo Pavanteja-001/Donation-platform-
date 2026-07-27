@@ -15,6 +15,7 @@ import needsRoutes from "./routes/needs";
 import contributionsRoutes from "./routes/contributions";
 import uploadsRoutes from "./routes/uploads";
 import forumRoutes from "./routes/forum";
+import locationRoutes from "./routes/locations";
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use("/api/needs", needsRoutes);
 app.use("/api/contributions", contributionsRoutes);
 app.use("/api/uploads", uploadsRoutes);
 app.use("/api/forum", forumRoutes);
+app.use("/api/locations", locationRoutes);
 
 // Last-resort handler — logs and responds 500 instead of letting the process crash. Route
 // handlers should still catch what they can (e.g. the P2002 UTR-uniqueness case), this is the

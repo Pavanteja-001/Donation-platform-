@@ -277,6 +277,17 @@ export function updateMe(
   });
 }
 
+export interface DistrictLocation {
+  id: string;
+  name: string;
+  state: string;
+  areas: string[];
+}
+
+export function fetchLocations() {
+  return request<{ districts: DistrictLocation[] }>("/api/locations");
+}
+
 // The "browse live needs" feed (PRD §6.8) — server already ranks Emergency > Urgent > Normal,
 // then recency.
 export function fetchNeeds(token: string) {
@@ -371,6 +382,8 @@ export async function postBloodNeed(
     description: string;
     bloodGroup: BloodGroup;
     unitsNeeded: number;
+    city?: string;
+    area?: string;
     linkedInstitutionId?: string;
     photos?: string[];
   }
@@ -382,6 +395,8 @@ export async function postBloodNeed(
       type: "BLOOD",
       title: data.title,
       description: data.description,
+      city: data.city,
+      area: data.area,
       photos: data.photos,
       linkedInstitutionId: data.linkedInstitutionId,
       payload: { blood_group: data.bloodGroup, units_needed: data.unitsNeeded },

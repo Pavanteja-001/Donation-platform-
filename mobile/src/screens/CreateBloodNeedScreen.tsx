@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { StyleSheet, View } from "react-native";
-import { postBloodNeed, uploadPhotos, type BloodGroup } from "../lib/api";
+import { useEffect, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { fetchLocations, postBloodNeed, uploadPhotos, type BloodGroup, type DistrictLocation } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { formatBloodGroup } from "../lib/needMeta";
@@ -21,14 +21,27 @@ const BLOOD_GROUPS: BloodGroup[] = [
 
 // PRD §8.3 — post a BLOOD need (group + units).
 export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [city, setCity] = useState(user?.city ?? "");
+  const [area, setArea] = useState(user?.area ?? "");
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | null>(null);
   const [unitsNeeded, setUnitsNeeded] = useState("1");
   const [photos, setPhotos] = useState<PickedPhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [districts, setDistricts] = useState<DistrictLocation[]>([]);
+
+  useEffect(() => {
+    fetchLocations()
+      .then(({ districts }) => setDistricts(districts))
+      .catch(() => {});
+  }, []);
+
+  const currentDistrictObj = districts.find((d) => d.name.toLowerCase() === city.trim().toLowerCase());
+  const availableAreas = currentDistrictObj ? currentDistrictObj.areas : [];
 
   async function handleSubmit() {
     if (!token) return;
@@ -46,6 +59,8 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
         description: description.trim(),
         bloodGroup,
         unitsNeeded: units,
+        city: city.trim() || undefined,
+        area: area.trim() || undefined,
         photos: photoUrls,
       });
       onDone();
@@ -87,6 +102,61 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
           setError(null);
         }}
       />
+
+      <Field label="District / City" helper="Matches donors in this district">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+          {districts.map((d) => (
+            <Chip
+              key={d.id}
+              label={d.name}
+              active={city.toLowerCase() === d.name.toLowerCase()}
+              onPress={() => {
+                setCity(d.name);
+                setArea("");
+                setError(null);
+              }}
+            />
+          ))}
+        </ScrollView>
+        <Input
+          label=""
+          placeholder="Or type city if not listed"
+          icon="map-pin"
+          value={city}
+          onChangeText={(txt) => {
+            setCity(txt);
+            setError(null);
+          }}
+        />
+      </Field>
+
+      <Field label="Area / Locality" helper="Specific area or hospital location">
+        {availableAreas.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4, marginBottom: 8 }}>
+            {availableAreas.map((a) => (
+              <Chip
+                key={a}
+                label={a}
+                active={area.toLowerCase() === a.toLowerCase()}
+                onPress={() => {
+                  setArea(a);
+                  setError(null);
+                }}
+              />
+            ))}
+          </ScrollView>
+        )}
+        <Input
+          label=""
+          placeholder="e.g. Gajuwaka, MVP Colony"
+          icon="navigation"
+          value={area}
+          onChangeText={(txt) => {
+            setArea(txt);
+            setError(null);
+          }}
+        />
+      </Field>
 
       {/* D-012 — urgency is deliberately absent: it's admin/institution-verified, never
           self-declared, so there is no field for the poster to set it. */}

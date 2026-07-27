@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import * as SecureStore from "expo-secure-store";
 import { fetchMe, ApiError, type AuthUser, type BloodEligibility, type TrustTierInfo } from "../lib/api";
+import { registerForPushNotificationsAsync } from "../lib/pushNotifications";
 // Imported from lib/, not from the screens themselves: screens depend on this context for their
 // token, so screen-owned caches created an AuthContext ↔ screen require cycle.
 import { clearAllListCaches } from "../lib/listCache";
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(me);
           setBloodEligibility(bloodEligibility);
           setTrustTierInfo(trust);
+          registerForPushNotificationsAsync(stored).catch(() => {});
         } catch (err) {
           if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
             await SecureStore.deleteItemAsync(TOKEN_KEY);
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(newUser);
         setBloodEligibility(newEligibility);
         setTrustTierInfo(newTrustTierInfo);
+        registerForPushNotificationsAsync(newToken).catch(() => {});
       },
       signOut: async () => {
         clearAllListCaches();

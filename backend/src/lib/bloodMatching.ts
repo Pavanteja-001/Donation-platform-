@@ -11,16 +11,19 @@ export async function notifyEligibleBloodDonors(need: Need): Promise<{ notified:
   const blood = parseBloodPayload(need.payload);
   if (!blood || !need.city) return { notified: 0 };
 
-  // Coarse DB-level filter (blood group + city + has a push token + hasn't opted out) — the
-  // finer-grained age/gap eligibility check (§8.2) needs JS since the gender-dependent gap
-  // rule isn't practical to express in a single SQL predicate.
+  // Coarse DB-level filter (blood group + district/city/area matching + has a push token + hasn't opted out)
+  const locationTerms = [need.city, need.area].filter((s): s is string => !!s && s.trim().length > 0);
+
   const candidates = await prisma.user.findMany({
     where: {
       role: Role.USER,
       bloodGroup: blood.blood_group,
-      city: need.city,
       availableToDonate: true,
       expoPushToken: { not: null },
+      OR: [
+        { city: { in: locationTerms, mode: "insensitive" } },
+        { area: { in: locationTerms, mode: "insensitive" } },
+      ],
     },
   });
 
