@@ -1,5 +1,12 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { fetchLocations, postBloodNeed, uploadPhotos, type BloodGroup, type DistrictItem } from "../lib/api";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  fetchLocations,
+  postBloodNeed,
+  uploadPhotos,
+  type AreaLocation,
+  type BloodGroup,
+  type DistrictItem,
+} from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PhotoPicker } from "../components/PhotoPicker";
 
@@ -47,6 +54,7 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
   const [districts, setDistricts] = useState<DistrictItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const mapFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     fetchLocations()
@@ -67,26 +75,46 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
   }, []);
 
   const selectedDistrictObj = districts.find((d) => d.name.toLowerCase() === city.trim().toLowerCase());
-  const availableAreas = selectedDistrictObj ? selectedDistrictObj.areas : [];
+  const availableAreas: AreaLocation[] = selectedDistrictObj ? selectedDistrictObj.areas : [];
+
+  // Moves the pin without touching `srcDoc` — see the note on `mapPickerIframeHtml`.
+  function moveMapPin(lat: number, lng: number) {
+    setLatitude(lat.toString());
+    setLongitude(lng.toString());
+    mapFrameRef.current?.contentWindow?.postMessage({ type: "SET_ADMIN_PIN", lat, lng }, "*");
+  }
 
   function handleDistrictChange(newCity: string) {
     setCity(newCity);
     setArea("");
-    const coords = CITY_COORDINATES[newCity.toLowerCase()] || CITY_COORDINATES["visakhapatnam"];
-    setLatitude(coords.lat.toString());
-    setLongitude(coords.lng.toString());
+    // Server-managed district centre first; CITY_COORDINATES is the offline fallback only, and
+    // no longer silently resolves an unknown district to Visakhapatnam.
+    const district = districts.find((d) => d.name.toLowerCase() === newCity.trim().toLowerCase());
+    if (district?.latitude != null && district.longitude != null) {
+      moveMapPin(district.latitude, district.longitude);
+      return;
+    }
+    const coords = CITY_COORDINATES[newCity.trim().toLowerCase()];
+    if (coords) moveMapPin(coords.lat, coords.lng);
   }
 
   function handleAreaChange(newArea: string) {
     setArea(newArea);
+    const match = availableAreas.find((a) => a.name.toLowerCase() === newArea.trim().toLowerCase());
+    if (match?.latitude != null && match.longitude != null) {
+      moveMapPin(match.latitude, match.longitude);
+      return;
+    }
     const key = newArea.toLowerCase().replace(/\s+/g, "");
     if (CITY_COORDINATES[key]) {
-      setLatitude(CITY_COORDINATES[key].lat.toString());
-      setLongitude(CITY_COORDINATES[key].lng.toString());
+      moveMapPin(CITY_COORDINATES[key].lat, CITY_COORDINATES[key].lng);
     }
   }
 
-  const mapPickerIframeHtml = `
+  // Frozen at mount: `srcDoc` changing is a full document reload, so rebuilding it from the
+  // coordinate state tore the map down on every click of the picker. Pin moves go by postMessage.
+  const mapPickerIframeHtml = useMemo(
+    () => `
     <!DOCTYPE html>
     <html>
     <head>
@@ -137,10 +165,20 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
           var pos = marker.getLatLng();
           sendCoords(pos.lat, pos.lng);
         });
+
+        // District/area selections arrive as messages instead of a document reload.
+        window.addEventListener('message', function(e) {
+          if (!e.data || e.data.type !== 'SET_ADMIN_PIN') return;
+          marker.setLatLng([e.data.lat, e.data.lng]);
+          map.panTo([e.data.lat, e.data.lng]);
+        });
       </script>
     </body>
     </html>
-  `;
+  `,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -148,6 +186,19 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
     const units = Number(unitsNeeded);
     if (!bloodGroup) return setError("Select a blood group");
     if (!units || units <= 0) return setError("Enter how many units are needed");
+
+    // `Number("")` is 0 — the old `latitude ? Number(latitude) : undefined` sent a plausible
+    // 0,0 (Gulf of Guinea) whenever a box was cleared. Send nothing and let the server resolve
+    // the area/district centre instead.
+    const parsedLat = Number(latitude);
+    const parsedLng = Number(longitude);
+    const hasPin =
+      latitude.trim() !== "" &&
+      longitude.trim() !== "" &&
+      !Number.isNaN(parsedLat) &&
+      !Number.isNaN(parsedLng) &&
+      Math.abs(parsedLat) <= 90 &&
+      Math.abs(parsedLng) <= 180;
 
     setError(null);
     setIsSubmitting(true);
@@ -158,8 +209,8 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
         description,
         city: city.trim() || undefined,
         area: area.trim() || undefined,
-        latitude: latitude ? Number(latitude) : undefined,
-        longitude: longitude ? Number(longitude) : undefined,
+        latitude: hasPin ? parsedLat : undefined,
+        longitude: hasPin ? parsedLng : undefined,
         bloodGroup,
         unitsNeeded: units,
         photos,
@@ -210,8 +261,8 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
               <select value={area} onChange={(e) => handleAreaChange(e.target.value)}>
                 <option value="">-- Select Area --</option>
                 {availableAreas.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
+                  <option key={a.id} value={a.name}>
+                    {a.name}
                   </option>
                 ))}
               </select>
@@ -232,6 +283,7 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
             📍 Pinpoint Location on Map (Click map to position pin)
           </label>
           <iframe
+            ref={mapFrameRef}
             title="Map Pinpoint Picker"
             srcDoc={mapPickerIframeHtml}
             style={{

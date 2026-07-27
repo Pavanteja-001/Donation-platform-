@@ -1,8 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAdminNeeds, rejectNeed, verifyNeed, type Need, type NeedStatus } from "../lib/api";
+import {
+  cancelNeed,
+  deleteNeed,
+  fetchAdminNeeds,
+  rejectNeed,
+  verifyNeed,
+  type Need,
+  type NeedStatus,
+} from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { EmptyState, ErrorState } from "../components/ui";
+import { PageSkeleton } from "../components/SkeletonLoader";
+
+// Mirrors the backend lifecycle graph (needLifecycle.ts): only a non-terminal need can move to
+// CANCELLED. Offering the button anywhere else would just produce a 409.
+const CANCELLABLE_STATUSES: NeedStatus[] = ["DRAFT", "PENDING_VERIFICATION", "LIVE", "PARTIALLY_FULFILLED"];
 
 const STATUS_FILTERS: { label: string; value: NeedStatus | "ALL" | undefined }[] = [
   { label: "Verification queue", value: undefined },
@@ -49,21 +62,9 @@ function progressLabel(need: Need): string | null {
   return null;
 }
 
-function TableSkeleton() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "20px" }}>
-      <Skeleton width="100%" height={40} style={{ borderRadius: "4px" }} />
-      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
-      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
-      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
-      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
-    </div>
-  );
-}
-
 export function NeedsPage() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, isAdmin } = useAuth();
   const [filter, setFilter] = useState<NeedStatus | "ALL" | undefined>(undefined);
   const [needs, setNeeds] = useState<Need[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +73,7 @@ export function NeedsPage() {
   function load() {
     if (!token) return;
     setError(null);
+    setNeeds(null); // Show PageSkeleton shimmer while fetching
     fetchAdminNeeds(token, filter)
       .then(({ needs }) => setNeeds(needs))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load needs"));
@@ -82,13 +84,17 @@ export function NeedsPage() {
   async function handleVerify(id: string) {
     if (!token) return;
     setBusyId(id);
+    // Instant Optimistic State Update
+    setNeeds((prev) =>
+      prev ? prev.map((n) => (n.id === id ? { ...n, adminVerified: true, status: "LIVE" as NeedStatus } : n)) : null
+    );
     try {
       await verifyNeed(token, id);
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to verify");
     } finally {
       setBusyId(null);
+      load();
     }
   }
 
@@ -97,11 +103,48 @@ export function NeedsPage() {
     const reason = window.prompt("Reason for rejecting this need (shown to the poster, D-017):");
     if (!reason) return;
     setBusyId(id);
+    // Instant Optimistic State Update
+    setNeeds((prev) =>
+      prev ? prev.map((n) => (n.id === id ? { ...n, status: "REJECTED" as NeedStatus } : n)) : null
+    );
     try {
       await rejectNeed(token, id, reason);
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject");
+    } finally {
+      setBusyId(null);
+      load();
+    }
+  }
+
+  // Take a live request down without destroying its history — the normal lever, and the only
+  // one staff get. CANCELLED is terminal, so it drops out of the feed and the map for good.
+  async function handleCancel(id: string, title: string) {
+    if (!token) return;
+    if (!window.confirm(`Cancel "${title}"? It disappears from the donor feed and map. Contributions and history are kept.`)) return;
+    setBusyId(id);
+    setNeeds((prev) => (prev ? prev.map((n) => (n.id === id ? { ...n, status: "CANCELLED" as NeedStatus } : n)) : null));
+    try {
+      await cancelNeed(token, id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cancel");
+    } finally {
+      setBusyId(null);
+      load();
+    }
+  }
+
+  // Irreversible, and the server refuses it once anyone has contributed — for junk posts only.
+  async function handleDelete(id: string, title: string) {
+    if (!token) return;
+    if (!window.confirm(`Permanently delete "${title}"? This cannot be undone. Use Cancel instead if this was a real request.`)) return;
+    setBusyId(id);
+    try {
+      await deleteNeed(token, id);
+      setNeeds((prev) => (prev ? prev.filter((n) => n.id !== id) : null));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
+      load();
     } finally {
       setBusyId(null);
     }
@@ -109,7 +152,7 @@ export function NeedsPage() {
 
   return (
     <div>
-      <h2>Needs</h2>
+      <h2>Needs Management</h2>
       <p className="hint">Every need goes through admin (or staff) verification before it's visible to donors (D-017/D-018).</p>
 
       <div className="filter-row">
@@ -126,7 +169,7 @@ export function NeedsPage() {
       </div>
 
       {error && <ErrorState message={error} onRetry={load} />}
-      {!error && !needs && <TableSkeleton />}
+      {!error && !needs && <PageSkeleton />}
       {!error && needs && needs.length === 0 && (
         <EmptyState title="No needs found" subtitle="Needs matching this status filter will show up here." />
       )}
@@ -135,12 +178,12 @@ export function NeedsPage() {
         <table>
           <thead>
             <tr>
-              <th>Title</th>
+              <th>Title & Location</th>
               <th>Type</th>
               <th>Status</th>
               <th>Posted by</th>
               <th>Progress</th>
-              <th />
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -150,6 +193,9 @@ export function NeedsPage() {
                   <button type="button" className="link-cell" onClick={() => navigate(`/needs/${n.id}`)} style={{ fontWeight: 600 }}>
                     {n.title}
                   </button>
+                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                    📍 {n.area ? `${n.area}, ${n.city}` : n.city ?? "Location specified"}
+                  </div>
                 </td>
                 <td style={{ fontWeight: 500 }}>{n.type}</td>
                 <td>
@@ -158,16 +204,54 @@ export function NeedsPage() {
                 <td>{n.postedBy.name ?? n.postedBy.phone ?? "—"}</td>
                 <td style={{ fontWeight: 500 }}>{progressLabel(n) ?? "—"}</td>
                 <td>
-                  {n.status === "PENDING_VERIFICATION" && (
-                    <div className="row-actions">
-                      <button type="button" className="link" onClick={() => handleVerify(n.id)} disabled={busyId === n.id}>
-                        Verify
+                  <div className="row-actions" style={{ gap: 6 }}>
+                    <button type="button" className="btn-action-primary" onClick={() => navigate(`/needs/${n.id}`)}>
+                      View Details
+                    </button>
+                    {n.latitude && n.longitude && (
+                      <a
+                        href={`https://maps.google.com/?q=${n.latitude},${n.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-action-secondary"
+                      >
+                        Location Map
+                      </a>
+                    )}
+                    {n.status === "PENDING_VERIFICATION" && (
+                      <>
+                        <button type="button" className="btn-action-success" onClick={() => handleVerify(n.id)} disabled={busyId === n.id}>
+                          Verify
+                        </button>
+                        <button type="button" className="btn-action-danger" onClick={() => handleReject(n.id)} disabled={busyId === n.id}>
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {/* Cancel is the safe take-down for anything still alive; delete is admin-only
+                        and the server blocks it once a need has contributions. */}
+                    {CANCELLABLE_STATUSES.includes(n.status) && (
+                      <button
+                        type="button"
+                        className="btn-action-danger"
+                        onClick={() => handleCancel(n.id, n.title)}
+                        disabled={busyId === n.id}
+                      >
+                        Cancel
                       </button>
-                      <button type="button" className="link danger" onClick={() => handleReject(n.id)} disabled={busyId === n.id}>
-                        Reject
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="btn-action-danger"
+                        onClick={() => handleDelete(n.id, n.title)}
+                        disabled={busyId === n.id}
+                        title="Permanently delete — blocked if anyone has contributed"
+                      >
+                        Delete
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

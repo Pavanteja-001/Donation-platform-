@@ -57,11 +57,76 @@ function normalizePayload(type: NeedType, payload: Record<string, unknown> | und
   return payload;
 }
 
+type CoordinateInput = { city?: string; area?: string; latitude?: number; longitude?: number };
+type ResolvedCoordinates =
+  | { ok: true; latitude: number | null; longitude: number | null }
+  | { ok: false; error: string };
+
+// Decides the coordinate a need is stored with, so the map never has to invent one.
+//
+// 1. An explicit pin from the poster wins — that's the hospital/pickup point they dropped on
+//    the picker, and it's the only coordinate that's actually precise.
+// 2. No pin (web-panel MONEY/KIT/GOODS forms, API callers) → fall back to the seeded centre of
+//    the area, then the district. Approximate, but it is *the right neighbourhood*.
+// 3. Nothing resolvable → null. The clients render a need with no coordinate as "location not
+//    pinned" instead of dropping it at a made-up spot near Visakhapatnam, which is what the
+//    mobile map used to do (DEFAULT_LAT + idx * 0.005 per need).
+async function resolveNeedCoordinates(input: CoordinateInput): Promise<ResolvedCoordinates> {
+  const hasLat = input.latitude !== undefined;
+  const hasLng = input.longitude !== undefined;
+  if (hasLat !== hasLng) {
+    return { ok: false, error: "latitude and longitude must be provided together" };
+  }
+  if (hasLat && hasLng) {
+    return { ok: true, latitude: input.latitude!, longitude: input.longitude! };
+  }
+
+  const city = input.city?.trim();
+  const area = input.area?.trim();
+
+  if (area) {
+    const match = await prisma.area.findFirst({
+      where: {
+        name: { equals: area, mode: "insensitive" },
+        latitude: { not: null },
+        longitude: { not: null },
+        ...(city ? { district: { name: { equals: city, mode: "insensitive" } } } : {}),
+      },
+      select: { latitude: true, longitude: true },
+    });
+    if (match) return { ok: true, latitude: match.latitude, longitude: match.longitude };
+  }
+
+  if (city) {
+    const district = await prisma.district.findFirst({
+      where: {
+        name: { equals: city, mode: "insensitive" },
+        latitude: { not: null },
+        longitude: { not: null },
+      },
+      select: { latitude: true, longitude: true },
+    });
+    if (district) return { ok: true, latitude: district.latitude, longitude: district.longitude };
+  }
+
+  return { ok: true, latitude: null, longitude: null };
+}
+
 // PRD §10.2 — MEAL_SLOT needs a MealSlot child row per date, created atomically alongside the
 // Need itself (or replaced wholesale on a DRAFT edit, see PATCH below). Returns the created Need.
 async function createMealSlotNeed(
   postedById: string,
-  base: { title: string; description: string; city?: string; area?: string; deadline?: Date; photos?: string[]; linkedInstitutionId?: string },
+  base: {
+    title: string;
+    description: string;
+    city?: string;
+    area?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    deadline?: Date;
+    photos?: string[];
+    linkedInstitutionId?: string;
+  },
   rawPayload: Record<string, unknown> | undefined
 ) {
   const parsedDates = z.array(z.coerce.date()).max(60).safeParse((rawPayload as { dates?: unknown })?.dates);
@@ -89,8 +154,12 @@ const createSchema = z.object({
   description: z.string().min(1),
   city: z.string().min(1).optional(),
   area: z.string().min(1).optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  // Range-checked: an unvalidated Float here means a typo'd coordinate (or a swapped
+  // lat/lng pair) is stored happily and then renders the need on the wrong continent.
+  // Both-or-neither is enforced in `resolveNeedCoordinates` — half a coordinate is not a
+  // location, and every map consumer would otherwise have to guard against it.
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   deadline: z.coerce.date().optional(),
   // Uploaded via POST /api/uploads/sign (folder: "need-photos") beforehand — these are the
   // resulting public URLs, capped so a need can't carry an unbounded gallery.
@@ -125,14 +194,24 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "linkedInstitutionId must be an existing INSTITUTION account" });
     }
   }
+  const coordinates = await resolveNeedCoordinates(parsed.data);
+  if (!coordinates.ok) {
+    return res.status(400).json({ error: coordinates.error });
+  }
   if (parsed.data.type === NeedType.MEAL_SLOT) {
     const { type: _type, payload, ...base } = parsed.data;
-    const need = await createMealSlotNeed(req.user!.sub, base, payload);
+    const need = await createMealSlotNeed(
+      req.user!.sub,
+      { ...base, latitude: coordinates.latitude, longitude: coordinates.longitude },
+      payload
+    );
     return res.status(201).json({ need });
   }
   const need = await prisma.need.create({
     data: {
       ...parsed.data,
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
       payload: normalizePayload(parsed.data.type, parsed.data.payload) as Prisma.InputJsonValue | undefined,
       postedById: req.user!.sub,
       status: NeedStatus.DRAFT,
@@ -170,6 +249,23 @@ router.patch("/:id", async (req, res) => {
   }
   const type = parsed.data.type ?? need.type;
   const { payload, ...rest } = parsed.data;
+  // Keep the stored coordinate consistent with the stored city/area. An explicit pin in this
+  // PATCH wins; otherwise a changed city/area re-resolves the fallback, so a need moved from
+  // Guntur to Kakinada doesn't keep pointing at Guntur. Untouched location fields → the
+  // coordinate is left exactly as it is.
+  let coordinateUpdate: { latitude: number | null; longitude: number | null } | undefined;
+  if (rest.latitude !== undefined || rest.city !== undefined || rest.area !== undefined) {
+    const coordinates = await resolveNeedCoordinates({
+      city: rest.city ?? need.city ?? undefined,
+      area: rest.area ?? need.area ?? undefined,
+      latitude: rest.latitude,
+      longitude: rest.longitude,
+    });
+    if (!coordinates.ok) {
+      return res.status(400).json({ error: coordinates.error });
+    }
+    coordinateUpdate = { latitude: coordinates.latitude, longitude: coordinates.longitude };
+  }
   // MEAL_SLOT with new `dates` while still DRAFT: wholesale-replace the MealSlot rows (safe —
   // nothing can be BOOKED yet, since booking only opens up at LIVE) rather than trying to diff
   // the old/new date lists. Same "fixed set, edit means replace" spirit as §10.2.
@@ -180,7 +276,11 @@ router.patch("/:id", async (req, res) => {
       await tx.mealSlot.deleteMany({ where: { needId: need.id } });
       const u = await tx.need.update({
         where: { id: need.id },
-        data: { ...rest, payload: normalizePayload(type, { ...payload, slots_total: dates.length }) as Prisma.InputJsonValue },
+        data: {
+          ...rest,
+          ...(coordinateUpdate ?? {}),
+          payload: normalizePayload(type, { ...payload, slots_total: dates.length }) as Prisma.InputJsonValue,
+        },
       });
       if (dates.length > 0) {
         await tx.mealSlot.createMany({ data: dates.map((date) => ({ needId: need.id, date })) });
@@ -193,7 +293,63 @@ router.patch("/:id", async (req, res) => {
     where: { id: need.id },
     data: {
       ...rest,
+      ...(coordinateUpdate ?? {}),
       ...(payload !== undefined ? { payload: normalizePayload(type, payload) as Prisma.InputJsonValue } : {}),
+    },
+  });
+  res.json({ need: updated });
+});
+
+const locationSchema = z
+  .object({
+    city: z.string().min(1).optional(),
+    area: z.string().min(1).optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "Nothing to update" });
+
+// Location is the one field a poster can still fix **after** submission.
+//
+// The general PATCH above is DRAFT-only on purpose — the story admin is verifying must not
+// change underneath them. A map pin is different: it isn't the claim being verified, it's how a
+// donor finds the hospital, and a need already LIVE with a wrong (or missing) pin is exactly the
+// case that needs fixing most urgently. Owner or ADMIN/STAFF; terminal needs stay frozen.
+router.patch("/:id/location", async (req, res) => {
+  const need = await prisma.need.findUnique({ where: { id: req.params.id } });
+  if (!need) return res.status(404).json({ error: "Need not found" });
+
+  const isOwner = need.postedById === req.user!.sub;
+  const isAdminOrStaff = req.user!.role === Role.ADMIN || req.user!.role === Role.STAFF;
+  if (!isOwner && !isAdminOrStaff) {
+    return res.status(403).json({ error: "Not allowed to update this need's location" });
+  }
+  if (!NON_TERMINAL.includes(need.status)) {
+    return res.status(409).json({ error: `Cannot change the location of a ${need.status} need` });
+  }
+
+  const parsed = locationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+
+  const coordinates = await resolveNeedCoordinates({
+    city: parsed.data.city ?? need.city ?? undefined,
+    area: parsed.data.area ?? need.area ?? undefined,
+    latitude: parsed.data.latitude,
+    longitude: parsed.data.longitude,
+  });
+  if (!coordinates.ok) {
+    return res.status(400).json({ error: coordinates.error });
+  }
+
+  const updated = await prisma.need.update({
+    where: { id: need.id },
+    data: {
+      ...(parsed.data.city !== undefined ? { city: parsed.data.city } : {}),
+      ...(parsed.data.area !== undefined ? { area: parsed.data.area } : {}),
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
     },
   });
   res.json({ need: updated });

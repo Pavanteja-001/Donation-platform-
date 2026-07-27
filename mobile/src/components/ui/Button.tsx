@@ -9,6 +9,7 @@ import Animated, {
   withDelay,
 } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { theme } from "../../lib/theme";
 import { PressableScale } from "./PressableScale";
 
@@ -32,6 +33,14 @@ const VARIANT = {
   ghost: { background: "transparent", foreground: theme.color.primary, border: "transparent" },
   danger: { background: theme.color.dangerSoft, foreground: theme.color.danger, border: "transparent" },
 } as const;
+
+// Filled variants get a lit ramp instead of one flat colour — same top-left light source as
+// every other raised surface (Depth.tsx). Outline/ghost variants stay flat by design: they are
+// *not* raised, and shading them would contradict that.
+const VARIANT_RAMP: Partial<Record<ButtonVariant, readonly [string, string, ...string[]]>> = {
+  primary: ["#D33B3B", "#B91C1C", "#8E1414"],
+  blood: ["#B32A2A", "#991B1B", "#761010"],
+};
 
 /**
  * PRD Appendix A.4 — the one button every screen reaches for.
@@ -73,6 +82,7 @@ export function Button({
   const isDisabled = disabled || loading;
   const sizing = SIZE[size];
   const palette = VARIANT[variant];
+  const ramp = VARIANT_RAMP[variant];
   const glowStyle = glow && !isDisabled ? (variant === "blood" || variant === "danger" ? theme.glow.blood : theme.glow.primary) : null;
 
   return (
@@ -97,6 +107,24 @@ export function Button({
         style,
       ]}
     >
+      {ramp && !isDisabled && (
+        <>
+          <LinearGradient
+            colors={ramp}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: sizing.radius }]}
+          />
+          {/* Gloss across the top half only — the edge the light actually reaches. */}
+          <LinearGradient
+            colors={["rgba(255,255,255,0.26)", "rgba(255,255,255,0)"]}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.5, y: 0.9 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: sizing.radius }]}
+          />
+        </>
+      )}
+
       {loading ? (
         <LoadingDots color={palette.foreground} />
       ) : (

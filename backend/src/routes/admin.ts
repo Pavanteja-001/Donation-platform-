@@ -20,6 +20,7 @@ router.use(requireAuth, requireRole(Role.ADMIN, Role.STAFF));
 // endpoint.
 router.get("/users", async (_req, res) => {
   const users = await prisma.user.findMany({
+    take: 150,
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -58,7 +59,10 @@ router.get("/analytics", async (_req, res) => {
     prisma.need.count({ where: { status: NeedStatus.LIVE } }),
     prisma.need.count({ where: { status: NeedStatus.FULFILLED } }),
     prisma.contribution.count({ where: { status: "CONFIRMED" } }),
-    prisma.need.findMany({ select: { type: true, payload: true, status: true } }),
+    prisma.need.findMany({
+      where: { status: { in: [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED, NeedStatus.FULFILLED] } },
+      select: { type: true, payload: true },
+    }),
   ]);
 
   let totalMoneyRaised = 0;
@@ -94,10 +98,6 @@ router.get("/analytics", async (_req, res) => {
   });
 });
 
-// Admin + Staff: the verification queue and verify/reject actions (D-018 — "verify/accept").
-// Default (no `status`) is the queue — PENDING_VERIFICATION only, oldest first, since that's
-// the actionable view. Pass `?status=LIVE` etc. (or `?status=ALL`) for general oversight of
-// needs regardless of status — used by the admin console's "All needs" tab.
 const needsQueryStatusSchema = z.union([z.nativeEnum(NeedStatus), z.literal("ALL")]).optional();
 
 router.get("/needs", async (req, res) => {
@@ -108,6 +108,7 @@ router.get("/needs", async (req, res) => {
   const status = parsed.data ?? NeedStatus.PENDING_VERIFICATION;
   const needs = await prisma.need.findMany({
     where: status === "ALL" ? {} : { status },
+    take: 150,
     orderBy: { createdAt: status === NeedStatus.PENDING_VERIFICATION ? "asc" : "desc" },
     include: { postedBy: { select: { id: true, name: true, phone: true, role: true } } },
   });
@@ -165,6 +166,30 @@ router.post("/needs/:id/reject", async (req, res) => {
   res.json({ need: updated });
 });
 
+// Take a live need down. Two levers, and they are not interchangeable:
+//
+// - **Cancel** (Admin + Staff) is the normal one: the need leaves the public feed and the map,
+//   but the row, its contributions and its history survive. Anything a donor already did stays
+//   auditable — required for money records (CLAUDE.md §7), and CANCELLED is terminal, so the
+//   need can't quietly come back.
+// - **Delete** (Admin only, below) is for junk that should never have existed — test posts,
+//   spam. It's irreversible, so it refuses the moment a need has any contribution attached.
+router.post("/needs/:id/cancel", async (req, res) => {
+  const need = await prisma.need.findUnique({ where: { id: req.params.id } });
+  if (!need) return res.status(404).json({ error: "Need not found" });
+  try {
+    assertTransition(need.status, NeedStatus.CANCELLED);
+  } catch (err) {
+    if (err instanceof InvalidTransitionError) return res.status(409).json({ error: err.message });
+    throw err;
+  }
+  const updated = await prisma.need.update({
+    where: { id: need.id },
+    data: { status: NeedStatus.CANCELLED },
+  });
+  res.json({ need: updated });
+});
+
 const kycQueryStatusSchema = z.union([z.nativeEnum(KycStatus), z.literal("ALL")]).optional();
 
 router.get("/kyc/queue", async (req, res) => {
@@ -217,6 +242,31 @@ router.post("/users/:id/kyc", async (req, res) => {
 
 // Everything below is ADMIN-only — editing users/settings, managing staff, overriding.
 const adminOnly = requireRole(Role.ADMIN);
+
+// Irreversible counterpart to the cancel above: for junk that should never have existed (test
+// posts, spam). Refuses the moment a need has a contribution attached — that history has to
+// survive, so cancel is the right lever there.
+router.delete("/needs/:id", adminOnly, async (req, res) => {
+  const need = await prisma.need.findUnique({
+    where: { id: req.params.id },
+    include: { _count: { select: { contributions: true } } },
+  });
+  if (!need) return res.status(404).json({ error: "Need not found" });
+
+  if (need._count.contributions > 0) {
+    return res.status(409).json({
+      error: `This need has ${need._count.contributions} contribution(s) and cannot be deleted — cancel it instead so the donation record survives.`,
+    });
+  }
+
+  // MealSlot rows have no cascade on the relation, so clear them in the same transaction or the
+  // delete fails on a foreign key (MEAL_SLOT needs only; a no-op for every other type).
+  await prisma.$transaction([
+    prisma.mealSlot.deleteMany({ where: { needId: need.id } }),
+    prisma.need.delete({ where: { id: need.id } }),
+  ]);
+  res.status(204).send();
+});
 
 router.patch("/users/:id", adminOnly, async (req, res) => {
   const schema = z.object({
@@ -276,25 +326,77 @@ router.delete("/staff/:id", adminOnly, async (req, res) => {
 });
 
 // Admin + Staff: Location Management (Districts & Areas)
+//
+// Coordinates are optional here but they matter: a district/area without one contributes no
+// map-centring hint, so a need posted there falls back to the district centre — and if that's
+// missing too, the need carries no pin at all rather than being placed somewhere wrong.
+const coordinateSchema = {
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+};
+
+// Latitude without longitude (or vice versa) is not a location — reject rather than storing
+// a half-coordinate that every consumer then has to guard against.
+function assertCoordinatePair(data: { latitude?: number; longitude?: number }) {
+  const hasLat = data.latitude !== undefined;
+  const hasLng = data.longitude !== undefined;
+  return hasLat === hasLng ? null : "latitude and longitude must be provided together";
+}
+
 router.post("/locations/districts", async (req, res) => {
   const schema = z.object({
     name: z.string().min(1, "District name is required"),
     state: z.string().optional(),
+    ...coordinateSchema,
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
   }
+  const pairError = assertCoordinatePair(parsed.data);
+  if (pairError) return res.status(400).json({ error: pairError });
   try {
     const district = await prisma.district.create({
       data: {
         name: parsed.data.name.trim(),
         state: parsed.data.state?.trim() || "Andhra Pradesh",
+        latitude: parsed.data.latitude ?? null,
+        longitude: parsed.data.longitude ?? null,
       },
     });
     res.status(201).json({ district });
   } catch (err) {
     res.status(409).json({ error: "District already exists" });
+  }
+});
+
+// Refine an existing district's centre (the seeded values are approximations).
+router.patch("/locations/districts/:id", async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1).optional(),
+    state: z.string().min(1).optional(),
+    ...coordinateSchema,
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+  const pairError = assertCoordinatePair(parsed.data);
+  if (pairError) return res.status(400).json({ error: pairError });
+  try {
+    const district = await prisma.district.update({
+      where: { id: req.params.id },
+      data: {
+        ...(parsed.data.name ? { name: parsed.data.name.trim() } : {}),
+        ...(parsed.data.state ? { state: parsed.data.state.trim() } : {}),
+        ...(parsed.data.latitude !== undefined
+          ? { latitude: parsed.data.latitude, longitude: parsed.data.longitude }
+          : {}),
+      },
+    });
+    res.json({ district });
+  } catch (err) {
+    res.status(404).json({ error: "District not found" });
   }
 });
 
@@ -311,21 +413,54 @@ router.post("/locations/areas", async (req, res) => {
   const schema = z.object({
     districtId: z.string().min(1, "District ID is required"),
     name: z.string().min(1, "Area name is required"),
+    ...coordinateSchema,
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
   }
+  const pairError = assertCoordinatePair(parsed.data);
+  if (pairError) return res.status(400).json({ error: pairError });
   try {
     const area = await prisma.area.create({
       data: {
         districtId: parsed.data.districtId,
         name: parsed.data.name.trim(),
+        latitude: parsed.data.latitude ?? null,
+        longitude: parsed.data.longitude ?? null,
       },
     });
     res.status(201).json({ area });
   } catch (err) {
     res.status(409).json({ error: "Area already exists in this district" });
+  }
+});
+
+// Refine a locality centre — the coordinate a create-need form opens its map picker on.
+router.patch("/locations/areas/:id", async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1).optional(),
+    ...coordinateSchema,
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
+  }
+  const pairError = assertCoordinatePair(parsed.data);
+  if (pairError) return res.status(400).json({ error: pairError });
+  try {
+    const area = await prisma.area.update({
+      where: { id: req.params.id },
+      data: {
+        ...(parsed.data.name ? { name: parsed.data.name.trim() } : {}),
+        ...(parsed.data.latitude !== undefined
+          ? { latitude: parsed.data.latitude, longitude: parsed.data.longitude }
+          : {}),
+      },
+    });
+    res.json({ area });
+  } catch (err) {
+    res.status(404).json({ error: "Area not found" });
   }
 });
 

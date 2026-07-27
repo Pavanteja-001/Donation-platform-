@@ -279,11 +279,23 @@ export function updateMe(
   });
 }
 
+// `latitude`/`longitude` are the seeded district/locality centres — the coordinate a map picker
+// should jump to when this district/area is selected. Null means the admin hasn't set one for
+// that row yet: leave the pin where it is and let the poster place it, never guess.
+export interface AreaLocation {
+  id: string;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface DistrictLocation {
   id: string;
   name: string;
   state: string;
-  areas: string[];
+  latitude: number | null;
+  longitude: number | null;
+  areas: AreaLocation[];
 }
 
 export function fetchLocations() {
@@ -303,6 +315,22 @@ export function fetchNeeds(token: string) {
 export function fetchMyNeeds(token: string) {
   return request<{ needs: Need[] }>("/api/needs/mine", {
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// The only part of a need its poster can still change after submission. Editing a need is
+// DRAFT-only (the story admin verified must not shift), but the map pin is how a donor finds the
+// hospital — a LIVE need with a missing or wrong pin is exactly what most needs fixing. Owner or
+// ADMIN/STAFF; rejected/cancelled/fulfilled needs are frozen.
+export function updateNeedLocation(
+  token: string,
+  id: string,
+  data: { city?: string; area?: string; latitude?: number; longitude?: number }
+) {
+  return request<{ need: Need }>(`/api/needs/${id}/location`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
   });
 }
 

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { fetchAnalytics, type AnalyticsData } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { Card, ErrorState, Skeleton } from "../components/ui";
+import { Card, ErrorState } from "../components/ui";
+import { PageSkeleton } from "../components/SkeletonLoader";
 
 // PRD §21 / Admin Console §15 — Platform Analytics & Metrics Overview
 export function AnalyticsPage() {
@@ -32,11 +33,7 @@ export function AnalyticsPage() {
     return (
       <div>
         <h2>Analytics &amp; Metrics</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginTop: 24 }}>
-          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <Skeleton key={i} height={100} />
-          ))}
-        </div>
+        <PageSkeleton />
       </div>
     );
   }

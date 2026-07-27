@@ -118,6 +118,10 @@ export interface Need {
   urgency: Urgency;
   city: string | null;
   area: string | null;
+  // The pinned (or server-resolved) coordinate the maps plot. Null when neither the poster
+  // pinned one nor the need's area/district has a centre on record.
+  latitude: number | null;
+  longitude: number | null;
   deadline: string | null;
   rejectionReason: string | null;
   photos: string[];
@@ -571,11 +575,23 @@ export function deleteForumAnswer(token: string, id: string) {
   });
 }
 
+// `latitude`/`longitude` are the admin-managed district/locality centres — where a map picker
+// should jump when this district/area is selected. Null = not set; leave the pin alone rather
+// than guessing.
+export interface AreaLocation {
+  id: string;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface DistrictLocation {
   id: string;
   name: string;
   state: string;
-  areas: string[];
+  latitude: number | null;
+  longitude: number | null;
+  areas: AreaLocation[];
 }
 
 export function fetchLocations() {

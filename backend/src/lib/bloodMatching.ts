@@ -5,13 +5,11 @@ import { computeEligibility } from "./bloodEligibility";
 import { parseBloodPayload } from "./bloodNeed";
 import { sendPushNotifications } from "./pushNotifications";
 
-// PRD §8.4 — a one-time push to every eligible donor when a BLOOD need goes LIVE. Not a live
-// subscription; re-notifying on later changes (e.g. urgency escalation) is a v2 concern.
+// PRD §8.4 — a one-time push to every eligible donor when a BLOOD need goes LIVE.
 export async function notifyEligibleBloodDonors(need: Need): Promise<{ notified: number }> {
   const blood = parseBloodPayload(need.payload);
   if (!blood || !need.city) return { notified: 0 };
 
-  // Coarse DB-level filter (blood group + district/city/area matching + has a push token + hasn't opted out)
   const locationTerms = [need.city, need.area].filter((s): s is string => !!s && s.trim().length > 0);
 
   const candidates = await prisma.user.findMany({
@@ -27,8 +25,13 @@ export async function notifyEligibleBloodDonors(need: Need): Promise<{ notified:
     },
   });
 
+  console.log(`[blood-match] Found ${candidates.length} candidate donors in ${need.city} for ${blood.blood_group}`);
+
   const eligible = candidates.filter((c) => computeEligibility(c).eligible);
-  if (eligible.length === 0) return { notified: 0 };
+  if (eligible.length === 0) {
+    console.log("[blood-match] No eligible donors matched push criteria.");
+    return { notified: 0 };
+  }
 
   await sendPushNotifications(
     eligible.map((donor) => ({
@@ -40,5 +43,6 @@ export async function notifyEligibleBloodDonors(need: Need): Promise<{ notified:
     }))
   );
 
+  console.log(`[blood-match] Sent push notification to ${eligible.length} eligible donors.`);
   return { notified: eligible.length };
 }

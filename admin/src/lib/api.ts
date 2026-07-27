@@ -503,6 +503,28 @@ export function rejectNeed(token: string, id: string, reason: string) {
   });
 }
 
+// Takes a live need off the feed and the map while keeping the row, its contributions and its
+// history intact (CANCELLED is terminal, so it can't come back). Admin + Staff.
+export function cancelNeed(token: string, id: string) {
+  return request<{ need: Need }>(`/api/admin/needs/${id}/cancel`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+// Irreversible, ADMIN only, and refused by the server the moment the need has a contribution —
+// this is for junk (test posts, spam), not for winding down a real request.
+export function deleteNeed(token: string, id: string) {
+  return fetch(`${API_URL}/api/admin/needs/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then(async (res) => {
+    if (res.status === 204) return;
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  });
+}
+
 export function fetchContributions(token: string, needId: string) {
   return request<{ contributions: Contribution[] }>(`/api/needs/${needId}/contributions`, {
     headers: authHeaders(token),
@@ -629,22 +651,53 @@ export function fetchAnalytics(token: string) {
   });
 }
 
+// A district/locality centre: where a map picker jumps when this row is selected, and the
+// fallback the server stamps on a need posted without an exact pin. Null = not set yet.
+export interface AreaLocation {
+  id: string;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface DistrictItem {
   id: string;
   name: string;
   state: string;
-  areas: string[];
+  latitude: number | null;
+  longitude: number | null;
+  areas: AreaLocation[];
 }
+
+export type Coordinates = { latitude: number; longitude: number };
 
 export function fetchLocations() {
   return request<{ districts: DistrictItem[] }>("/api/locations");
 }
 
-export function createDistrict(token: string, name: string, state?: string) {
+export function createDistrict(token: string, name: string, state?: string, coords?: Coordinates) {
   return request<{ district: DistrictItem }>("/api/admin/locations/districts", {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ name, state }),
+    body: JSON.stringify({ name, state, ...coords }),
+  });
+}
+
+// Refines an existing centre. The seeded coordinates are approximate locality centres — this
+// is how an admin corrects one without touching the seed.
+export function updateDistrict(token: string, id: string, data: Partial<Coordinates> & { name?: string; state?: string }) {
+  return request<{ district: DistrictItem }>(`/api/admin/locations/districts/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateArea(token: string, id: string, data: Partial<Coordinates> & { name?: string }) {
+  return request<{ area: AreaLocation }>(`/api/admin/locations/areas/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
   });
 }
 
@@ -657,11 +710,11 @@ export function deleteDistrict(token: string, id: string) {
   });
 }
 
-export function createArea(token: string, districtId: string, name: string) {
-  return request<{ area: { id: string; name: string } }>("/api/admin/locations/areas", {
+export function createArea(token: string, districtId: string, name: string, coords?: Coordinates) {
+  return request<{ area: AreaLocation }>("/api/admin/locations/areas", {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ districtId, name }),
+    body: JSON.stringify({ districtId, name, ...coords }),
   });
 }
 

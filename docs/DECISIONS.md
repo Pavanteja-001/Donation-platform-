@@ -260,6 +260,36 @@
 
 ---
 
+### D-026 · Map coordinates: the poster's pin is the truth, district/area centres are the fallback, and coordinates live in the DB
+- **Decision:** Three rules, in order:
+  1. **An exact pin wins.** Whatever the poster (or admin/institution) drops on the create-need map picker is stored verbatim and is what every map plots.
+  2. **No pin → server-side fallback.** `POST/PATCH /api/needs` resolves `area` → `district` centre from the `Area`/`District` tables and stores that. Approximate, but genuinely in the right locality.
+  3. **Nothing resolvable → no coordinate, and no marker.** A need with `latitude`/`longitude` null is listed as "no pinned location", never drawn at a stand-in position.
+  Coordinates moved out of the per-client `CITY_COORDINATES` constants into `District.latitude/longitude` and `Area.latitude/longitude`, served by `GET /api/locations` (areas are now objects, not bare name strings) and editable by admins (`PATCH /api/admin/locations/districts/:id` and `/areas/:id`). The client-side tables survive only as an offline fallback for when `/api/locations` fails.
+- **Why:** The hardcoded tables were the direct cause of needs rendering in the wrong city. The DB district is named `"Vijayawada (NTR)"`, the mobile table's key was `"ntr (vijayawada)"` — no match, and the lookup then fell back to `CITY_COORDINATES["visakhapatnam"]`, so every NTR request pinned on the Vizag coast. Only 5 of ~70 seeded areas had an entry at all. A table that lives in three client bundles cannot stay in sync with districts an admin creates at runtime; one that lives next to the districts themselves can.
+- **This is only about map coordinates.** Blood-alert routing is unchanged and does not use coordinates: `notifyEligibleBloodDonors` matches `need.city`/`need.area` **strings** against `user.city`/`user.area` (D-010). The district/area dropdowns, and what gets stored in `need.city`/`need.area`, are untouched.
+- **Impact:**
+  - `District`/`Area` gain nullable `latitude`/`longitude`; `prisma/seedLocations.ts` seeds all 7 districts and 69 areas. Area values are **approximate locality centres** (~1 km), enough to open the picker on the right neighbourhood — never to be treated as an address. Admins refine them from the Locations page.
+  - `prisma/backfillNeedCoordinates.ts` (one-off) gives pre-existing needs the same fallback so they don't disappear from the map.
+  - Need coordinates are range-validated (`±90`/`±180`) and must be sent as a pair; half a coordinate is a 400.
+  - Clients no longer send a coordinate they had to invent: an empty/unparseable box submits nothing (`Number("")` was silently posting `0,0`).
+
+---
+
+### D-027 · Mobile depth pass: native gradient/blur/SVG adopted (supersedes D-025's "zero native dependencies")
+- **Decision:** Install `expo-linear-gradient`, `expo-blur` and `react-native-svg` in the mobile app. `components/Gradient.tsx` keeps its exact props but is now a real `LinearGradient` (the 32 stacked-band fake is gone, and `bands` is accepted-and-ignored for call-site compatibility). New `components/Depth.tsx` holds the shared primitives: `IconPlate`, `DepthCard`, `LitEdge`, `litRamp()`.
+- **Why:** Client review — the UI read as flat and unfinished. Three things caused it, and none could be fixed with the stacked-band approach: elevation opacities (0.04–0.10) sat below the perceptual threshold on a phone in daylight; icons were flat tinted squares; and every surface was uniformly lit, so nothing had direction.
+- **The rule that holds it together — one light source, top-left.** A raised surface is brightest at its top-left edge, its own colour in the middle, darkest at the bottom-right, and casts a warm shadow down-right. Recessed surfaces invert it. Applying that consistently is what reads as dimensional; individual effects don't.
+- **Impact:**
+  - **Requires a native rebuild** (`npx expo run:ios` / `npx expo run:android`, or a new dev-client build). This is the cost D-025 was avoiding; the client accepted it.
+  - Elevation opacities raised to 0.08/0.12/0.18, plus a new `level4` for floating surfaces.
+  - New gradient tokens: `surfaceSheen`, `plateBrand`, `plateNeutral`, `gloss`.
+  - Applied so far: feed cards + My Needs cards (sheen + `IconPlate`), filled buttons (lit ramp + gloss), tab bar (real `BlurView` frosted pill on `level4`). Hero surfaces get true gradients for free via `Gradient`.
+  - `react-native-svg` is installed but not yet used — it's there for illustrated empty states, which is the next step, not something this pass delivered.
+  - Outline/ghost buttons stay deliberately flat: they are not raised surfaces, and shading them would contradict the light model.
+
+---
+
 ### Open decisions (gap register — resolve before / during build)
 - **O-10 · Legal/compliance** — terms, privacy policy, data-retention for KYC & health data (non-code, required).
 

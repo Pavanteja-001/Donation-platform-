@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { WebView } from "react-native-webview";
@@ -63,6 +63,10 @@ const STATIC_LEAFLET_HTML = `
     }).addTo(map);
 
     var activeMarkers = [];
+    // The map is only auto-framed once. After that the viewer owns the viewport — re-framing on
+    // every data injection (which is what setView(bounds[0]) used to do) yanked the map back
+    // mid-pan and made it feel broken.
+    var hasFramed = false;
 
     window.updateMapData = function(userLoc, markers) {
       // Clear old markers
@@ -98,8 +102,12 @@ const STATIC_LEAFLET_HTML = `
         bounds.push([m.lat, m.lng]);
       });
 
-      if (bounds.length > 0) {
-        map.setView(bounds[0], 14);
+      if (!hasFramed && bounds.length > 0) {
+        hasFramed = true;
+        if (userLoc) bounds.push([userLoc.latitude, userLoc.longitude]);
+        // fitBounds, not setView(bounds[0]) — a Guntur request and a Vizag request are 350 km
+        // apart, and centring on whichever happened to be first hid every other pin off-screen.
+        map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 });
       }
     };
   </script>
@@ -127,31 +135,44 @@ export function NeedsMapScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =>
     }
   }, [token]);
 
-  const filteredNeeds = needs.filter((n) => {
-    if (filter === "BLOOD") return n.type === "BLOOD";
-    if (filter === "EMERGENCY") return n.urgency === "EMERGENCY";
-    return true;
-  });
+  const filteredNeeds = useMemo(
+    () =>
+      needs.filter((n) => {
+        if (filter === "BLOOD") return n.type === "BLOOD";
+        if (filter === "EMERGENCY") return n.urgency === "EMERGENCY";
+        return true;
+      }),
+    [needs, filter]
+  );
 
-  // REAL-TIME MARKERS with fallback for requests missing latitude/longitude
-  const markersData = filteredNeeds.map((need, idx) => {
-    const lat = need.latitude ?? DEFAULT_LAT + (idx * 0.005);
-    const lng = need.longitude ?? DEFAULT_LNG - (idx * 0.005);
-    const isBlood = need.type === "BLOOD";
-    const isEmergency = need.urgency === "EMERGENCY";
-    const blood = isBlood && isBloodPayload(need.payload) ? (need.payload as BloodPayload) : null;
-    const badgeText = blood ? formatBloodGroup(blood.blood_group) : need.type;
-    const color = isEmergency ? "#DC2626" : isBlood ? "#E11D48" : "#2563EB";
+  // Plots the coordinate the poster actually pinned — nothing else. A need whose latitude or
+  // longitude is null is NOT drawn: the old fallback (`DEFAULT_LAT + idx * 0.005`) fanned such
+  // needs out around Rushikonda, so a Guntur request showed up on the Vizag coast and the
+  // distance readout under it was equally fictional. They're surfaced as a count instead.
+  const markersData = useMemo(
+    () =>
+      filteredNeeds
+        .filter((need) => need.latitude != null && need.longitude != null)
+        .map((need) => {
+          const isBlood = need.type === "BLOOD";
+          const isEmergency = need.urgency === "EMERGENCY";
+          const blood = isBlood && isBloodPayload(need.payload) ? (need.payload as BloodPayload) : null;
+          const badgeText = blood ? formatBloodGroup(blood.blood_group) : need.type;
+          const color = isEmergency ? "#DC2626" : isBlood ? "#E11D48" : "#2563EB";
 
-    return {
-      id: need.id,
-      lat,
-      lng,
-      title: need.title,
-      badgeText,
-      color,
-    };
-  });
+          return {
+            id: need.id,
+            lat: need.latitude as number,
+            lng: need.longitude as number,
+            title: need.title,
+            badgeText,
+            color,
+          };
+        }),
+    [filteredNeeds]
+  );
+
+  const unmappedCount = filteredNeeds.length - markersData.length;
 
   const sendMapData = useCallback(() => {
     if (!webViewRef.current || !isMapLoaded) return;
@@ -159,15 +180,14 @@ export function NeedsMapScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =>
     webViewRef.current.injectJavaScript(script);
   }, [isMapLoaded, userLocation, markersData]);
 
-  // Tab Focus Handler — refreshes backend API data AND re-injects map markers on tab switch
+  // Refresh the feed on tab focus. `load` is the only dependency on purpose: `sendMapData`
+  // changes identity whenever the marker list does, and depending on it here re-ran the effect
+  // (and therefore `load()`) after every fetch — an endless refetch loop while the tab was open.
+  // The effect below handles re-injecting markers once the new data lands.
   useFocusEffect(
     useCallback(() => {
       load();
-      const timer = setTimeout(() => {
-        sendMapData();
-      }, 150);
-      return () => clearTimeout(timer);
-    }, [load, sendMapData])
+    }, [load])
   );
 
   useEffect(() => {
@@ -204,6 +224,12 @@ export function NeedsMapScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =>
           <Chip label="Blood Only" icon="droplet" tone="blood" active={filter === "BLOOD"} onPress={() => setFilter("BLOOD")} />
           <Chip label="Emergency" icon="alert-triangle" tone="blood" active={filter === "EMERGENCY"} onPress={() => setFilter("EMERGENCY")} />
         </ScrollView>
+        {unmappedCount > 0 && (
+          <Text style={styles.unmappedNotice}>
+            {unmappedCount} {unmappedCount === 1 ? "need has" : "needs have"} no pinned location — if it's
+            yours, set it from My Needs
+          </Text>
+        )}
       </View>
 
       {/* Slide-Up Detail Card on Marker Tap */}
@@ -231,7 +257,10 @@ export function NeedsMapScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =>
           <View style={styles.locationRow}>
             <Feather name="map-pin" size={13} color={theme.color.textSecondary} />
             <Text style={styles.locationText}>
-              {selectedNeed.area ? `${selectedNeed.area}, ${selectedNeed.city}` : selectedNeed.city ?? "Rushikonda, Visakhapatnam"}
+              {/* No "Rushikonda, Visakhapatnam" stand-in — a need with no location text says so. */}
+              {selectedNeed.area
+                ? `${selectedNeed.area}, ${selectedNeed.city}`
+                : (selectedNeed.city ?? "Location not specified")}
               {userLocation && selectedNeed.latitude && selectedNeed.longitude
                 ? ` · ~${calculateRoadDistanceKm(userLocation.latitude, userLocation.longitude, selectedNeed.latitude, selectedNeed.longitude)} km by road`
                 : ""}
@@ -263,6 +292,17 @@ const styles = StyleSheet.create({
     right: 16,
   },
   chipRow: { gap: 8, paddingRight: 16 },
+  unmappedNotice: {
+    ...theme.typography.caption,
+    color: theme.color.textSecondary,
+    backgroundColor: theme.color.surface,
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.radii.pill,
+    overflow: "hidden",
+  },
 
   detailCard: {
     position: "absolute",

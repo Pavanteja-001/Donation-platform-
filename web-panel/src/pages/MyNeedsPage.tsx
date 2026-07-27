@@ -11,7 +11,8 @@ import {
   type Need,
 } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { EmptyState, ErrorState } from "../components/ui";
+import { PageSkeleton } from "../components/SkeletonLoader";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -59,17 +60,6 @@ function progressLabel(need: Need): string | null {
   return null;
 }
 
-function TableSkeleton() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "20px" }}>
-      <Skeleton width="100%" height={40} style={{ borderRadius: "4px" }} />
-      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
-      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
-      <Skeleton width="100%" height={32} style={{ borderRadius: "4px" }} />
-    </div>
-  );
-}
-
 export function MyNeedsPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -79,6 +69,7 @@ export function MyNeedsPage() {
   const load = useCallback(() => {
     if (!token) return;
     setError(null);
+    setNeeds(null); // Show PageSkeleton shimmer while loading
     fetchMyNeeds(token)
       .then(({ needs }) => setNeeds(needs))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load your needs"));
@@ -94,7 +85,7 @@ export function MyNeedsPage() {
       <p className="hint">Every need is admin-verified before donors can see it (PRD §6.3).</p>
 
       {error && <ErrorState message={error} onRetry={load} />}
-      {!needs && !error && <TableSkeleton />}
+      {!needs && !error && <PageSkeleton />}
       {needs && needs.length === 0 && (
         <EmptyState title="You haven't posted anything yet" actionLabel="Post a need" onAction={() => navigate("/post")} />
       )}
@@ -103,11 +94,12 @@ export function MyNeedsPage() {
         <table>
           <thead>
             <tr>
-              <th>Title</th>
+              <th>Title & Location</th>
               <th>Type</th>
               <th>Status</th>
               <th>Progress</th>
-              <th>Posted</th>
+              <th>Posted Date</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -117,6 +109,9 @@ export function MyNeedsPage() {
                   <button type="button" className="link-cell" onClick={() => navigate(`/needs/${n.id}`)} style={{ fontWeight: 600 }}>
                     {n.title}
                   </button>
+                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                    📍 {n.area ? `${n.area}, ${n.city}` : n.city ?? "Location specified"}
+                  </div>
                 </td>
                 <td style={{ fontWeight: 500 }}>{n.type}</td>
                 <td>
@@ -124,6 +119,23 @@ export function MyNeedsPage() {
                 </td>
                 <td style={{ fontWeight: 500 }}>{progressLabel(n) ?? "—"}</td>
                 <td>{new Date(n.createdAt).toLocaleDateString()}</td>
+                <td>
+                  <div className="row-actions" style={{ gap: 6 }}>
+                    <button type="button" className="btn-action-primary" onClick={() => navigate(`/needs/${n.id}`)}>
+                      View Details
+                    </button>
+                    {n.latitude && n.longitude && (
+                      <a
+                        href={`https://maps.google.com/?q=${n.latitude},${n.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-action-secondary"
+                      >
+                        Location Map
+                      </a>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchKycQueue, updateKycStatus, type AdminUser, type KycStatus } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Card, Button } from "../components/ui";
+import { PageSkeleton } from "../components/SkeletonLoader";
 
 export function InstitutionsPage() {
   const { token } = useAuth();
@@ -115,6 +116,8 @@ export function InstitutionsPage() {
       </div>
 
       {error && <p className="error" style={{ marginBottom: "16px" }}>{error}</p>}
+
+      {isLoading && !institutions && <PageSkeleton />}
 
       <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", flexWrap: "wrap" }}>
         

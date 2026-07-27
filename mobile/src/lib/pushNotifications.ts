@@ -15,44 +15,27 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-function customAtob(input: string): string {
-  const str = input.replace(/=+$/, "");
-  let output = "";
-  if (str.length % 4 === 1) {
-    throw new Error("Base64 decode failed");
-  }
-  for (
-    let bc = 0, bs = 0, rbuffer, idx = 0;
-    (rbuffer = str.charAt(idx++));
-    ~rbuffer && ((bs = bc % 4 ? bs * 64 + rbuffer : rbuffer), bc++ % 4)
-      ? (output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6))))
-      : 0
-  ) {
-    rbuffer = chars.indexOf(rbuffer);
-  }
-  return output;
-}
+// (A hand-rolled base64/JWT decoder lived here purely to build the fake dev push token from the
+// auth token's phone claim. The fake token is gone, and so is the decoder.)
 
-function decodeJwt(token: string) {
+// Schedules an instant local push notification alert (used in dev mode / USB debugging)
+export async function scheduleLocalNotification(title: string, body: string, data?: Record<string, unknown>) {
   try {
-    const base64Url = token.split(".")[1];
-    if (!base64Url) return null;
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const bytes = customAtob(base64);
-    const unicodeChars = bytes.split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2));
-    const jsonPayload = decodeURIComponent(unicodeChars.join(""));
-    return JSON.parse(jsonPayload);
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        data: data ?? {},
+      },
+      trigger: null, // Instant trigger
+    });
   } catch (err) {
-    return null;
+    console.warn("[push] Local notification error:", err);
   }
 }
 
-// D-016 — registers this device for Expo push and saves the token server-side (used for the
-// eligible blood-donor match, §8.4). Best-effort: no EAS project is configured for this app yet
-// (dev-only, no distribution pipeline), so getExpoPushTokenAsync can fail with "no projectId" —
-// caught and logged rather than surfaced to the user, same "never let notifications break the
-// core flow" principle as the backend's push-sending code.
 export async function registerForPushNotificationsAsync(token: string): Promise<void> {
   try {
     if (Platform.OS === "android") {
@@ -80,18 +63,29 @@ export async function registerForPushNotificationsAsync(token: string): Promise<
       if (finalStatus !== "granted" && !__DEV__) return;
 
       const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-      const { data } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : {});
+      if (!projectId) {
+        // Expo can't mint a token without knowing which EAS project it belongs to. Say so
+        // loudly — this is a setup gap, and it used to be papered over with a mock token.
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[push] No EAS projectId (app.json → expo.extra.eas.projectId). Push notifications " +
+            "cannot be delivered to this build. Run `eas init`, upload the FCM key with " +
+            "`eas credentials`, then rebuild."
+        );
+        return;
+      }
+      const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
       expoPushToken = data;
     } catch (e) {
-      if (__DEV__) {
-        const decoded = decodeJwt(token);
-        const suffix = decoded?.phone ? decoded.phone.replace(/\D/g, "") : Math.random().toString(36).substring(7);
-        expoPushToken = `ExponentPushToken[mock-${suffix}]`;
-        // eslint-disable-next-line no-console
-        console.log("[push] Dev fallback mock token registered:", expoPushToken);
-      } else {
-        throw e;
-      }
+      // Deliberately NOT falling back to a fake `ExponentPushToken[mock-…]` any more.
+      //
+      // That fallback stored an unusable token on the user's record, so the backend's blood
+      // matching counted them as reachable and "sent" pushes that Expo rejected outright
+      // (DeviceNotRegistered) — a request that looked fully successful end to end while no
+      // device could ever receive it. No token is far more honest than a fake one.
+      // eslint-disable-next-line no-console
+      console.warn("[push] Could not obtain an Expo push token — this device will not receive pushes:", e);
+      return;
     }
 
     await updateMe(token, { expoPushToken });

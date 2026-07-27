@@ -96,6 +96,19 @@ export const theme = {
     brandDeep: ["#4C0D0D", "#8C1616", "#240505"] as string[],
     /** Scrim laid over hero photography so overlaid text stays legible. */
     scrim: ["rgba(28,20,22,0)", "rgba(28,20,22,0.55)"] as string[],
+
+    // --- Depth washes --------------------------------------------------------
+    // Everything below assumes one consistent light source: **top-left**. A surface is lighter
+    // where the light hits it and darker where it falls away; that single rule is what reads as
+    // dimensional rather than "a flat rectangle with a shadow under it".
+    /** Laid over a white card, top-left → bottom-right. Barely visible on its own. */
+    surfaceSheen: ["rgba(255,255,255,0.9)", "rgba(255,255,255,0)", "rgba(124,45,45,0.035)"] as string[],
+    /** Fill for a raised crimson icon plate. */
+    plateBrand: ["#D4383A", "#B91C1C", "#8A1414"] as string[],
+    /** Neutral plate for secondary/inactive icons. */
+    plateNeutral: ["#FFFFFF", "#F7ECEC", "#EADCDC"] as string[],
+    /** Highlight arc across the top of a plate or pill — the "lit" edge. */
+    gloss: ["rgba(255,255,255,0.55)", "rgba(255,255,255,0.06)"] as string[],
   },
 
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 40 },
@@ -146,28 +159,39 @@ export const theme = {
   // A.3 — soft ambient elevation. RN needs both the iOS shadow props and Android's `elevation`,
   // bundled here so call sites never hand-roll either. Shadows stay low-opacity and wide-radius:
   // the goal is a card lifting off the canvas, not a hard drop shadow.
+  // Opacities were raised from 0.04/0.06/0.10 — at those values the shadow was below the
+  // perceptual threshold on most phone screens in daylight, which is the main reason the UI read
+  // as flat. They are still warm and wide (never a hard drop shadow), just actually visible.
   elevation: {
     none: {},
     level1: {
       shadowColor: "#3B0A0A",
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.04,
+      shadowOpacity: 0.08,
       shadowRadius: 8,
       elevation: 2,
     },
     level2: {
       shadowColor: "#3B0A0A",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.06,
-      shadowRadius: 12,
-      elevation: 3,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.12,
+      shadowRadius: 14,
+      elevation: 5,
     },
     level3: {
       shadowColor: "#3B0A0A",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.1,
-      shadowRadius: 24,
-      elevation: 8,
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.18,
+      shadowRadius: 26,
+      elevation: 12,
+    },
+    /** Floating above everything: tab bar, bottom sheets, the one hero CTA. */
+    level4: {
+      shadowColor: "#2A0606",
+      shadowOffset: { width: 0, height: 18 },
+      shadowOpacity: 0.24,
+      shadowRadius: 34,
+      elevation: 18,
     },
   },
 

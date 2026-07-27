@@ -20,6 +20,7 @@ import {
 import { shareNeedViaWhatsApp } from "../lib/whatsapp";
 import { buildUpiDeepLink, buildUpiQrCodeUrl } from "../lib/upi";
 import { useAuth } from "../context/AuthContext";
+import { PageSkeleton } from "../components/SkeletonLoader";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -87,13 +88,15 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
   async function handleVerify() {
     if (!token) return;
     setBusy(true);
+    // Optimistic update
+    setNeed((prev) => (prev ? { ...prev, adminVerified: true, status: "LIVE" } : null));
     try {
       await verifyNeed(token, needId);
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to verify");
     } finally {
       setBusy(false);
+      load();
     }
   }
 
@@ -102,44 +105,50 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
     const reason = window.prompt("Reason for rejecting this need (shown to the poster, D-017):");
     if (!reason) return;
     setBusy(true);
+    // Optimistic update
+    setNeed((prev) => (prev ? { ...prev, status: "REJECTED" } : null));
     try {
       await rejectNeed(token, needId, reason);
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject");
     } finally {
       setBusy(false);
+      load();
     }
   }
 
   async function handleContributionDecision(id: string, decision: "confirm" | "reject") {
     if (!token) return;
     setBusy(true);
+    setContributions((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, status: decision === "confirm" ? "CONFIRMED" : "REJECTED" } : c))
+    );
     try {
       await (decision === "confirm" ? confirmContribution : rejectContribution)(token, id);
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update this contribution");
     } finally {
       setBusy(false);
+      load();
     }
   }
 
   async function handleUrgencyChange(urgency: Urgency) {
     if (!token) return;
     setBusy(true);
+    setNeed((prev) => (prev ? { ...prev, urgency } : null));
     try {
       await setNeedUrgency(token, needId, urgency);
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update urgency");
     } finally {
       setBusy(false);
+      load();
     }
   }
 
   if (error && !need) return <p className="error">{error}</p>;
-  if (!need) return <p className="hint">Loading…</p>;
+  if (!need) return <PageSkeleton />;
 
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
   const kit = need.type === "KIT" && isKitPayload(need.payload) ? need.payload : null;

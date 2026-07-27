@@ -19,6 +19,8 @@ import {
   formatAmount,
   timeAgo,
 } from "../lib/needMeta";
+import { IconPlate, litRamp } from "../components/Depth";
+import { LocationPinModal } from "../components/LocationPinModal";
 import { ProgressBar } from "../components/ProgressBar";
 import { EmptyState, ErrorState, Skeleton, Badge, Chip, PressableScale } from "../components/ui";
 
@@ -55,7 +57,24 @@ function NeedsListSkeleton() {
   );
 }
 
-function NeedItem({ item, onSelect }: { item: Need; onSelect: (need: Need) => void }) {
+// A need can still have its pin fixed while it's alive — see `updateNeedLocation`. Terminal
+// needs (fulfilled/rejected/cancelled/expired) are frozen, so there's nothing to fix there.
+const PIN_EDITABLE_STATUSES: Need["status"][] = [
+  "DRAFT",
+  "PENDING_VERIFICATION",
+  "LIVE",
+  "PARTIALLY_FULFILLED",
+];
+
+function NeedItem({
+  item,
+  onSelect,
+  onEditLocation,
+}: {
+  item: Need;
+  onSelect: (need: Need) => void;
+  onEditLocation: (need: Need) => void;
+}) {
   const meta = TYPE_META[item.type];
   const money = isMoneyPayload(item.payload) ? item.payload : null;
   const kit = isKitPayload(item.payload) ? item.payload : null;
@@ -73,9 +92,12 @@ function NeedItem({ item, onSelect }: { item: Need; onSelect: (need: Need) => vo
     >
       <View style={styles.rowBetween}>
         <View style={styles.typeGroup}>
-          <View style={[styles.typeIcon, { backgroundColor: meta.tint }]}>
-            <Feather name={meta.icon} size={13} color={meta.color} />
-          </View>
+          <IconPlate
+            icon={meta.icon}
+            size="sm"
+            tone={item.type === "BLOOD" ? "blood" : "custom"}
+            colors={item.type === "BLOOD" ? undefined : litRamp(meta.color)}
+          />
           <Text style={[styles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
         </View>
         <Badge label={STATUS_LABEL[item.status]} tone={STATUS_BADGE_TONE[item.status]} />
@@ -137,6 +159,26 @@ function NeedItem({ item, onSelect }: { item: Need; onSelect: (need: Need) => vo
         </View>
       )}
 
+      {/* The pin is the only field still editable once a need is submitted, and a need with no
+          pin is invisible on the needs map — so say so, right where the poster can fix it. */}
+      {PIN_EDITABLE_STATUSES.includes(item.status) && (
+        <View style={styles.locationRow}>
+          <Feather
+            name={item.latitude != null ? "map-pin" : "alert-circle"}
+            size={12}
+            color={item.latitude != null ? theme.color.textTertiary : theme.color.warning}
+          />
+          <Text style={[styles.footerText, item.latitude == null && { color: theme.color.warning }]} numberOfLines={1}>
+            {item.latitude != null ? "Pinned on map" : "Not on the map yet"}
+          </Text>
+          <Chip
+            label={item.latitude != null ? "Update location" : "Set location"}
+            icon="map"
+            onPress={() => onEditLocation(item)}
+          />
+        </View>
+      )}
+
       {posted && (
         <View style={styles.footer}>
           <Feather name="clock" size={11} color={theme.color.textTertiary} />
@@ -153,6 +195,7 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterId>("ALL");
+  const [editingLocationFor, setEditingLocationFor] = useState<Need | null>(null);
 
   const load = useCallback(
     async (opts: { silent?: boolean; force?: boolean } = {}) => {
@@ -208,8 +251,19 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
     setIsRefreshing(false);
   }
 
+  // Patch the saved need in place (and in the shared cache) so the card flips to "Pinned on map"
+  // without a refetch — and so the needs map picks it up on its next focus.
+  const handleLocationSaved = useCallback((updated: Need) => {
+    const apply = (list: Need[]) =>
+      list.map((n) => (n.id === updated.id ? { ...n, ...updated, postedBy: n.postedBy } : n));
+    setNeeds((prev) => (prev ? apply(prev) : prev));
+    if (myNeedsCache.data) myNeedsCache.data = apply(myNeedsCache.data);
+  }, []);
+
   const renderItem = useCallback(
-    ({ item }: { item: Need }) => <NeedItem item={item} onSelect={onSelectNeed} />,
+    ({ item }: { item: Need }) => (
+      <NeedItem item={item} onSelect={onSelectNeed} onEditLocation={setEditingLocationFor} />
+    ),
     [onSelectNeed]
   );
 
@@ -283,6 +337,15 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
           />
         </Animated.View>
       )}
+
+      {editingLocationFor && (
+        <LocationPinModal
+          need={editingLocationFor}
+          visible
+          onClose={() => setEditingLocationFor(null)}
+          onSaved={handleLocationSaved}
+        />
+      )}
     </View>
   );
 }
@@ -339,4 +402,10 @@ const styles = StyleSheet.create({
     borderTopColor: theme.color.borderSubtle,
   },
   footerText: { ...theme.typography.caption, color: theme.color.textTertiary },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: theme.spacing.md,
+  },
 });

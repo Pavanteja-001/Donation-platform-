@@ -4,6 +4,8 @@ import { createBottomTabNavigator, type BottomTabBarProps } from "@react-navigat
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { LitEdge } from "../components/Depth";
 import { NeedsFeedScreen } from "../screens/NeedsFeedScreen";
 import { NeedsMapScreen } from "../screens/NeedsMapScreen";
 import { MyNeedsScreen } from "../screens/MyNeedsScreen";
@@ -121,7 +123,13 @@ function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[styles.tabBarWrap, { paddingBottom: Math.max(insets.bottom, theme.spacing.md) }]}>
-      <View style={[styles.tabBar, theme.elevation.level3]}>
+      <View style={[styles.tabBar, theme.elevation.level4]}>
+        {/* Real frosted glass: content scrolling underneath is visible and blurred, which is what
+            makes the bar read as floating *above* the page rather than pasted onto it. The tint
+            below keeps contrast on Android, where the blur is cheaper and lighter. */}
+        <BlurView intensity={38} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={styles.tabBarTint} pointerEvents="none" />
+        <LitEdge style={styles.tabBarEdge} />
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
@@ -225,19 +233,36 @@ const styles = StyleSheet.create({
   tabBarWrap: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
-    backgroundColor: theme.color.background,
+    // Transparent so the blurred pill sits on the scene rather than on an opaque strip. The
+    // scene is still inset by the bar's measured height, so nothing scrolls underneath and
+    // nothing is hidden — making the bar `position: absolute` (content flowing under the glass)
+    // would need a bottom inset added to all five tab screens' lists.
+    backgroundColor: "transparent",
   },
   tabBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: theme.color.surface,
+    // Translucent, not opaque: the BlurView behind it does the work. Fully opaque white would
+    // throw away the frosted effect entirely.
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: theme.color.borderSubtle,
+    borderColor: "rgba(255,255,255,0.55)",
     borderRadius: theme.radii.pill,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.sm,
+    overflow: "hidden",
   },
+  // Warm veil over the blur so labels keep contrast against busy content underneath.
+  tabBarTint: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 252, 252, 0.62)",
+  },
+  tabBarEdge: { position: "absolute", top: 0, left: 0, right: 0 },
   tabItemWrap: { flex: 1, alignItems: "center" },
   tabPill: {
     flexDirection: "row",

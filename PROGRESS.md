@@ -5,6 +5,74 @@
 
 ---
 
+### Session 35 — Map locations audit: needs now render where they actually are (D-026)
+
+**The bug:** needs showed up in the wrong place on the mobile needs map. Three independent causes,
+all found by tracing a coordinate from the create form to the marker:
+
+1. **The map invented coordinates.** `NeedsMapScreen` plotted `need.latitude ?? DEFAULT_LAT + idx * 0.005`
+   — every need without a stored coordinate got fanned out around Rushikonda, and the "~N km by road"
+   under it was computed from that fiction.
+2. **The client coordinate tables didn't match the DB.** `CITY_COORDINATES` (duplicated in mobile,
+   web-panel and admin) was keyed `"ntr (vijayawada)"`; the seeded district is `"Vijayawada (NTR)"`.
+   No match → fell through to `CITY_COORDINATES["visakhapatnam"]`. Only 5 of ~70 areas had any entry.
+3. **Nothing filled the gap server-side.** A need posted without a pin stored `null, null` forever.
+
+**What was done** (see D-026; blood-alert routing was NOT touched — it matches city/area strings,
+never coordinates):
+
+- **Backend:** `District`/`Area` gained nullable `latitude`/`longitude` (`db push`, columns live);
+  `seedLocations.ts` seeds all 7 districts + 69 areas and now writes coords on the *update* path too,
+  so re-running fills existing rows. `GET /api/locations` returns them (areas are objects now, not
+  bare strings). New `PATCH /api/admin/locations/districts/:id` and `/areas/:id` to refine a centre.
+  `POST`/`PATCH /api/needs` range-validate coordinates, reject a half-pair, and resolve
+  area → district centre when no pin is sent. One-off `prisma/backfillNeedCoordinates.ts` filled the
+  one pre-existing need (`Visakhapatnam / MVP Colony` → `17.74, 83.33`).
+- **Mobile:** map plots real coordinates only and shows "N needs have no pinned location" instead of
+  faking them; `fitBounds` (once) replaces `setView(bounds[0])` on every injection; killed the
+  `useFocusEffect` → `sendMapData` dependency loop that re-fetched the feed on every render. Create
+  form prefers server coords, seeds the pin from the poster's own city/area, and no longer rebuilds
+  the WebView HTML on each tap (which was resetting the map).
+- **Web-panel + admin:** same coordinate sourcing; `srcDoc` frozen and pin moved by `postMessage`
+  (it was reloading the whole iframe per click); `Need.latitude/longitude` added to the web-panel
+  type (`MyNeedsPage` was reading fields that didn't exist); Locations page shows each area's
+  coordinate and lets an admin set/correct it.
+
+**Verified:** `tsc` clean in all four packages (two pre-existing unrelated errors remain in
+`NeedDetailPage` in admin/web-panel, from in-flight work). Live API checks: no-pin Guntur/Brodipet →
+`16.307, 80.44`; explicit pin preserved exactly; unknown city → `null, null`; half-pair → 400;
+lat `917` → 400. Test needs and the throwaway test user were deleted afterwards.
+
+**Also added this session (client asks, after the map fix):**
+
+- **A poster can fix the pin after posting.** `PATCH /api/needs/:id/location` — owner or
+  admin/staff, non-terminal needs only. Editing a need stays DRAFT-only (the story admin verified
+  must not shift); the pin is not that, and a LIVE need with a wrong pin is the urgent case. UI:
+  every live/pending need in **My Needs** shows "Pinned on map" / "Not on the map yet" plus a
+  Set/Update location button opening `components/LocationPinModal.tsx` (tap, drag, type, or GPS).
+- **Admin can take a live request down, two ways.** `POST /api/admin/needs/:id/cancel`
+  (admin + staff) → leaves the feed and map, keeps the row and contributions, terminal.
+  `DELETE /api/admin/needs/:id` (admin only) → permanent, and refused with a 409 the moment the
+  need has any contribution. Both wired into the admin Needs table.
+  Verified: owner ✓ / stranger 403 ✓ / admin ✓ / out-of-range 400 ✓ / cancelled need rejects edits ✓
+  / staff cancel ✓ / double cancel 409 ✓ / staff delete 403 ✓ / admin delete 204 ✓ / delete with a
+  contribution 409 ✓ / cancelled need absent from the public feed ✓.
+- **Mobile depth pass (D-027)** — client feedback that the UI reads flat. Installed
+  `expo-linear-gradient`, `expo-blur`, `react-native-svg`; `Gradient` is now a real gradient with
+  unchanged props; new `components/Depth.tsx` (`IconPlate`, `DepthCard`, `LitEdge`, `litRamp`);
+  elevation opacities raised + new `level4`; feed/My Needs cards, filled buttons and the tab bar
+  reworked around a single top-left light source. `tsc` clean, `expo export` succeeds (4MB).
+
+**⚠️ Native rebuild required before the app runs again:** `npx expo run:ios` / `npx expo run:android`
+(or a fresh dev-client build). The three new packages are native modules — Metro alone won't pick
+them up. This is the cost D-025 deferred and D-027 accepted.
+
+**Next:** `react-native-svg` is installed but unused — illustrated empty states are the obvious
+next step. The feed still never passes user GPS to `NeedCard`, so its distance line is dead code.
+Area centres are ~1 km approximations; refine the ones that matter from the admin Locations page.
+
+---
+
 ### Session 34 — Mobile UI Overhaul (full design-system rebuild, all 20 screens)
 
 **What was done:**

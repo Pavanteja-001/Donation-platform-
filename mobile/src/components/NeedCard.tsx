@@ -17,6 +17,7 @@ import {
   timeAgo,
   type IconName,
 } from "../lib/needMeta";
+import { IconPlate, litRamp } from "./Depth";
 import { ProgressBar, type ProgressTone } from "./ProgressBar";
 import { EmergencyPulse } from "./EmergencyPulse";
 import { Gradient } from "./Gradient";
@@ -95,12 +96,24 @@ function NeedCardComponent({
         />
       )}
 
+      {/* Lit from the top-left, like every raised surface in the app (see Depth.tsx). At 3%
+          it isn't perceived as an effect — it just stops the card reading as flat paper. */}
+      <Gradient
+        colors={theme.gradient.surfaceSheen}
+        direction="diagonal"
+        style={StyleSheet.absoluteFill as never}
+        pointerEvents="none"
+      />
+
       <View style={styles.body}>
         <View style={styles.headerRow}>
           <View style={styles.typeGroup}>
-            <View style={[styles.typeIcon, { backgroundColor: meta.tint }]}>
-              <Feather name={meta.icon} size={13} color={meta.color} />
-            </View>
+            <IconPlate
+              icon={meta.icon}
+              size="sm"
+              tone={need.type === "BLOOD" ? "blood" : "custom"}
+              colors={need.type === "BLOOD" ? undefined : litRamp(meta.color)}
+            />
             <Text style={[styles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
           </View>
 

@@ -6,7 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import type { Need } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { formatBloodGroup, isMoneyPayload, num } from "../lib/needMeta";
+import { isMoneyPayload, num } from "../lib/needMeta";
 import { Gradient } from "./Gradient";
 import { AnimatedCounter } from "./AnimatedCounter";
 import { useCreateNeedFlow, useForumFlow } from "./CreateNeedAction";
@@ -69,8 +69,6 @@ export function FeedHero({ needs }: { needs: Need[] }) {
     };
   }, [needs]);
 
-  const city = user?.city;
-
   return (
     <Gradient colors={theme.gradient.brand} style={[styles.hero, { paddingTop: insets.top + theme.spacing.md }]}>
       <View style={styles.topRow}>
@@ -87,21 +85,6 @@ export function FeedHero({ needs }: { needs: Need[] }) {
           <GlassButton icon="message-circle" onPress={openForum} label="Community forum" />
           <GlassButton icon="plus" onPress={openCreate} label="Post a need" />
         </View>
-      </View>
-
-      <View style={styles.chipRow}>
-        {user?.bloodGroup && (
-          <View style={styles.glassChip}>
-            <Feather name="droplet" size={11} color="#FFFFFF" />
-            <Text style={styles.glassChipText}>{formatBloodGroup(user.bloodGroup)}</Text>
-          </View>
-        )}
-        {city && (
-          <View style={styles.glassChip}>
-            <Feather name="map-pin" size={11} color="#FFFFFF" />
-            <Text style={styles.glassChipText}>{city}</Text>
-          </View>
-        )}
       </View>
 
       <Animated.View entering={FadeInDown.delay(120).duration(420)} style={styles.statsStrip}>

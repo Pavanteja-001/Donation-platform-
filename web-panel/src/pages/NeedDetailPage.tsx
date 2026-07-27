@@ -18,6 +18,7 @@ import { shareNeedViaWhatsApp } from "../lib/whatsapp";
 import { buildUpiDeepLink, buildUpiQrCodeUrl } from "../lib/upi";
 import { useAuth } from "../context/AuthContext";
 import { EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { PageSkeleton } from "../components/SkeletonLoader";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
   return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
@@ -92,31 +93,35 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
   async function handleDecision(id: string, decision: "confirm" | "reject") {
     if (!token) return;
     setBusy(true);
+    setContributions((prev) =>
+      prev ? prev.map((c) => (c.id === id ? { ...c, status: decision === "confirm" ? "CONFIRMED" : "REJECTED" } : c)) : null
+    );
     try {
       await (decision === "confirm" ? confirmContribution : rejectContribution)(token, id);
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update this contribution");
     } finally {
       setBusy(false);
+      load();
     }
   }
 
   async function handleInstitutionVerify() {
     if (!token || !need) return;
     setBusy(true);
+    setNeed((prev) => (prev ? { ...prev, institutionVerified: true, status: "LIVE" } : null));
     try {
       await institutionVerifyNeed(token, need.id);
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to verify this need");
     } finally {
       setBusy(false);
+      load();
     }
   }
 
   if (error && !need) return <ErrorState message={error} onRetry={load} />;
-  if (!need) return <DetailSkeleton />;
+  if (!need) return <PageSkeleton />;
 
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
   const kit = need.type === "KIT" && isKitPayload(need.payload) ? need.payload : null;

@@ -8,18 +8,20 @@
    missing success/warning/info + the spacing scale (real drift from mobile/web-panel, fixed in
    Chunk 1 of Milestone 9). */
 :root {
-  --color-primary: #0e7c66;
+  --color-primary: #e11d48;
   --color-on-primary: #ffffff;
-  --color-accent: #f2a900;
-  --color-success: #2e9e5b;
-  --color-warning: #c98a00;
-  --color-danger: #d7263d;
-  --color-info: #2b6cb0;
-  --color-background: #f7f8f8;
+  --color-primary-dark: #be123c;
+  --color-primary-light: #fff1f2;
+  --color-accent: #f43f5e;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #dc2626;
+  --color-info: #2563eb;
+  --color-background: #f8fafc;
   --color-surface: #ffffff;
-  --color-border: #e2e5e4;
-  --color-text-primary: #14201d;
-  --color-text-secondary: #5b6b67;
+  --color-border: #e2e8f0;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #64748b;
   --radius: 12px;
 
   --space-xs: 4px;
@@ -29,16 +31,37 @@
   --space-xl: 24px;
   --space-xxl: 32px;
 
-  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --elevation-2: 0 4px 10px rgba(0, 0, 0, 0.1);
+  --elevation-1: 0 2px 6px rgba(15, 23, 42, 0.04);
+  --elevation-2: 0 4px 14px rgba(15, 23, 42, 0.08);
 
   --motion-fast: 150ms;
   --motion-normal: 220ms;
 
-  font-family: "Noto Sans", "Noto Sans Devanagari", "Noto Sans Telugu", system-ui, "Segoe UI", Roboto, sans-serif;
+  font-family: "Noto Sans", "Noto Sans Devanagari", "Noto Sans Telugu", system-ui, -apple-system, sans-serif;
   color-scheme: light;
   color: var(--color-text-primary);
   background: var(--color-background);
+}
+
+/* Shimmer Loading Skeleton Animation */
+@keyframes shimmerPulse {
+  0% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+  100% { opacity: 0.55; }
+}
+
+.shimmer-skeleton {
+  background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);
+  animation: shimmerPulse 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+.shimmer-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
 }
 
 * {
@@ -97,24 +120,37 @@ body {
 }
 
 form label {
-  display: block;
+  display: flex;
+  flex-direction: column;
   font-size: 13px;
+  font-weight: 600;
   color: var(--color-text-secondary);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 form input,
+form select,
 form textarea,
 .inline-form input {
   display: block;
   width: 100%;
   margin-top: 6px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  font-size: 15px;
+  font-size: 14px;
   font-family: inherit;
   color: var(--color-text-primary);
+  background: var(--color-surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+form input:focus,
+form select:focus,
+form textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.12);
 }
 
 button {
@@ -122,20 +158,33 @@ button {
 }
 
 form button[type="submit"] {
-  width: 100%;
-  padding: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  height: 42px;
   background: var(--color-primary);
   color: var(--color-on-primary);
   border: none;
   border-radius: var(--radius);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+form button[type="submit"]:hover {
+  background: var(--color-primary-dark);
 }
 
 form button[type="submit"]:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.auth-card form button[type="submit"] {
+  width: 100%;
 }
 
 .link {
@@ -150,6 +199,88 @@ form button[type="submit"]:disabled {
 .link.danger {
   color: var(--color-danger);
   padding: 0;
+}
+
+/* Enterprise Professional Action Buttons */
+.btn-action-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border: 1px solid rgba(225, 29, 72, 0.2);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-action-primary:hover {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-action-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-action-secondary:hover {
+  background: #e2e8f0;
+}
+
+.btn-action-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-action-success:hover {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.btn-action-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-action-danger:hover {
+  background: #dc2626;
+  color: #ffffff;
 }
 
 .error {

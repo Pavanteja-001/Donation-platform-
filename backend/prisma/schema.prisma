@@ -348,9 +348,18 @@ model ForumAnswer {
 }
 
 model District {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  state     String   @default("Andhra Pradesh")
+  id    String @id @default(cuid())
+  name  String @unique
+  state String @default("Andhra Pradesh")
+
+  // District centre. This is what a create-need form centres its map picker on, and the
+  // server-side fallback for a need posted without a pinned coordinate (see needs.ts
+  // `resolveNeedCoordinates`). Nullable so an admin-created district isn't blocked on
+  // knowing coordinates — a need in a district with no centre simply carries no pin
+  // rather than being silently placed somewhere wrong.
+  latitude  Float?
+  longitude Float?
+
   areas     Area[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -361,8 +370,14 @@ model Area {
   name       String
   districtId String
   district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+
+  // Approximate locality centre — preferred over the district centre when resolving a
+  // need's fallback coordinate. Null = fall back to the district.
+  latitude  Float?
+  longitude Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([districtId, name])
   @@index([districtId])

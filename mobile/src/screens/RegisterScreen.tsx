@@ -290,17 +290,20 @@ export function RegisterScreen({
               <Text style={styles.label}>Area / Locality</Text>
               {availableAreas.length > 0 && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4, marginBottom: 8 }}>
-                  {availableAreas.map((a) => (
-                    <Chip
-                      key={a}
-                      label={a}
-                      active={area.toLowerCase() === a.toLowerCase()}
-                      onPress={() => {
-                        setArea(a);
-                        clearFieldError("area");
-                      }}
-                    />
-                  ))}
+                  {availableAreas.map((a) => {
+                    const areaName = typeof a === "string" ? a : a.name;
+                    return (
+                      <Chip
+                        key={areaName}
+                        label={areaName}
+                        active={area.toLowerCase() === areaName.toLowerCase()}
+                        onPress={() => {
+                          setArea(areaName);
+                          clearFieldError("area");
+                        }}
+                      />
+                    );
+                  })}
                 </ScrollView>
               )}
               <Input
