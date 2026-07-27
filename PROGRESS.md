@@ -85,6 +85,42 @@ legacy RN `Animated`.
 
 ---
 
+### Session 35 — Fix: Portal Isolation (Admin/Staff vs Institution) & Conditional KYC Flow
+
+**What was done:**
+
+1. **Strict Portal Separation:**
+   - **Institution Partner Web Panel (`web-panel`)**: Gated to `INSTITUTION` role accounts ONLY. If an `ADMIN` or `STAFF` account (e.g., `+910000000000`) attempts to log in on `web-panel`, the login is explicitly blocked with: `"Access denied: Admin and Staff accounts cannot log in to the Institution Partner Panel. Please use the Admin Console."`
+   - **Admin Console (`admin`)**: Gated to `ADMIN` or `STAFF` role accounts ONLY. Non-admin/staff logins are blocked with: `"Access denied: Only Admin and Staff accounts can log in to the Admin Console."`
+
+2. **Conditional KYC Flow on Web Panel (`web-panel/src/pages/LoginPage.tsx`):**
+   - **Newly Registered Institutions (`kycStatus === "NOT_SUBMITTED"`)**: Directs the user to complete the multi-step KYC profile and document upload onboarding forms (`setStep("profile")`).
+   - **Returning Institutions (`kycStatus` is `PENDING_APPROVAL`, `APPROVED`, or `REJECTED`)**: Immediately signs in to the dashboard without re-asking for KYC details. Institutions can track review status or update details via the `VerificationStatusPage`.
+
+3. **Build & Type Verification:**
+   - 100% clean builds across `backend`, `web-panel`, `admin`, and `mobile`.
+
+---
+
+### Session 34 — Fix: Admin Phone Seed & Role Guards Across Web-Panel and Admin Console
+
+**What was done:**
+
+1. **Admin Seed Account Verification (`seed.ts`):**
+   - Executed `npx prisma db seed` to ensure the founding Admin account (`+910000000000`, 10 zeros) exists in the database with `role: ADMIN`.
+
+2. **Web Panel Institution KYC Bypass for Admin/Staff (`web-panel/src/pages/LoginPage.tsx`):**
+   - Updated `handleVerifyOtp` in `web-panel/src/pages/LoginPage.tsx` so `ADMIN` and `STAFF` accounts (e.g. `+910000000000`) bypass the Institution KYC registration form step (`setStep("profile")`) and sign in directly.
+
+3. **Admin Console Role Enforcement (`admin/src/pages/LoginPage.tsx` & `admin/src/App.tsx`):**
+   - Added role guard in `admin/src/pages/LoginPage.tsx` to block non-ADMIN/STAFF accounts from signing in to the Admin Console.
+   - Updated `Root` component in `admin/src/App.tsx` to enforce `isAdminOrStaff` route protection across all console layout endpoints.
+
+4. **Build & Type Verification:**
+   - Verified 100% clean builds across `backend`, `web-panel`, `admin`, and `mobile`.
+
+---
+
 ### Session 33 — Performance & Security Hardening (QA Audit & Indexing Pass)
 
 **What was done:**

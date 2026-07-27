@@ -48,14 +48,15 @@ function CreateSkillRequestWrapper() {
 
 function Root() {
   const { user, isLoading } = useAuth();
+  const isInstitution = !!user && user.role === "INSTITUTION";
 
   if (isLoading) return <div className="loading">Loading…</div>;
 
   return (
     <Routes>
-      <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
+      <Route path="/login" element={!isInstitution ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
       
-      <Route element={user ? <DashboardLayout /> : <Navigate to="/login" replace />}>
+      <Route element={isInstitution ? <DashboardLayout /> : <Navigate to="/login" replace />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardOverviewPage />} />
         <Route path="/needs" element={<MyNeedsPage />} />
@@ -71,7 +72,7 @@ function Root() {
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+      <Route path="*" element={<Navigate to={isInstitution ? "/dashboard" : "/login"} replace />} />
     </Routes>
   );
 }

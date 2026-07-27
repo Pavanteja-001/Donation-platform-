@@ -4,74 +4,98 @@ import { Platform } from "react-native";
 // copy of the shared tokens (no monorepo/shared-package tooling exists yet, so each app keeps
 // its own file — see web-panel/admin's lib/theme.ts for the same values in their own shape).
 //
-// Visual language: an off-white slate canvas with crisp white cards floating on soft ambient
-// shadows. Emerald teal carries every default platform action; red is reserved — exclusively —
-// for blood, emergency and danger. Nothing else may use it.
+// Visual language: a warm blush off-white canvas with crisp white cards floating on soft ambient
+// shadows, and deep crimson carrying every primary action.
+//
+// This supersedes the original emerald-teal palette (D-025). Under D-014 red was reserved for
+// blood/emergency/danger; now that red IS the brand, urgency is signalled by intensity and
+// treatment instead — hotter red (`emergency`), solid fills, and the radiating pulse — rather
+// than by hue alone. Do not add a second accent hue to compensate.
 
-// Slate-harmonised neutral ramp. Every grey in the app comes from here so surfaces, borders and
-// text share one temperature instead of drifting warm/cool per screen.
-const slate = {
-  50: "#F8FAFC",
-  100: "#F1F5F9",
-  200: "#E8ECF1",
-  300: "#CBD5E1",
-  400: "#94A3B8",
-  500: "#64748B",
-  700: "#334155",
-  900: "#0F172A",
+// Warm neutral ramp. Every grey in the app comes from here so surfaces, borders and text share
+// one temperature. Deliberately warm (a trace of red in each step) rather than the blue-grey
+// slate this used to be — against a crimson brand, cool greys read as cheap and clinical.
+const warm = {
+  50: "#FBF7F7",
+  100: "#F6EFEF",
+  200: "#EDE2E2",
+  300: "#D8C7C8",
+  400: "#A6959A",
+  500: "#75656B",
+  700: "#3D3033",
+  900: "#1C1416",
 } as const;
 
 export const theme = {
   color: {
-    // --- Platform actions, money needs, primary navigation -------------------
-    primary: "#0F766E",
-    primaryBright: "#0D9488",
-    primaryDeep: "#115E59",
-    primarySoft: "#ECFDF5", // tinted fill behind teal icons/callouts
+    // --- Brand. Deep crimson carries every primary action ---------------------
+    // This supersedes the emerald-teal primary (see D-025). Because red is now the brand, it can
+    // no longer signal urgency on its own — emergency is distinguished by *intensity and
+    // treatment* instead: hotter red, solid fills, and the radiating pulse.
+    primary: "#B91C1C",
+    primaryBright: "#DC2626",
+    primaryDeep: "#7F1D1D",
+    primarySoft: "#FDECEC", // tinted fill behind crimson icons/callouts
     onPrimary: "#FFFFFF",
 
-    // --- Blood + emergency. Deep crimson, and ONLY for these ----------------
-    // `blood` and `danger` are deliberately separate names for the same family: one is a
-    // domain colour (a BLOOD need), the other is a state (destructive/error). Keeping them
-    // distinct means restyling error states later can't silently repaint blood needs.
+    // --- Blood domain. Same family as the brand, one step deeper -------------
+    // Kept as its own token rather than aliased to `primary`: a BLOOD need is a domain concept,
+    // and keeping the name means the two can diverge again without hunting call sites.
     blood: "#991B1B",
     bloodBright: "#DC2626",
-    bloodSoft: "#FEF2F2",
+    bloodSoft: "#FDECEC",
     onBlood: "#FFFFFF",
 
-    danger: "#DC2626",
-    dangerDeep: "#991B1B",
-    dangerSoft: "#FEF2F2",
+    // --- Emergency + danger. Hotter and brighter than the brand ---------------
+    emergency: "#EF4444",
+    danger: "#E02424",
+    dangerDeep: "#7F1D1D",
+    dangerSoft: "#FDECEC",
 
     // --- Supporting semantics ------------------------------------------------
-    accent: "#F2A900",
-    accentSoft: "#FFF8E7",
-    success: "#059669",
-    successSoft: "#ECFDF5",
+    accent: "#E8A317",
+    accentSoft: "#FDF4E3",
+    // Success stays green — it's the only way "confirmed" can read as distinct now that the
+    // brand is red. Used sparingly: confirmed contributions, verified badges, completed needs.
+    success: "#0E9F6E",
+    successSoft: "#E8F8F1",
     warning: "#D97706",
-    warningSoft: "#FFFBEB",
+    warningSoft: "#FDF6E7",
     info: "#2563EB",
-    infoSoft: "#EFF6FF",
+    infoSoft: "#EEF3FE",
 
     // --- Canvas & surfaces ---------------------------------------------------
-    background: slate[50], // the app canvas — cards must never match this
-    backgroundAlt: slate[100], // sectioned/grouped backgrounds
-    surface: "#FFFFFF", // floating cards
-    surfaceMuted: slate[100], // image placeholders, inert fills, neutral badges
-    surfaceSunken: "#E9EEF3", // skeleton base, progress tracks
+    // Warm, faintly blush off-white rather than a cold near-white. This is what stops the app
+    // reading as "very white" — cards still separate cleanly, but the canvas has a temperature.
+    background: warm[50],
+    backgroundAlt: warm[100],
+    surface: "#FFFFFF",
+    surfaceMuted: warm[100],
+    surfaceSunken: "#EFE3E4", // skeleton base, progress tracks
 
     // --- Lines ---------------------------------------------------------------
     // `borderSubtle` is the near-invisible hairline that defines a floating white card without
     // boxing it in. `border` is the visible-but-quiet line for inputs, dividers and chips.
-    borderSubtle: "rgba(15, 23, 42, 0.05)",
-    border: slate[200],
-    borderStrong: slate[300],
+    borderSubtle: "rgba(124, 45, 45, 0.07)",
+    border: warm[200],
+    borderStrong: warm[300],
 
     // --- Text ----------------------------------------------------------------
-    textPrimary: slate[900],
-    textSecondary: slate[500],
-    textTertiary: slate[400],
+    textPrimary: warm[900],
+    textSecondary: warm[500],
+    textTertiary: warm[400],
     textInverse: "#FFFFFF",
+  },
+
+  // Gradient stops for hero surfaces — the dark crimson→near-black wash from the reference
+  // designs. Consumed by <Gradient>, which renders them without a native dependency.
+  gradient: {
+    /** Splash / login hero / emergency panel. */
+    brand: ["#7F1D1D", "#B91C1C", "#3B0A0A"] as string[],
+    /** Deep, near-black variant for full-bleed panels behind white text. */
+    brandDeep: ["#4C0D0D", "#8C1616", "#240505"] as string[],
+    /** Scrim laid over hero photography so overlaid text stays legible. */
+    scrim: ["rgba(28,20,22,0)", "rgba(28,20,22,0.55)"] as string[],
   },
 
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 40 },
@@ -125,21 +149,21 @@ export const theme = {
   elevation: {
     none: {},
     level1: {
-      shadowColor: "#0F172A",
+      shadowColor: "#3B0A0A",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.04,
       shadowRadius: 8,
       elevation: 2,
     },
     level2: {
-      shadowColor: "#0F172A",
+      shadowColor: "#3B0A0A",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.06,
       shadowRadius: 12,
       elevation: 3,
     },
     level3: {
-      shadowColor: "#0F172A",
+      shadowColor: "#3B0A0A",
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.1,
       shadowRadius: 24,
@@ -151,17 +175,17 @@ export const theme = {
   // sparingly — if everything glows, nothing reads as important.
   glow: {
     primary: {
-      shadowColor: "#0F766E",
+      shadowColor: "#B91C1C",
       shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.28,
-      shadowRadius: 16,
+      shadowOpacity: 0.34,
+      shadowRadius: 18,
       elevation: 8,
     },
     blood: {
       shadowColor: "#991B1B",
       shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.3,
-      shadowRadius: 16,
+      shadowOpacity: 0.36,
+      shadowRadius: 18,
       elevation: 8,
     },
   },

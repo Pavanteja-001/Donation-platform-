@@ -70,11 +70,17 @@ export function LoginPage() {
     try {
       const { token, user } = await verifyOtp("+91" + phone, code, name || undefined);
       
-      // If the user hasn't submitted KYC, direct them to KYC steps first
+      // Admin and Staff accounts cannot log in to the Institution Partner Panel
+      if (user.role === "ADMIN" || user.role === "STAFF") {
+        return setError("Access denied: Admin and Staff accounts cannot log in to the Institution Partner Panel. Please use the Admin Console.");
+      }
+
+      // Ask for KYC details ONLY for newly registered accounts that haven't submitted KYC yet
       if (!user.kycStatus || user.kycStatus === "NOT_SUBMITTED") {
         setTempToken(token);
         setStep("profile");
       } else {
+        // KYC already submitted (PENDING_APPROVAL, APPROVED, or REJECTED) — sign in directly
         signIn(token, user);
       }
     } catch (err) {

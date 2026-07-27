@@ -12,7 +12,7 @@ export function Chip({
   onPress,
   disabled = false,
   icon,
-  /** Selected-state colour. Blood/urgency filter rows tint crimson; everything else teal. */
+  /** Selected-state colour. Blood/urgency rows use the deeper crimson; everything else the brand. */
   tone = "primary",
   count,
 }: {

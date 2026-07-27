@@ -55,14 +55,15 @@ function CreateSkillRequestWrapper() {
 
 function Root() {
   const { user, isLoading } = useAuth();
+  const isAdminOrStaff = !!user && (user.role === "ADMIN" || user.role === "STAFF");
 
   if (isLoading) return <div className="loading">Loading…</div>;
 
   return (
     <Routes>
-      <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/needs" replace />} />
+      <Route path="/login" element={!isAdminOrStaff ? <LoginPage /> : <Navigate to="/needs" replace />} />
 
-      <Route element={user ? <ConsoleLayout /> : <Navigate to="/login" replace />}>
+      <Route element={isAdminOrStaff ? <ConsoleLayout /> : <Navigate to="/login" replace />}>
         <Route path="/" element={<Navigate to="/needs" replace />} />
         <Route path="/needs" element={<NeedsPage />} />
         <Route path="/needs/:needId" element={<NeedDetailRouteWrapper />} />

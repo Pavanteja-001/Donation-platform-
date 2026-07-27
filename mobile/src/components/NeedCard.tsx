@@ -18,9 +18,11 @@ import {
 } from "../lib/needMeta";
 import { ProgressBar, type ProgressTone } from "./ProgressBar";
 import { EmergencyPulse } from "./EmergencyPulse";
+import { Gradient } from "./Gradient";
 import { Badge, PressableScale } from "./ui";
 
-// PRD Appendix A: red is reserved for danger/emergency/blood urgency only.
+// D-025: crimson is the brand now, so urgency can't be signalled by hue alone — EMERGENCY is
+// marked by a solid fill, the gradient strip and the pulse instead.
 const URGENCY: Record<Urgency, { label: string; icon: IconName } | null> = {
   EMERGENCY: { label: "Emergency", icon: "alert-triangle" },
   URGENT: { label: "Urgent", icon: "clock" },
@@ -42,7 +44,7 @@ function NeedCardComponent({ need, onPress }: { need: Need; onPress?: () => void
   const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
 
-  // Blood needs fill their progress crimson; everything else uses the platform teal.
+  // Blood needs fill a deeper crimson; everything else uses the brand crimson.
   const progressTone: ProgressTone = need.type === "BLOOD" ? "blood" : "primary";
 
   return (
@@ -55,10 +57,10 @@ function NeedCardComponent({ need, onPress }: { need: Need; onPress?: () => void
       {/* Emergency gets a full-bleed crimson strip rather than just another badge — at a glance
           down a scrolling feed, a coloured band is findable in a way a small pill is not. */}
       {isEmergency && (
-        <View style={styles.emergencyStrip}>
+        <Gradient colors={theme.gradient.brand} direction="horizontal" bands={20} style={styles.emergencyStrip}>
           <Feather name="alert-triangle" size={12} color={theme.color.onBlood} />
           <Text style={styles.emergencyStripText}>Emergency · needs donors now</Text>
-        </View>
+        </Gradient>
       )}
 
       {cover && (
@@ -207,9 +209,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.xs + 2,
-    backgroundColor: theme.color.blood,
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 7,
+    paddingVertical: 8,
   },
   emergencyStripText: {
     ...theme.typography.overline,

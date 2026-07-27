@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { theme } from "./src/lib/theme";
+import { Gradient } from "./src/components/Gradient";
 import { ToastProvider } from "./src/components/ui";
 import { registerForPushNotificationsAsync } from "./src/lib/pushNotifications";
 import * as Notifications from "expo-notifications";
@@ -53,11 +54,11 @@ function Root() {
   // system spinner on a blank screen is indistinguishable from a hang.
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.loading}>
+      <Gradient colors={theme.gradient.brandDeep} style={styles.loading}>
         <Animated.View entering={FadeIn.duration(320)} style={styles.brandMark}>
-          <Feather name="droplet" size={30} color={theme.color.onPrimary} />
+          <Feather name="droplet" size={34} color={theme.color.onPrimary} />
         </Animated.View>
-      </SafeAreaView>
+      </Gradient>
     );
   }
 
@@ -97,14 +98,17 @@ export default function App() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  loading: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.color.background },
+  loading: { flex: 1, justifyContent: "center", alignItems: "center" },
+  // Sits on the dark crimson wash, so the mark is a translucent glass tile rather than a
+  // filled crimson square that would disappear into the background.
   brandMark: {
-    width: 68,
-    height: 68,
-    borderRadius: theme.radii.xl,
-    backgroundColor: theme.color.primary,
+    width: 76,
+    height: 76,
+    borderRadius: theme.radii.xxl,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
     alignItems: "center",
     justifyContent: "center",
-    ...theme.glow.primary,
   },
 });

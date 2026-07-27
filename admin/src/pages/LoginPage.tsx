@@ -48,6 +48,9 @@ export function LoginPage() {
     setIsSubmitting(true);
     try {
       const { token, user } = await verifyOtp("+91" + phone, code.replace(/\D/g, ""));
+      if (user.role !== "ADMIN" && user.role !== "STAFF") {
+        return setError("Access denied: Only Admin and Staff accounts can log in to the Admin Console.");
+      }
       signIn(token, user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Incorrect or expired OTP");

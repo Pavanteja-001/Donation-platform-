@@ -15,7 +15,7 @@ type IconName = keyof typeof Feather.glyphMap;
 /**
  * PRD Appendix A.4 — labelled input with prefix, icon and inline error slot.
  *
- * Idle state is a soft slate "well" that lifts to white on focus, with the border easing to teal
+ * Idle state is a soft warm "well" that lifts to white on focus, with the border easing to crimson
  * and a faint coloured glow. Animating fill *and* border gives focus a clear, calm target without
  * needing a heavy outline.
  *

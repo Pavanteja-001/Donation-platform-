@@ -6,9 +6,7 @@ import Animated, {
   withTiming,
   withSpring,
   withDelay,
-  withSequence,
   Easing,
-  runOnJS,
   cancelAnimation,
   interpolate,
 } from "react-native-reanimated";
@@ -16,14 +14,15 @@ import { Feather } from "@expo/vector-icons";
 import { theme } from "../lib/theme";
 import { Button } from "./ui";
 
-// Confetti colours: platform teal + accent + the supporting semantics. Crimson is deliberately
-// excluded — red means blood/emergency/danger everywhere else in this app, and celebrating with
-// it would break that association at exactly the wrong moment.
+// Crimson + gold leads, with green and blue as supporting colour. Now that crimson is the brand
+// (D-025) rather than a danger-only signal, celebrating in it is on-brand — and red-and-gold is
+// the festive pairing this audience reads as celebration.
 const CONFETTI_COLORS = [
   theme.color.primary,
-  theme.color.primaryBright,
   theme.color.accent,
+  theme.color.primaryBright,
   theme.color.success,
+  theme.color.accent,
   theme.color.info,
 ];
 

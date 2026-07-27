@@ -21,7 +21,9 @@ import { theme } from "../lib/theme";
  */
 export function EmergencyPulse({
   children,
-  color = theme.color.blood,
+  // Hotter than the crimson brand on purpose — now that red carries every primary action, the
+  // pulse has to out-read the brand colour to still mean "urgent" (D-025).
+  color = theme.color.emergency,
   /** Ring corner radius — match the wrapped element so the ring traces its shape. */
   radius = theme.radii.pill,
   active = true,

@@ -19,7 +19,7 @@ export type IconName = keyof typeof Feather.glyphMap;
  *
  * The feed card, the detail screen and the poster's own list all need the same icon/colour/label
  * for a given type and the same tone for a given status. Three copies of these tables meant a
- * BLOOD need could plausibly render teal in one place and crimson in another; this is the single
+ * BLOOD need could plausibly render one colour in one place and another elsewhere; this is the
  * source they all read from.
  */
 export const TYPE_META: Record<NeedType, { label: string; icon: IconName; tint: string; color: string }> = {

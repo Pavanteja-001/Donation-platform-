@@ -24,6 +24,7 @@ import { Feather } from "@expo/vector-icons";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { Gradient } from "../components/Gradient";
 import { Button, Input, PressableScale } from "../components/ui";
 
 type Step = "phone" | "otp";
@@ -150,12 +151,16 @@ export function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInUp.delay(80).duration(500)} style={styles.logoContainer}>
-          <View style={styles.brandMark}>
-            <Feather name="droplet" size={30} color={theme.color.onPrimary} />
-          </View>
-          <Text style={styles.title}>DonationPlatform</Text>
-          <Text style={styles.subtitle}>Connecting donors and saving lives instantly</Text>
+        {/* Deep crimson hero panel, mirroring the reference splash. Sits above the white form
+            card so the screen reads as branded rather than blank. */}
+        <Animated.View entering={FadeInUp.delay(80).duration(500)}>
+          <Gradient colors={theme.gradient.brand} style={[styles.hero, theme.elevation.level3]}>
+            <View style={styles.brandMark}>
+              <Feather name="droplet" size={32} color="#FFFFFF" />
+            </View>
+            <Text style={styles.title}>DonationPlatform</Text>
+            <Text style={styles.subtitle}>Connecting donors and saving lives instantly</Text>
+          </Gradient>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(160).duration(520)} style={[styles.card, theme.elevation.level2]}>
@@ -268,19 +273,28 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xxl,
   },
 
-  logoContainer: { alignItems: "center", marginBottom: theme.spacing.xxl },
+  hero: {
+    alignItems: "center",
+    borderRadius: theme.radii.xxl,
+    paddingVertical: theme.spacing.xxl,
+    paddingHorizontal: theme.spacing.xl,
+    marginBottom: theme.spacing.xl,
+    overflow: "hidden",
+  },
+  // Glass tile on the crimson wash — a filled mark would vanish into it.
   brandMark: {
-    width: 68,
-    height: 68,
+    width: 72,
+    height: 72,
     borderRadius: theme.radii.xl,
-    backgroundColor: theme.color.primary,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: theme.spacing.lg,
-    ...theme.glow.primary,
   },
-  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: theme.spacing.xs },
-  subtitle: { ...theme.typography.bodySmall, color: theme.color.textSecondary, textAlign: "center" },
+  title: { ...theme.typography.h1, color: "#FFFFFF", marginBottom: theme.spacing.xs },
+  subtitle: { ...theme.typography.bodySmall, color: "rgba(255,255,255,0.78)", textAlign: "center" },
 
   card: {
     backgroundColor: theme.color.surface,

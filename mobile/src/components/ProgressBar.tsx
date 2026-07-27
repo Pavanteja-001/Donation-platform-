@@ -22,7 +22,7 @@ const TONE_COLOR: Record<ProgressTone, string> = {
 /**
  * PRD §7.4/§9.4 — the public progress bar shown on every money need.
  *
- * `tone` exists so a BLOOD need's units bar fills crimson while a money need fills teal, without
+ * `tone` exists so a BLOOD need's units bar fills the deeper crimson while a money need uses the
  * the call site reaching past this component for a colour.
  */
 export function ProgressBar({

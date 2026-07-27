@@ -36,7 +36,7 @@ export function CreateNeedScaffold({
   submitLabel?: string;
 }) {
   const meta = TYPE_META[type];
-  // Blood posts get crimson CTAs; every other type stays on the platform teal.
+  // Blood posts get the deeper crimson CTA; every other type uses the brand crimson.
   const isBlood = type === "BLOOD";
 
   return (

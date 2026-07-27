@@ -242,6 +242,24 @@
 
 ---
 
+### D-025 · Brand palette: crimson is the primary colour (supersedes the red-reservation rule in D-014)
+- **Decision:** The mobile app's primary/brand colour is **deep crimson `#B91C1C`** (`primaryDeep #7F1D1D`, `primaryBright #DC2626`), on a **warm blush off-white canvas `#FBF7F7`**. This replaces the emerald-teal primary (`#0F766E`). D-014's rule that "red is reserved for danger/emergency/blood only" **no longer holds** — red now carries every primary action.
+- **Why:** Client direction, after reviewing the built teal UI against the reference designs they supplied (SaveLife / Donorin blood-donation concepts): the app read as "very white" and off-brand for a platform whose flagship module is blood donation. The reference designs are unambiguously crimson-led with dark red gradient heroes.
+- **How urgency still reads, now that hue is no longer available as the signal:** emergency is distinguished by **intensity + treatment**, not colour family —
+  1. a hotter red (`emergency #EF4444`) than the brand crimson,
+  2. **solid** badge fills where normal states use soft tints,
+  3. the radiating `EmergencyPulse` ring,
+  4. a full-bleed gradient strip on the card.
+  Do **not** introduce a second accent hue to compensate — that would reintroduce exactly the ambiguity this structure avoids.
+- **Impact:**
+  - `mobile/src/lib/theme.ts` rewritten: crimson brand ramp, warm neutral ramp (replacing the blue-grey slate ramp), new `gradient` tokens, crimson `glow`, warm shadow colour.
+  - New `mobile/src/components/Gradient.tsx` — a stacked-band linear gradient, so the reference designs' dark crimson hero washes cost **no native dependency** (`expo-linear-gradient` is not installed and would force a prebuild). Swap the implementation for `expo-linear-gradient` later and every call site keeps working.
+  - `app.json` Android notification accent `#0E7C66` → `#B91C1C`.
+  - `success` green is retained deliberately and used sparingly (confirmed / verified / completed) — it is now the only way those states can read as distinct from the brand.
+  - **Outstanding:** the **institution web panel and admin console still carry the old teal tokens**. D-014 requires one design system across all three surfaces, so they are now visually out of sync with mobile. Client has explicitly deferred this ("later we change other panel admin"). Until then D-014's single-theme guarantee is knowingly broken.
+
+---
+
 ### Open decisions (gap register — resolve before / during build)
 - **O-10 · Legal/compliance** — terms, privacy policy, data-retention for KYC & health data (non-code, required).
 

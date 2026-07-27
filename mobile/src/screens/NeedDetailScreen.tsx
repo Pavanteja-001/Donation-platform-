@@ -63,6 +63,7 @@ import {
 import { ProgressBar, type ProgressTone } from "../components/ProgressBar";
 import { AnimatedCounter } from "../components/AnimatedCounter";
 import { EmergencyPulse } from "../components/EmergencyPulse";
+import { Gradient } from "../components/Gradient";
 import { SuccessCelebration } from "../components/SuccessCelebration";
 import { ErrorState, Button, Input, Chip, Card, Badge, Skeleton, PressableScale } from "../components/ui";
 
@@ -481,7 +482,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
   const meta = TYPE_META[need.type];
   const isEmergency = need.urgency === "EMERGENCY";
   const isBloodNeed = need.type === "BLOOD";
-  // Blood and emergency needs drive their CTAs crimson; everything else stays on platform teal.
+  // Blood/emergency CTAs use the deeper `blood` variant; everything else uses the brand crimson.
   const ctaVariant = isBloodNeed || isEmergency ? "blood" : "primary";
   const progressTone: ProgressTone = isBloodNeed ? "blood" : "primary";
   const location = [need.area, need.city].filter(Boolean).join(", ");
@@ -517,6 +518,15 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
               />
             ))}
           </ScrollView>
+
+          {/* Crimson-tinted scrim: the reference photography is warm and dark at the edges, and
+              this keeps overlaid badges readable on light photos too. */}
+          <Gradient
+            colors={theme.gradient.scrim}
+            style={styles.heroScrim}
+            bands={16}
+            pointerEvents="none"
+          />
 
           <Animated.View style={[styles.heroBadges, heroOverlayStyle]} pointerEvents="none">
             <Badge label={meta.label} icon={meta.icon} tone={isBloodNeed ? "blood" : "primary"} solid />
@@ -1010,6 +1020,8 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl, backgroundColor: theme.color.background },
 
   hero: { backgroundColor: theme.color.surfaceMuted },
+  // Bottom-anchored so the wash is strongest where the content sheet meets the photo.
+  heroScrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: HERO_HEIGHT * 0.55 },
   heroBadges: {
     position: "absolute",
     top: theme.spacing.lg,
