@@ -9,6 +9,7 @@ import Animated, {
   cancelAnimation,
 } from "react-native-reanimated";
 import { theme } from "../lib/theme";
+import { num } from "../lib/needMeta";
 
 export type ProgressTone = "primary" | "blood" | "accent" | "success";
 
@@ -33,6 +34,8 @@ export function ProgressBar({
   /** Hide the caption when the parent already states the numbers. */
   showLabel = true,
   height = 8,
+  /** Invert for dark surfaces (the emergency rail) — crimson on crimson is unreadable. */
+  onDark = false,
 }: {
   raised?: number;
   target?: number;
@@ -40,10 +43,13 @@ export function ProgressBar({
   tone?: ProgressTone;
   showLabel?: boolean;
   height?: number;
+  onDark?: boolean;
 }) {
-  const safeRaised = raised ?? 0;
-  const safeTarget = target ?? 0;
-  const pct = safeTarget > 0 ? Math.min(safeRaised / safeTarget, 1) : 0;
+  // `num` rather than `?? 0`: a payload field can be present-but-NaN, and feeding NaN into
+  // withTiming leaves the bar stuck with no visible error.
+  const safeRaised = num(raised);
+  const safeTarget = num(target);
+  const pct = safeTarget > 0 ? Math.min(Math.max(safeRaised / safeTarget, 0), 1) : 0;
   const isComplete = pct >= 1;
 
   const progress = useSharedValue(0);
@@ -69,11 +75,17 @@ export function ProgressBar({
 
   // A fully funded need reads as success regardless of its type — reaching the goal is the
   // message at that point, not which category it belongs to.
-  const fillColor = isComplete ? theme.color.success : TONE_COLOR[tone];
+  const fillColor = onDark ? "#FFFFFF" : isComplete ? theme.color.success : TONE_COLOR[tone];
 
   return (
     <View>
-      <View style={[styles.track, { height, borderRadius: height }]}>
+      <View
+        style={[
+          styles.track,
+          { height, borderRadius: height },
+          onDark && { backgroundColor: "rgba(255,255,255,0.22)" },
+        ]}
+      >
         <Animated.View
           onLayout={handleFillLayout}
           style={[styles.fill, { backgroundColor: fillColor, borderRadius: height }, animatedStyle]}

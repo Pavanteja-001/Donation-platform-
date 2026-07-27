@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import * as SecureStore from "expo-secure-store";
 import { fetchMe, ApiError, type AuthUser, type BloodEligibility, type TrustTierInfo } from "../lib/api";
-import { clearNeedsFeedCache } from "../screens/NeedsFeedScreen";
-import { clearMyNeedsCache } from "../screens/MyNeedsScreen";
-import { clearContributionsCache } from "../screens/MyContributionsScreen";
+// Imported from lib/, not from the screens themselves: screens depend on this context for their
+// token, so screen-owned caches created an AuthContext ↔ screen require cycle.
+import { clearAllListCaches } from "../lib/listCache";
 
 const TOKEN_KEY = "donationplatform_auth_token";
 
@@ -66,9 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setTrustTierInfo(newTrustTierInfo);
       },
       signOut: async () => {
-        clearNeedsFeedCache();
-        clearMyNeedsCache();
-        clearContributionsCache();
+        clearAllListCaches();
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         setToken(null);
         setUser(null);

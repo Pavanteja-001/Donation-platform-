@@ -5,6 +5,7 @@ import { FlashList } from "@shopify/flash-list";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { fetchMyNeeds, type Need } from "../lib/api";
+import { myNeedsCache, isStale } from "../lib/listCache";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import {
@@ -146,17 +147,9 @@ function NeedItem({ item, onSelect }: { item: Need; onSelect: (need: Need) => vo
   );
 }
 
-let cachedMyNeeds: Need[] | null = null;
-let cachedMyNeedsFetchedAt = 0;
-
-export function clearMyNeedsCache() {
-  cachedMyNeeds = null;
-  cachedMyNeedsFetchedAt = 0;
-}
-
 export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
   const { token } = useAuth();
-  const [needs, setNeeds] = useState<Need[] | null>(cachedMyNeeds);
+  const [needs, setNeeds] = useState<Need[] | null>(myNeedsCache.data);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterId>("ALL");
@@ -165,21 +158,19 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
     async (opts: { silent?: boolean; force?: boolean } = {}) => {
       if (!token) return;
 
-      const now = Date.now();
-      const isStale = now - cachedMyNeedsFetchedAt > 15000;
-      if (cachedMyNeeds !== null && !isStale && !opts.force) {
+      if (myNeedsCache.data !== null && !isStale(myNeedsCache) && !opts.force) {
         return;
       }
 
-      const isSilent = opts.silent || cachedMyNeeds !== null;
+      const isSilent = opts.silent || myNeedsCache.data !== null;
       if (!isSilent) setError(null);
       try {
         const { needs: freshNeeds } = await fetchMyNeeds(token);
-        cachedMyNeeds = freshNeeds;
-        cachedMyNeedsFetchedAt = Date.now();
+        myNeedsCache.data = freshNeeds;
+        myNeedsCache.fetchedAt = Date.now();
         setNeeds(freshNeeds);
       } catch (err) {
-        if (!cachedMyNeeds) {
+        if (!myNeedsCache.data) {
           setError(err instanceof Error ? err.message : "Failed to load your needs");
         }
       }

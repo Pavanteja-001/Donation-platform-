@@ -5,6 +5,7 @@ import { FlashList } from "@shopify/flash-list";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { fetchMyContributions, type Contribution, type ContributionKind } from "../lib/api";
+import { contributionsCache, isStale } from "../lib/listCache";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { formatAmount, formatDate, timeAgo, type IconName } from "../lib/needMeta";
@@ -133,21 +134,13 @@ function ContributionItem({
   );
 }
 
-let cachedContributions: Contribution[] | null = null;
-let cachedContributionsFetchedAt = 0;
-
-export function clearContributionsCache() {
-  cachedContributions = null;
-  cachedContributionsFetchedAt = 0;
-}
-
 export function MyContributionsScreen({
   onViewCertificate,
 }: {
   onViewCertificate: (contributionId: string) => void;
 }) {
   const { token } = useAuth();
-  const [contributions, setContributions] = useState<Contribution[] | null>(cachedContributions);
+  const [contributions, setContributions] = useState<Contribution[] | null>(contributionsCache.data);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterId>("ALL");
@@ -156,21 +149,19 @@ export function MyContributionsScreen({
     async (opts: { silent?: boolean; force?: boolean } = {}) => {
       if (!token) return;
 
-      const now = Date.now();
-      const isStale = now - cachedContributionsFetchedAt > 15000;
-      if (cachedContributions !== null && !isStale && !opts.force) {
+      if (contributionsCache.data !== null && !isStale(contributionsCache) && !opts.force) {
         return;
       }
 
-      const isSilent = opts.silent || cachedContributions !== null;
+      const isSilent = opts.silent || contributionsCache.data !== null;
       if (!isSilent) setError(null);
       try {
         const { contributions: freshContributions } = await fetchMyContributions(token);
-        cachedContributions = freshContributions;
-        cachedContributionsFetchedAt = Date.now();
+        contributionsCache.data = freshContributions;
+        contributionsCache.fetchedAt = Date.now();
         setContributions(freshContributions);
       } catch (err) {
-        if (!cachedContributions) {
+        if (!contributionsCache.data) {
           setError(err instanceof Error ? err.message : "Failed to load your contributions");
         }
       }

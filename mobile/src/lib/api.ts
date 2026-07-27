@@ -138,7 +138,13 @@ export interface Need {
   adminVerified: boolean;
   payload: MoneyPayload | KitPayload | BloodPayload | MealSlotPayload | GoodsPayload | Record<string, unknown> | null;
   // Only ever non-empty for MEAL_SLOT needs (§10.2).
-  mealSlots: MealSlot[];
+  //
+  // OPTIONAL ON PURPOSE: only `GET /needs/:id` includes this relation. The list endpoints
+  // (`GET /needs`, `GET /needs/mine`) do not, and the feed hands its partial need straight to
+  // the detail screen as `initialNeed` — which renders before the full refetch lands. Typing
+  // this as a required array was a lie about those responses and crashed the detail screen on
+  // MEAL_SLOT needs. Always read it as `need.mealSlots ?? []`.
+  mealSlots?: MealSlot[];
   postedBy: { id: string; name: string | null; role: Role };
   createdAt: string;
 }

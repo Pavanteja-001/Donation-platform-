@@ -74,10 +74,12 @@ function formatContributionAmount(c: Contribution): string {
   if (c.kind === "KIT") return `${c.kits} kits`;
   if (c.kind === "MEAL_SLOT") {
     const date = c.mealSlotDate ? formatDate(c.mealSlotDate) : "";
-    return c.amount != null ? `₹${c.amount.toLocaleString("en-IN")} · ${date}` : date;
+    return c.amount != null ? `${formatAmount(c.amount)} · ${date}` : date;
   }
   if (c.kind === "GOODS") return "Claim";
-  return `₹${c.amount?.toLocaleString("en-IN")}`;
+  // `formatAmount` tolerates a null amount — DELIVER-mode contributions carry none (§9.2/§10.4),
+  // and this used to render the string "₹undefined" for them.
+  return formatAmount(c.amount);
 }
 
 const FUNDABLE: Need["status"][] = ["LIVE", "PARTIALLY_FULFILLED"];
@@ -475,6 +477,12 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
   const canRespondToBlood = blood && FUNDABLE.includes(need.status) && !isOwner && !hasResponded;
   const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
   const canBookMealSlot = mealSlot && FUNDABLE.includes(need.status) && !isOwner;
+  // The list endpoints omit the mealSlots relation, so this is undefined until the detail
+  // refetch lands. Normalised once here rather than guarded at each of the two read sites.
+  const mealSlotDates = need.mealSlots ?? [];
+  // Looked up rather than asserted with `!`: the selected id can outlive its slot if the need
+  // refetches while a date is selected (e.g. someone else books it first, §10.3).
+  const selectedSlot = mealSlotDates.find((s) => s.id === selectedSlotId);
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
   const canClaimGoods = goods && need.status === "LIVE" && !isOwner && !hasClaimed;
   const pendingContributions = contributions?.filter((c) => c.status === "PENDING_CONFIRMATION") ?? [];
@@ -850,8 +858,17 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
                   : "Select an open date you will cook and serve meals on."}
               </Text>
 
+              {/* Empty until the detail refetch lands — the feed's `initialNeed` carries no
+                  mealSlots, so this renders a loading row rather than crashing. */}
+              {mealSlotDates.length === 0 ? (
+                <View style={styles.slotsLoadingRow}>
+                  <Skeleton width={104} height={40} radius={theme.radii.pill} />
+                  <Skeleton width={104} height={40} radius={theme.radii.pill} />
+                  <Skeleton width={104} height={40} radius={theme.radii.pill} />
+                </View>
+              ) : (
               <View style={styles.dateChipRow}>
-                {need.mealSlots.map((slot) => {
+                {mealSlotDates.map((slot) => {
                   const isOpen = slot.status === "OPEN";
                   const isSelected = selectedSlotId === slot.id;
                   return (
@@ -865,6 +882,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
                   );
                 })}
               </View>
+              )}
 
               {selectedSlotId && (
                 <Animated.View entering={FadeInDown.duration(300)} style={styles.actionCard}>
@@ -897,7 +915,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
                   )}
                   {error && <InlineError message={error} />}
                   <Button
-                    label={`Book ${formatDate(need.mealSlots.find((s) => s.id === selectedSlotId)!.date)}`}
+                    label={selectedSlot ? `Book ${formatDate(selectedSlot.date)}` : "Book this date"}
                     icon="check"
                     glow
                     onPress={() => handleBookSlot(mealSlot)}
@@ -1152,6 +1170,7 @@ const styles = StyleSheet.create({
   warningText: { ...theme.typography.bodySmall, color: "#92400E", flex: 1, fontWeight: "600" },
 
   dateChipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  slotsLoadingRow: { flexDirection: "row", gap: theme.spacing.sm },
   proofPreviewRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md },
   proofPreview: { width: 72, height: 72, borderRadius: theme.radii.md, backgroundColor: theme.color.surfaceMuted },
 

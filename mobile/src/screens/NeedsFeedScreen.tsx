@@ -5,8 +5,11 @@ import { FlashList } from "@shopify/flash-list";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { fetchNeeds, type Need } from "../lib/api";
+import { needsFeedCache, isStale } from "../lib/listCache";
 import { useAuth } from "../context/AuthContext";
 import { NeedCard } from "../components/NeedCard";
+import { FeedHero } from "../components/FeedHero";
+import { EmergencySpotlight } from "../components/EmergencySpotlight";
 import { theme } from "../lib/theme";
 import { EmptyState, ErrorState, Skeleton, Chip } from "../components/ui";
 
@@ -47,17 +50,9 @@ function FeedSkeleton() {
   );
 }
 
-let cachedNeeds: Need[] | null = null;
-let cachedNeedsFetchedAt = 0;
-
-export function clearNeedsFeedCache() {
-  cachedNeeds = null;
-  cachedNeedsFetchedAt = 0;
-}
-
 export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
   const { token } = useAuth();
-  const [needs, setNeeds] = useState<Need[] | null>(cachedNeeds);
+  const [needs, setNeeds] = useState<Need[] | null>(needsFeedCache.data);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterId>("ALL");
@@ -66,21 +61,19 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
     async (opts: { silent?: boolean; force?: boolean } = {}) => {
       if (!token) return;
 
-      const now = Date.now();
-      const isStale = now - cachedNeedsFetchedAt > 15000;
-      if (cachedNeeds !== null && !isStale && !opts.force) {
+      if (needsFeedCache.data !== null && !isStale(needsFeedCache) && !opts.force) {
         return;
       }
 
-      const isSilent = opts.silent || cachedNeeds !== null;
+      const isSilent = opts.silent || needsFeedCache.data !== null;
       if (!isSilent) setError(null);
       try {
         const { needs: freshNeeds } = await fetchNeeds(token);
-        cachedNeeds = freshNeeds;
-        cachedNeedsFetchedAt = Date.now();
+        needsFeedCache.data = freshNeeds;
+        needsFeedCache.fetchedAt = Date.now();
         setNeeds(freshNeeds);
       } catch (err) {
-        if (!cachedNeeds) {
+        if (!needsFeedCache.data) {
           setError(err instanceof Error ? err.message : "Failed to load needs");
         }
       }
@@ -130,7 +123,11 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
       const isFirstSight = !seenIds.current.has(item.id);
       seenIds.current.add(item.id);
 
-      const card = <NeedCard need={item} onPress={() => onSelectNeed(item)} />;
+      const card = (
+        <View style={styles.cardWrap}>
+          <NeedCard need={item} onPress={() => onSelectNeed(item)} />
+        </View>
+      );
       if (!isFirstSight) return card;
 
       return (
@@ -150,9 +147,12 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
     );
   }
 
+  // The hero renders during loading too, with zeroed counters — so the header doesn't pop into
+  // existence and shove the first card down once the fetch lands.
   if (!needs) {
     return (
       <View style={styles.screen}>
+        <FeedHero needs={[]} />
         <FeedSkeleton />
       </View>
     );
@@ -160,54 +160,37 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
 
   return (
     <View style={styles.screen}>
-      {/* Fixed above the list rather than a ListHeaderComponent: filters that scroll away force
-          a trip back to the top every time you want to change what you're looking at. */}
-      {needs.length > 0 && (
-        <View style={styles.filterBar}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            {FILTERS.map((f) => (
-              <Chip
-                key={f.id}
-                label={f.label}
-                icon={f.icon}
-                active={filter === f.id}
-                tone={f.id === "EMERGENCY" || f.id === "BLOOD" ? "blood" : "primary"}
-                count={f.id === "ALL" ? undefined : counts[f.id]}
-                onPress={() => setFilter(f.id)}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
       {needs.length === 0 ? (
-        <View style={styles.centered}>
-          <EmptyState
-            title="No live needs right now"
-            subtitle="Verified needs will show up here as they go live."
-          />
-        </View>
-      ) : visibleNeeds.length === 0 ? (
-        <View style={styles.centered}>
-          <EmptyState
-            title={`No ${FILTERS.find((f) => f.id === filter)?.label.toLowerCase()} needs`}
-            subtitle="Nothing live in this category yet. Try another filter or pull to refresh."
-          />
-        </View>
+        <>
+          <FeedHero needs={[]} />
+          <View style={styles.centered}>
+            <EmptyState
+              icon="inbox"
+              title="No live needs right now"
+              subtitle="Verified needs will show up here as they go live."
+            />
+          </View>
+        </>
       ) : (
-        // Keyed by filter so switching categories fades the new set in instead of hard-cutting.
-        <Animated.View key={filter} entering={FadeIn.duration(theme.motion.normal)} style={styles.listWrap}>
+        <View style={styles.listWrap}>
           <FlashList
             data={visibleNeeds}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            // Hero + emergency rail + filters travel with the list. They used to be pinned above
+            // it, but a hero that never scrolls away would permanently eat a third of the screen —
+            // and the chips read as belonging to the header they sit under.
+            ListHeaderComponent={
+              <FeedListHeader
+                needs={needs}
+                counts={counts}
+                filter={filter}
+                onFilterChange={setFilter}
+                onSelectNeed={onSelectNeed}
+              />
+            }
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
@@ -216,14 +199,73 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
                 colors={[theme.color.primary]}
               />
             }
+            // An empty *filter* result stays inside the list, so the hero and the chips remain on
+            // screen — rendering it as a separate branch hid the chips and left no way back.
+            ListEmptyComponent={
+              <View style={styles.filterEmpty}>
+                <EmptyState
+                  icon="filter"
+                  title={`No ${FILTERS.find((f) => f.id === filter)?.label.toLowerCase()} needs`}
+                  subtitle="Nothing live in this category yet. Try another filter or pull to refresh."
+                />
+              </View>
+            }
             ListFooterComponent={
-              <Text style={styles.footerNote}>
-                {visibleNeeds.length} {visibleNeeds.length === 1 ? "need" : "needs"} shown
-              </Text>
+              visibleNeeds.length === 0 ? null : (
+                <Text style={styles.footerNote}>
+                  {visibleNeeds.length} {visibleNeeds.length === 1 ? "need" : "needs"} shown
+                </Text>
+              )
             }
           />
-        </Animated.View>
+        </View>
       )}
+    </View>
+  );
+}
+
+/**
+ * Everything above the cards: crimson hero, pinned emergency rail, then the filter row.
+ *
+ * Split out so FlashList can treat it as one header block, and so the filter state stays owned by
+ * the screen rather than leaking into the hero.
+ */
+function FeedListHeader({
+  needs,
+  counts,
+  filter,
+  onFilterChange,
+  onSelectNeed,
+}: {
+  needs: Need[];
+  counts: Record<FilterId, number>;
+  filter: FilterId;
+  onFilterChange: (id: FilterId) => void;
+  onSelectNeed: (need: Need) => void;
+}) {
+  return (
+    <View style={styles.headerBlock}>
+      <FeedHero needs={needs} />
+      <EmergencySpotlight needs={needs} onSelectNeed={onSelectNeed} />
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+        keyboardShouldPersistTaps="handled"
+      >
+        {FILTERS.map((f) => (
+          <Chip
+            key={f.id}
+            label={f.label}
+            icon={f.icon}
+            active={filter === f.id}
+            tone={f.id === "EMERGENCY" || f.id === "BLOOD" ? "blood" : "primary"}
+            count={f.id === "ALL" ? undefined : counts[f.id]}
+            onPress={() => onFilterChange(f.id)}
+          />
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -231,16 +273,15 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.background },
   listWrap: { flex: 1 },
-  listContent: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md, paddingBottom: theme.spacing.xxl },
+  // No horizontal padding here — the hero is full-bleed. Cards get their inset from `cardWrap`.
+  listContent: { paddingBottom: theme.spacing.xxl },
+  cardWrap: { paddingHorizontal: theme.spacing.lg },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
-  filterBar: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.color.borderSubtle,
-    backgroundColor: theme.color.background,
-  },
+  headerBlock: { marginBottom: theme.spacing.xs },
+  filterEmpty: { paddingTop: theme.spacing.xxl },
   filterRow: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.lg,
     gap: theme.spacing.sm,
   },
   footerNote: {

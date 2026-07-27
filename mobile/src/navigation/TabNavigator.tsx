@@ -1,5 +1,5 @@
-import { Alert, StyleSheet, Text, View } from "react-native";
-import Animated, { useAnimatedStyle, withSpring, withTiming, useDerivedValue, interpolateColor } from "react-native-reanimated";
+import { StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, withSpring, useDerivedValue, interpolateColor } from "react-native-reanimated";
 import { createBottomTabNavigator, type BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -9,8 +9,7 @@ import { MyNeedsScreen } from "../screens/MyNeedsScreen";
 import { MyContributionsScreen } from "../screens/MyContributionsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { theme } from "../lib/theme";
-import { useAuth } from "../context/AuthContext";
-import { isProfileComplete } from "../lib/profile";
+import { useCreateNeedFlow } from "../components/CreateNeedAction";
 import { PressableScale } from "../components/ui";
 import type { AppNavigationProp, TabParamList } from "./types";
 
@@ -48,37 +47,9 @@ function HeaderIconButton({
 }
 
 function CreateNeedButton() {
-  const { user } = useAuth();
-  const navigation = useNavigation<AppNavigationProp>();
-
-  const handlePress = () => {
-    if (!isProfileComplete(user)) {
-      Alert.alert(
-        "Complete your profile",
-        "Posting a need requires a completed profile (full name, date of birth, gender, blood group, city and area).",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Complete profile", onPress: () => navigation.navigate("Register", { isSkippable: true }) },
-        ]
-      );
-    } else {
-      navigation.navigate("CreateNeedChooser");
-    }
-  };
-
-  return <HeaderIconButton icon="plus" onPress={handlePress} accessibilityLabel="Create a need" side="right" />;
-}
-
-function ForumButton() {
-  const navigation = useNavigation<AppNavigationProp>();
-  return (
-    <HeaderIconButton
-      icon="message-circle"
-      onPress={() => navigation.navigate("Forum")}
-      accessibilityLabel="Community forum"
-      side="left"
-    />
-  );
+  // Shares the profile gate with the feed hero's own create button (see CreateNeedAction).
+  const openCreate = useCreateNeedFlow();
+  return <HeaderIconButton icon="plus" onPress={openCreate} accessibilityLabel="Create a need" side="right" />;
 }
 
 /**
@@ -209,15 +180,12 @@ export function TabNavigator() {
         sceneStyle: styles.scene,
       }}
     >
+      {/* No nav header on Home: FeedHero is the header, and it carries the forum/create actions
+          plus the safe-area inset itself. Stacking both would eat a third of the screen. */}
       <Tab.Screen
         name="Home"
         component={HomeTabScreen}
-        options={{
-          title: "Home",
-          headerTitle: "Live needs",
-          headerRight: () => <CreateNeedButton />,
-          headerLeft: () => <ForumButton />,
-        }}
+        options={{ title: "Home", headerShown: false }}
       />
       <Tab.Screen
         name="MyNeeds"

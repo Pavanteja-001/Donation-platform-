@@ -65,16 +65,18 @@ export function AnimatedCounter({
   style?: StyleProp<TextStyle>;
   animate?: boolean;
 }) {
-  const progress = useSharedValue(animate ? 0 : value);
+  // A missing or NaN payload field would otherwise render "NaN" and stall the timing animation.
+  const safeValue = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  const progress = useSharedValue(animate ? 0 : safeValue);
 
   useEffect(() => {
     if (!animate) {
-      progress.value = value;
+      progress.value = safeValue;
       return;
     }
-    progress.value = withTiming(value, { duration, easing: Easing.out(Easing.cubic) });
+    progress.value = withTiming(safeValue, { duration, easing: Easing.out(Easing.cubic) });
     return () => cancelAnimation(progress);
-  }, [value, duration, animate, progress]);
+  }, [safeValue, duration, animate, progress]);
 
   const animatedProps = useAnimatedProps(() => {
     return {
@@ -92,8 +94,8 @@ export function AnimatedCounter({
       underlineColorAndroid="transparent"
       style={[styles.text, style]}
       animatedProps={animatedProps}
-      defaultValue={`${prefix}${groupIndian(animate ? 0 : value)}${suffix}`}
-      accessibilityLabel={`${prefix}${value}${suffix}`}
+      defaultValue={`${prefix}${groupIndian(animate ? 0 : safeValue)}${suffix}`}
+      accessibilityLabel={`${prefix}${safeValue}${suffix}`}
       pointerEvents="none"
       scrollEnabled={false}
     />

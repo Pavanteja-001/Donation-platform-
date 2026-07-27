@@ -81,12 +81,26 @@ export function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayloa
 
 // --- Formatting --------------------------------------------------------------
 
+/**
+ * Coerces a possibly-missing numeric payload field to a usable number.
+ *
+ * `Need.payload` is untyped JSON at the database layer, so a row written before a progress field
+ * existed — or seeded/edited directly — can be missing it entirely. The type guards above only
+ * validate the *defining* field of each payload (e.g. `target_amount`), so such a payload still
+ * narrows successfully and then blows up on read. Every numeric payload read goes through here.
+ *
+ * Zero is the right default: a missing progress field means nothing has been raised yet.
+ */
+export function num(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 export function formatBloodGroup(g: string) {
   return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
 }
 
-export function formatAmount(n: number) {
-  return `₹${n.toLocaleString("en-IN")}`;
+export function formatAmount(n: number | null | undefined) {
+  return `₹${num(n).toLocaleString("en-IN")}`;
 }
 
 export function formatDate(iso: string) {
