@@ -6,16 +6,25 @@ import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { Avatar, Badge, Button, Chip, PressableScale, type TrustTier } from "../components/ui";
+import { Avatar, Badge, Button, PressableScale, type TrustTier } from "../components/ui";
 import { ProgressBar } from "../components/ProgressBar";
 import { AnimatedCounter } from "../components/AnimatedCounter";
-import { useTranslation } from "../lib/i18n";
+import { useTranslation, type Language } from "../lib/i18n";
 import { updateMe, uploadProfilePhoto } from "../lib/api";
 import type { AppNavigationProp } from "../navigation/types";
 
 type IconName = keyof typeof Feather.glyphMap;
 
 const TIER_LABEL: Record<string, string> = { BRONZE: "Bronze", SILVER: "Silver", GOLD: "Gold" };
+
+// Each label is looked up through `t` so the list itself is localised — the labels stay in their
+// own script on purpose ("తెలుగు (Telugu)"), since a language picker a user can't read is
+// useless to the exact person who needs it.
+const LANGUAGE_OPTIONS: { code: Language; labelKey: "english" | "telugu" | "hindi" }[] = [
+  { code: "en", labelKey: "english" },
+  { code: "te", labelKey: "telugu" },
+  { code: "hi", labelKey: "hindi" },
+];
 
 /** Titled card wrapper — every block on this screen shares the same shape. */
 function Section({ icon, title, children, tone = theme.color.primary, tint = theme.color.primarySoft }: {
@@ -228,10 +237,34 @@ export function ProfileScreen() {
       {/* Language (D-009 — tri-language is committed for v1) */}
       <Animated.View entering={FadeInDown.delay(180).duration(360)}>
         <Section icon="globe" title={t.selectLanguage} tone={theme.color.info} tint={theme.color.infoSoft}>
-          <View style={styles.chipGrid}>
-            <Chip label={t.english} icon={language === "en" ? "check" : undefined} active={language === "en"} onPress={() => setLanguage("en")} />
-            <Chip label={t.telugu} icon={language === "te" ? "check" : undefined} active={language === "te"} onPress={() => setLanguage("te")} />
-            <Chip label={t.hindi} icon={language === "hi" ? "check" : undefined} active={language === "hi"} onPress={() => setLanguage("hi")} />
+          {/* A full-width row per language, not wrapped chips.
+              The three labels are wildly different widths ("English" vs "తెలుగు (Telugu)" vs
+              "हिन्दी (Hindi)"), so a wrapping chip row broke into a ragged 2-then-1 layout, and
+              Telugu/Devanagari glyphs have taller line boxes than Latin, leaving chips of
+              unequal heights side by side. Rows sidestep both, and a radio list is the right
+              affordance for a persistent settings choice anyway. */}
+          <View style={styles.languageList}>
+            {LANGUAGE_OPTIONS.map((option) => {
+              const isActive = language === option.code;
+              return (
+                <PressableScale
+                  key={option.code}
+                  onPress={() => setLanguage(option.code)}
+                  scaleTo={0.98}
+                  accessibilityLabel={t[option.labelKey]}
+                  style={[styles.languageRow, isActive && styles.languageRowActive]}
+                >
+                  <Feather
+                    name={isActive ? "check-circle" : "circle"}
+                    size={18}
+                    color={isActive ? theme.color.info : theme.color.textTertiary}
+                  />
+                  <Text style={[styles.languageLabel, isActive && styles.languageLabelActive]} numberOfLines={1}>
+                    {t[option.labelKey]}
+                  </Text>
+                </PressableScale>
+              );
+            })}
           </View>
         </Section>
       </Animated.View>
@@ -330,5 +363,30 @@ const styles = StyleSheet.create({
   switchHint: { ...theme.typography.caption, color: theme.color.textSecondary },
 
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+
+  languageList: { gap: theme.spacing.sm },
+  languageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    // A fixed row height keeps all three aligned: Telugu and Devanagari glyphs have taller line
+    // boxes than Latin, so height-by-content alone would leave the rows visibly uneven.
+    minHeight: 52,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    backgroundColor: theme.color.surface,
+  },
+  languageRowActive: { borderColor: theme.color.info, backgroundColor: theme.color.infoSoft },
+  languageLabel: {
+    ...theme.typography.bodyMedium,
+    color: theme.color.textPrimary,
+    // Explicit lineHeight — without it, Devanagari matras get clipped at the top on Android.
+    lineHeight: 24,
+    flex: 1,
+  },
+  languageLabelActive: { fontWeight: "800", color: theme.color.info },
+
   actions: { gap: theme.spacing.sm, marginTop: theme.spacing.xs },
 });

@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import * as SecureStore from "expo-secure-store";
 
 export type Language = "en" | "te" | "hi";
 
@@ -189,13 +190,27 @@ const LanguageContext = createContext<LanguageContextType>({
   t: en,
 });
 
-const STORAGE_KEY = "@user_language_preference";
+const STORAGE_KEY = "user_language_preference";
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>("en");
 
+  // The choice was previously in-memory only — STORAGE_KEY was declared and never used, so
+  // every app restart silently reverted to English. A language preference that doesn't survive
+  // a restart reads as a broken toggle, which is exactly how this was reported.
+  useEffect(() => {
+    SecureStore.getItemAsync(STORAGE_KEY)
+      .then((saved) => {
+        if (saved === "en" || saved === "te" || saved === "hi") setLanguageState(saved);
+      })
+      .catch(() => {});
+  }, []);
+
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
+    // Fire-and-forget: the UI must switch instantly, and a failed write is not worth blocking
+    // or surfacing — worst case the preference doesn't survive the next restart.
+    SecureStore.setItemAsync(STORAGE_KEY, lang).catch(() => {});
   };
 
   return (
