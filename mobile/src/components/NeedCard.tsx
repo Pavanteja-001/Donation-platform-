@@ -1,178 +1,255 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
+import { memo } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
-import type { BloodPayload, GoodsPayload, KitPayload, MealSlotPayload, MoneyPayload, Need, Urgency } from "../lib/api";
+import { Feather } from "@expo/vector-icons";
+import type { Need, Urgency } from "../lib/api";
 import { theme } from "../lib/theme";
-import { ProgressBar } from "./ProgressBar";
+import {
+  TYPE_META,
+  isBloodPayload,
+  isGoodsPayload,
+  isKitPayload,
+  isMealSlotPayload,
+  isMoneyPayload,
+  formatAmount,
+  formatBloodGroup,
+  timeAgo,
+  type IconName,
+} from "../lib/needMeta";
+import { ProgressBar, type ProgressTone } from "./ProgressBar";
+import { Badge, PressableScale } from "./ui";
 
 // PRD Appendix A: red is reserved for danger/emergency/blood urgency only.
-const URGENCY_STYLE: Record<Urgency, { label: string; background: string; color: string }> = {
-  EMERGENCY: { label: "Emergency", background: theme.color.danger, color: theme.color.onPrimary },
-  URGENT: { label: "Urgent", background: theme.color.accent, color: theme.color.textPrimary },
-  NORMAL: { label: "Normal", background: theme.color.border, color: theme.color.textSecondary },
+const URGENCY: Record<Urgency, { label: string; icon: IconName } | null> = {
+  EMERGENCY: { label: "Emergency", icon: "alert-triangle" },
+  URGENT: { label: "Urgent", icon: "clock" },
+  // NORMAL is the default state — badging it adds noise to every card to say nothing.
+  NORMAL: null,
 };
 
-function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
-  return !!payload && typeof (payload as MoneyPayload).target_amount === "number";
-}
-
-function isKitPayload(payload: Need["payload"]): payload is KitPayload {
-  return !!payload && typeof (payload as KitPayload).kits_needed === "number";
-}
-
-function isBloodPayload(payload: Need["payload"]): payload is BloodPayload {
-  return !!payload && typeof (payload as BloodPayload).units_needed === "number";
-}
-
-function isMealSlotPayload(payload: Need["payload"]): payload is MealSlotPayload {
-  return !!payload && typeof (payload as MealSlotPayload).slots_total === "number";
-}
-
-function isGoodsPayload(payload: Need["payload"]): payload is GoodsPayload {
-  return !!payload && typeof (payload as GoodsPayload).item === "string";
-}
-
-function formatBloodGroup(g: string) {
-  return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
-}
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-export function NeedCard({ need, onPress }: { need: Need; onPress?: () => void }) {
-  const urgency = URGENCY_STYLE[need.urgency];
+function NeedCardComponent({ need, onPress }: { need: Need; onPress?: () => void }) {
+  const urgency = URGENCY[need.urgency];
+  const isEmergency = need.urgency === "EMERGENCY";
+  const meta = TYPE_META[need.type];
   const location = [need.area, need.city].filter(Boolean).join(", ");
+  const posted = timeAgo(need.createdAt);
+  const cover = need.photos.length > 0 ? need.photos[0] : null;
+
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
   const kit = need.type === "KIT" && isKitPayload(need.payload) ? need.payload : null;
   const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
   const mealSlot = need.type === "MEAL_SLOT" && isMealSlotPayload(need.payload) ? need.payload : null;
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
 
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-    };
-  });
-
-  const handlePressIn = () => {
-    if (onPress) {
-      scale.value = withSpring(0.98, { damping: 15, stiffness: 350 });
-    }
-  };
-
-  const handlePressOut = () => {
-    if (onPress) {
-      scale.value = withSpring(1, { damping: 15, stiffness: 350 });
-    }
-  };
+  // Blood needs fill their progress crimson; everything else uses the platform teal.
+  const progressTone: ProgressTone = need.type === "BLOOD" ? "blood" : "primary";
 
   return (
-    <AnimatedPressable
-      style={[styles.card, theme.elevation.level1, animatedStyle]}
+    <PressableScale
       onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      disabled={!onPress}
+      scaleTo={0.985}
+      accessibilityLabel={`${meta.label} need: ${need.title}`}
+      style={[styles.card, theme.elevation.level2, isEmergency && styles.cardEmergency]}
     >
-      {need.photos.length > 0 && (
+      {/* Emergency gets a full-bleed crimson strip rather than just another badge — at a glance
+          down a scrolling feed, a coloured band is findable in a way a small pill is not. */}
+      {isEmergency && (
+        <View style={styles.emergencyStrip}>
+          <Feather name="alert-triangle" size={12} color={theme.color.onBlood} />
+          <Text style={styles.emergencyStripText}>Emergency · needs donors now</Text>
+        </View>
+      )}
+
+      {cover && (
         <Image
-          source={{ uri: need.photos[0] }}
+          source={{ uri: cover }}
           style={styles.cover}
           contentFit="cover"
           cachePolicy="memory-disk"
-          transition={200}
+          transition={220}
+          // Without this, FlashList recycling shows the previous row's photo for a frame
+          // before the new one decodes.
+          recyclingKey={need.id}
         />
       )}
-      <View style={styles.headerRow}>
-        <View style={[styles.badge, { backgroundColor: urgency.background }]}>
-          <Text style={[styles.badgeText, { color: urgency.color }]}>{urgency.label}</Text>
+
+      <View style={styles.body}>
+        <View style={styles.headerRow}>
+          <View style={styles.typeGroup}>
+            <View style={[styles.typeIcon, { backgroundColor: meta.tint }]}>
+              <Feather name={meta.icon} size={13} color={meta.color} />
+            </View>
+            <Text style={[styles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
+          </View>
+
+          <View style={styles.headerRight}>
+            {need.adminVerified && <Feather name="check-circle" size={14} color={theme.color.success} />}
+            {urgency && (
+              <Badge
+                label={urgency.label}
+                icon={urgency.icon}
+                tone={isEmergency ? "blood" : "accent"}
+                solid={isEmergency}
+              />
+            )}
+          </View>
         </View>
-        <Text style={styles.type}>{need.type.replace("_", " ")}</Text>
+
+        <Text style={styles.title} numberOfLines={2}>
+          {need.title}
+        </Text>
+        <Text style={styles.description} numberOfLines={2}>
+          {need.description}
+        </Text>
+
+        {money && (
+          <View style={styles.stats}>
+            <View style={styles.amountRow}>
+              <Text style={styles.amount}>{formatAmount(money.raised_amount)}</Text>
+              <Text style={styles.amountTarget}>of {formatAmount(money.target_amount)}</Text>
+            </View>
+            <ProgressBar raised={money.raised_amount} target={money.target_amount} showLabel={false} />
+          </View>
+        )}
+
+        {blood && (
+          <View style={styles.stats}>
+            <View style={styles.amountRow}>
+              <View style={styles.bloodGroup}>
+                <Feather name="droplet" size={13} color={theme.color.onBlood} />
+                <Text style={styles.bloodGroupText}>{formatBloodGroup(blood.blood_group)}</Text>
+              </View>
+              <Text style={styles.unitsText}>
+                {blood.units_fulfilled} of {blood.units_needed} units
+              </Text>
+            </View>
+            <ProgressBar
+              raised={blood.units_fulfilled}
+              target={blood.units_needed}
+              tone={progressTone}
+              showLabel={false}
+            />
+          </View>
+        )}
+
+        {kit && (
+          <View style={styles.stats}>
+            <ProgressBar
+              raised={kit.kits_funded}
+              target={kit.kits_needed}
+              label={`${kit.kits_funded} of ${kit.kits_needed} kits funded`}
+            />
+          </View>
+        )}
+
+        {mealSlot && (
+          <View style={styles.stats}>
+            <ProgressBar
+              raised={mealSlot.slots_confirmed}
+              target={mealSlot.slots_total}
+              tone="accent"
+              label={`${mealSlot.slots_confirmed} of ${mealSlot.slots_total} ${mealSlot.meal_type} slots`}
+            />
+          </View>
+        )}
+
+        {/* GOODS has no partial state (§11.3) — a claimed/available badge pair, not a bar. */}
+        {goods && (
+          <View style={styles.goodsRow}>
+            <Badge label={goods.item} tone="info" />
+            <Badge label={goods.condition} tone="neutral" />
+            {goods.claimed && <Badge label="Claimed" tone="success" icon="check" />}
+          </View>
+        )}
+
+        {(location || posted) && (
+          <View style={styles.footer}>
+            {location ? (
+              <View style={styles.footerItem}>
+                <Feather name="map-pin" size={12} color={theme.color.textTertiary} />
+                <Text style={styles.footerText} numberOfLines={1}>
+                  {location}
+                </Text>
+              </View>
+            ) : (
+              <View />
+            )}
+            {posted && <Text style={styles.footerText}>{posted}</Text>}
+          </View>
+        )}
       </View>
-      <Text style={styles.title}>{need.title}</Text>
-      <Text style={styles.description} numberOfLines={2}>
-        {need.description}
-      </Text>
-      {money && (
-        <View style={styles.progress}>
-          <ProgressBar raised={money.raised_amount} target={money.target_amount} />
-        </View>
-      )}
-      {kit && (
-        <View style={styles.progress}>
-          <ProgressBar
-            raised={kit.kits_funded}
-            target={kit.kits_needed}
-            label={`${kit.kits_funded} of ${kit.kits_needed} kits funded`}
-          />
-        </View>
-      )}
-      {blood && (
-        <View style={styles.progress}>
-          <Text style={styles.bloodGroup}>{formatBloodGroup(blood.blood_group)}</Text>
-          <ProgressBar
-            raised={blood.units_fulfilled}
-            target={blood.units_needed}
-            label={`${blood.units_fulfilled} of ${blood.units_needed} units`}
-          />
-        </View>
-      )}
-      {mealSlot && (
-        <View style={styles.progress}>
-          <Text style={styles.mealType}>{mealSlot.meal_type}</Text>
-          <ProgressBar
-            raised={mealSlot.slots_confirmed}
-            target={mealSlot.slots_total}
-            label={`${mealSlot.slots_confirmed} of ${mealSlot.slots_total} slots confirmed`}
-          />
-        </View>
-      )}
-      {goods && (
-        <View style={styles.progress}>
-          <Text style={styles.mealType}>{goods.item}</Text>
-          <Text style={styles.meta}>Condition: {goods.condition}</Text>
-        </View>
-      )}
-      {location ? <Text style={styles.meta}>{location}</Text> : null}
-    </AnimatedPressable>
+    </PressableScale>
   );
 }
+
+/**
+ * Memoised because this renders inside a FlashList: without it every parent state change
+ * (refresh flag, filter chip) re-renders every mounted row.
+ */
+export const NeedCard = memo(NeedCardComponent);
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius * 1.2,
-    padding: theme.spacing.lg,
+    borderColor: theme.color.borderSubtle,
+    borderRadius: theme.radii.xxl,
     marginBottom: theme.spacing.md,
     overflow: "hidden",
   },
-  cover: {
-    height: 150,
-    marginHorizontal: -theme.spacing.lg,
-    marginTop: -theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-    backgroundColor: theme.color.border,
+  cardEmergency: { borderColor: "rgba(153, 27, 27, 0.18)" },
+  emergencyStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs + 2,
+    backgroundColor: theme.color.blood,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 7,
   },
-  headerRow: {
+  emergencyStripText: {
+    ...theme.typography.overline,
+    color: theme.color.onBlood,
+    textTransform: "uppercase",
+  },
+  cover: {
+    height: 164,
+    width: "100%",
+    backgroundColor: theme.color.surfaceMuted,
+  },
+  body: { padding: theme.spacing.lg, gap: theme.spacing.sm },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: theme.spacing.sm },
+  typeGroup: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, flexShrink: 1 },
+  typeIcon: { width: 26, height: 26, borderRadius: theme.radii.xs, alignItems: "center", justifyContent: "center" },
+  typeLabel: { ...theme.typography.overline, textTransform: "uppercase" },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+  title: { ...theme.typography.h3, color: theme.color.textPrimary },
+  description: { ...theme.typography.bodySmall, color: theme.color.textSecondary },
+  stats: { marginTop: theme.spacing.xs, gap: theme.spacing.sm },
+  amountRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: theme.spacing.sm },
+  amount: { ...theme.typography.numeric, color: theme.color.textPrimary },
+  amountTarget: { ...theme.typography.caption, color: theme.color.textSecondary },
+  bloodGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: theme.color.blood,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 5,
+    borderRadius: theme.radii.pill,
+  },
+  bloodGroupText: { fontSize: 14, fontWeight: "800", color: theme.color.onBlood, letterSpacing: -0.2 },
+  unitsText: { ...theme.typography.caption, color: theme.color.textSecondary, fontWeight: "700" },
+  goodsRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, flexWrap: "wrap", marginTop: theme.spacing.xs },
+  footer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.color.borderSubtle,
   },
-  badge: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 3,
-    borderRadius: 6, // slightly squared badge corners for premium dashboard look
-  },
-  badgeText: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
-  type: { fontSize: 11, color: theme.color.textSecondary, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
-  title: { fontSize: 17, fontWeight: "700", color: theme.color.textPrimary, marginBottom: 4 },
-  description: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.sm, lineHeight: 18 },
-  progress: { marginBottom: theme.spacing.sm },
-  bloodGroup: { fontSize: 13, fontWeight: "700", color: theme.color.danger, marginBottom: 4 },
-  mealType: { fontSize: 13, fontWeight: "700", color: theme.color.primary, marginBottom: 4, textTransform: "capitalize" },
-  meta: { fontSize: 12, color: theme.color.textSecondary, fontWeight: "500" },
+  footerItem: { flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 1 },
+  footerText: { ...theme.typography.caption, color: theme.color.textTertiary },
 });

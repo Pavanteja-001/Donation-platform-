@@ -1,74 +1,78 @@
-import { Pressable, StyleSheet, Text } from "react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
+import { StyleSheet, Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { theme } from "../../lib/theme";
+import { PressableScale } from "./PressableScale";
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+type IconName = keyof typeof Feather.glyphMap;
 
-// PRD Appendix A.4 — Selectable/filter chip. Overhauled with Reanimated to ensure
-// 60/120fps micro-interactions (press scaling) and consistent styling.
+// PRD Appendix A.4 — selectable/filter chip.
 export function Chip({
   label,
   active = false,
   onPress,
   disabled = false,
+  icon,
+  /** Selected-state colour. Blood/urgency filter rows tint crimson; everything else teal. */
+  tone = "primary",
+  count,
 }: {
   label: string;
   active?: boolean;
   onPress?: () => void;
   disabled?: boolean;
+  icon?: IconName;
+  tone?: "primary" | "blood";
+  count?: number;
 }) {
-  const scale = useSharedValue(1);
-
-  const animatedPressStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-    };
-  });
-
-  const handlePressIn = () => {
-    if (!disabled && onPress) {
-      scale.value = withSpring(0.94, { damping: 15, stiffness: 350 });
-    }
-  };
-
-  const handlePressOut = () => {
-    if (!disabled && onPress) {
-      scale.value = withSpring(1, { damping: 15, stiffness: 350 });
-    }
-  };
+  const activeColor = tone === "blood" ? theme.color.blood : theme.color.primary;
+  const foreground = active ? theme.color.onPrimary : theme.color.textSecondary;
 
   return (
-    <AnimatedPressable
+    <PressableScale
+      onPress={onPress}
+      disabled={disabled}
+      scaleTo={0.94}
+      accessibilityLabel={label}
+      accessibilityRole="button"
       style={[
         styles.chip,
-        active && styles.chipActive,
+        active && { backgroundColor: activeColor, borderColor: activeColor },
         disabled && styles.disabled,
-        animatedPressStyle,
       ]}
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      disabled={disabled || !onPress}
     >
-      <Text style={[styles.text, active && styles.textActive]}>{label}</Text>
-    </AnimatedPressable>
+      {icon && <Feather name={icon} size={13} color={foreground} />}
+      <Text style={[styles.text, { color: foreground }]} numberOfLines={1}>
+        {label}
+      </Text>
+      {typeof count === "number" && (
+        <View style={[styles.count, active ? styles.countActive : styles.countIdle]}>
+          <Text style={[styles.countText, { color: active ? theme.color.onPrimary : theme.color.textSecondary }]}>
+            {count}
+          </Text>
+        </View>
+      )}
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs + 2,
     borderWidth: 1,
     borderColor: theme.color.border,
-    borderRadius: 999,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 8,
-    minHeight: 38,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 9,
+    minHeight: 40,
     justifyContent: "center",
-    alignItems: "center",
     backgroundColor: theme.color.surface,
   },
-  chipActive: { borderColor: theme.color.primary, backgroundColor: theme.color.primary },
-  disabled: { opacity: 0.5 },
-  text: { fontSize: 13, fontWeight: "600", color: theme.color.textSecondary },
-  textActive: { color: theme.color.onPrimary },
+  disabled: { opacity: 0.45 },
+  text: { fontSize: 13, fontWeight: "700", letterSpacing: -0.1 },
+  count: { minWidth: 20, paddingHorizontal: 5, paddingVertical: 1, borderRadius: theme.radii.pill, alignItems: "center" },
+  countIdle: { backgroundColor: theme.color.surfaceMuted },
+  countActive: { backgroundColor: "rgba(255,255,255,0.25)" },
+  countText: { fontSize: 11, fontWeight: "800" },
 });

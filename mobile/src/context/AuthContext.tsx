@@ -36,11 +36,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const stored = await SecureStore.getItemAsync(TOKEN_KEY);
       if (stored) {
         try {
-          const { user: me, bloodEligibility, trustTier, confirmedContributionsCount } = await fetchMe(stored);
+          const { user: me, bloodEligibility, ...trust } = await fetchMe(stored);
           setToken(stored);
           setUser(me);
           setBloodEligibility(bloodEligibility);
-          setTrustTierInfo({ trustTier, confirmedContributionsCount });
+          setTrustTierInfo(trust);
         } catch (err) {
           if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
             await SecureStore.deleteItemAsync(TOKEN_KEY);
@@ -77,10 +77,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       refreshUser: async () => {
         if (!token) return;
-        const { user: me, bloodEligibility, trustTier, confirmedContributionsCount } = await fetchMe(token);
+        const { user: me, bloodEligibility, ...trust } = await fetchMe(token);
         setUser(me);
         setBloodEligibility(bloodEligibility);
-        setTrustTierInfo({ trustTier, confirmedContributionsCount });
+        setTrustTierInfo(trust);
       },
     }),
     [user, token, isLoading, bloodEligibility, trustTierInfo]

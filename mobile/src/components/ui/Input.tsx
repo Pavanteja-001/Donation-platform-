@@ -1,90 +1,148 @@
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolateColor } from "react-native-reanimated";
+import { StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolateColor,
+  FadeIn,
+} from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { theme } from "../../lib/theme";
 
-const AnimatedView = Animated.createAnimatedComponent(View);
+type IconName = keyof typeof Feather.glyphMap;
 
-// PRD Appendix A.4 — Labeled input with prefix support and inline error slot.
-// Overhauled with Reanimated to animate border colors and a subtle focus glow.
+/**
+ * PRD Appendix A.4 — labelled input with prefix, icon and inline error slot.
+ *
+ * Idle state is a soft slate "well" that lifts to white on focus, with the border easing to teal
+ * and a faint coloured glow. Animating fill *and* border gives focus a clear, calm target without
+ * needing a heavy outline.
+ *
+ * Note: this component owns no outer margin. Spacing between fields belongs to the parent's
+ * `gap`, so a form can space itself without fighting a hardcoded margin from inside.
+ */
 export function Input({
   label,
   prefix,
+  icon,
   error,
+  helper,
   style,
+  containerStyle,
   onFocus,
   onBlur,
+  multiline,
   ...props
-}: TextInputProps & { label?: string; prefix?: string; error?: string }) {
-  const isFocused = useSharedValue(0);
+}: TextInputProps & {
+  label?: string;
+  prefix?: string;
+  icon?: IconName;
+  error?: string;
+  helper?: string;
+  containerStyle?: StyleProp<ViewStyle>;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+  const focus = useSharedValue(0);
+  const hasError = !!error;
 
   const animatedContainerStyle = useAnimatedStyle(() => {
-    const borderColor = interpolateColor(
-      isFocused.value,
-      [0, 1],
-      [theme.color.border, theme.color.primary]
-    );
+    // An error outranks focus: a field that's wrong should stay visibly wrong while you fix it.
+    const borderColor = hasError
+      ? theme.color.danger
+      : interpolateColor(focus.value, [0, 1], [theme.color.border, theme.color.primary]);
+
+    const backgroundColor = hasError
+      ? theme.color.dangerSoft
+      : interpolateColor(focus.value, [0, 1], [theme.color.background, theme.color.surface]);
 
     return {
-      borderColor: error ? theme.color.danger : borderColor,
-      // Subtle elevation/glow on focus for premium look
-      shadowColor: theme.color.primary,
-      shadowOpacity: withTiming(isFocused.value * 0.08, { duration: 150 }),
+      borderColor,
+      backgroundColor,
+      shadowColor: hasError ? theme.color.danger : theme.color.primary,
+      shadowOpacity: withTiming(focus.value * 0.14, { duration: theme.motion.fast }),
+      shadowRadius: withTiming(focus.value * 8, { duration: theme.motion.fast }),
       shadowOffset: { width: 0, height: 2 },
-      shadowRadius: withTiming(isFocused.value * 3, { duration: 150 }),
+      elevation: 0,
     };
-  });
+  }, [hasError]);
+
+  const iconColor = hasError ? theme.color.danger : isFocused ? theme.color.primary : theme.color.textTertiary;
 
   return (
-    <View style={styles.wrap}>
+    <View style={containerStyle}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <AnimatedView style={[styles.inputContainer, animatedContainerStyle]}>
+
+      <Animated.View style={[styles.inputContainer, multiline && styles.inputContainerMultiline, animatedContainerStyle]}>
+        {icon && <Feather name={icon} size={17} color={iconColor} style={styles.icon} />}
         {prefix && <Text style={styles.prefix}>{prefix}</Text>}
+
         <TextInput
-          style={[styles.input, prefix ? { paddingLeft: 0 } : { paddingLeft: theme.spacing.lg }, style]}
-          placeholderTextColor={theme.color.textSecondary}
+          style={[styles.input, (icon || prefix) && styles.inputWithAdornment, multiline && styles.inputMultiline, style]}
+          placeholderTextColor={theme.color.textTertiary}
+          selectionColor={theme.color.primary}
+          multiline={multiline}
           onFocus={(e) => {
-            isFocused.value = withTiming(1, { duration: 150 });
-            if (onFocus) onFocus(e);
+            setIsFocused(true);
+            focus.value = withTiming(1, { duration: theme.motion.fast });
+            onFocus?.(e);
           }}
           onBlur={(e) => {
-            isFocused.value = withTiming(0, { duration: 150 });
-            if (onBlur) onBlur(e);
+            setIsFocused(false);
+            focus.value = withTiming(0, { duration: theme.motion.fast });
+            onBlur?.(e);
           }}
           {...props}
         />
-      </AnimatedView>
-      {error && <Text style={styles.error}>{error}</Text>}
+      </Animated.View>
+
+      {error ? (
+        <Animated.View entering={FadeIn.duration(theme.motion.fast)} style={styles.messageRow}>
+          <Feather name="alert-circle" size={12} color={theme.color.danger} />
+          <Text style={styles.errorText}>{error}</Text>
+        </Animated.View>
+      ) : helper ? (
+        <View style={styles.messageRow}>
+          <Text style={styles.helperText}>{helper}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginBottom: theme.spacing.md },
-  label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.xs },
+  label: {
+    ...theme.typography.caption,
+    fontWeight: "700",
+    color: theme.color.textPrimary,
+    marginBottom: theme.spacing.sm,
+  },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderRadius: theme.radius,
-    minHeight: 48, // slightly increased for premium feel
-    // iOS shadow settings container (Android elevation requires different config, but shadow properties are standard)
-    elevation: 2,
+    borderWidth: 1.5,
+    borderRadius: theme.radii.md,
+    minHeight: 52,
+    paddingHorizontal: theme.spacing.lg,
   },
+  inputContainerMultiline: { alignItems: "flex-start", paddingVertical: theme.spacing.md },
+  icon: { marginRight: theme.spacing.sm },
   prefix: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
     color: theme.color.textSecondary,
-    paddingLeft: theme.spacing.lg,
-    paddingRight: theme.spacing.xs,
+    marginRight: theme.spacing.sm,
   },
   input: {
     flex: 1,
     paddingVertical: theme.spacing.md,
-    paddingRight: theme.spacing.lg,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: "500",
     color: theme.color.textPrimary,
   },
-  error: { color: theme.color.danger, fontSize: 12, marginTop: theme.spacing.xs },
+  inputWithAdornment: { paddingLeft: 0 },
+  inputMultiline: { minHeight: 88, textAlignVertical: "top", paddingTop: 0 },
+  messageRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: theme.spacing.xs + 2 },
+  errorText: { ...theme.typography.caption, color: theme.color.danger, fontWeight: "600", flex: 1 },
+  helperText: { ...theme.typography.caption, color: theme.color.textTertiary, flex: 1 },
 });

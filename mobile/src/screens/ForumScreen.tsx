@@ -1,34 +1,80 @@
-// PRD §12 — Community Q&A Forum screen. Lists questions with answer counts; users can ask
-// new questions. Pagination via cursor. Tap a question to open the detail screen.
+// PRD §12 — Community Q&A forum. Lists questions with answer counts; users can ask new ones.
+// Cursor pagination.
 import { useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  TextInput,
-  Modal,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import { View, Text, StyleSheet, Modal, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { FlashList } from "@shopify/flash-list";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
-import {
-  fetchForumQuestions,
-  askForumQuestion,
-  ForumQuestion,
-} from "../lib/api";
+import { fetchForumQuestions, askForumQuestion, type ForumQuestion } from "../lib/api";
 import { theme } from "../lib/theme";
-import { Card, EmptyState, ErrorState } from "../components/ui";
+import { timeAgo } from "../lib/needMeta";
+import { Avatar, Button, EmptyState, ErrorState, Input, Skeleton, PressableScale } from "../components/ui";
 
 type Props = { onSelectQuestion: (question: ForumQuestion) => void };
+
+function ForumSkeleton() {
+  return (
+    <View style={styles.skeletonWrap}>
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} style={[styles.card, theme.elevation.level1, { gap: theme.spacing.md }]}>
+          <Skeleton width="85%" height={18} />
+          <Skeleton width="60%" height={13} />
+          <View style={styles.rowBetween}>
+            <Skeleton width={110} height={20} radius={theme.radii.pill} />
+            <Skeleton width={70} height={20} radius={theme.radii.pill} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function QuestionCard({ item, onPress }: { item: ForumQuestion; onPress: () => void }) {
+  const answers = item._count?.answers ?? 0;
+  const asked = timeAgo(item.createdAt);
+
+  return (
+    <PressableScale onPress={onPress} scaleTo={0.985} style={[styles.card, theme.elevation.level2]}>
+      <Text style={styles.questionTitle} numberOfLines={2}>
+        {item.title}
+      </Text>
+
+      <View style={styles.metaRow}>
+        <View style={styles.authorGroup}>
+          <Avatar name={item.author.name} size={22} />
+          <Text style={styles.authorName} numberOfLines={1}>
+            {item.author.name ?? "User"}
+          </Text>
+        </View>
+
+        <View style={styles.metaRight}>
+          {asked && <Text style={styles.metaText}>{asked}</Text>}
+          {/* An answered question reads differently from an open one, so the count is a chip
+              rather than another grey line of text. */}
+          <View style={[styles.answerChip, answers > 0 && styles.answerChipActive]}>
+            <Feather
+              name="message-circle"
+              size={11}
+              color={answers > 0 ? theme.color.primary : theme.color.textTertiary}
+            />
+            <Text style={[styles.answerChipText, answers > 0 && styles.answerChipTextActive]}>
+              {answers}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </PressableScale>
+  );
+}
 
 export function ForumScreen({ onSelectQuestion }: Props) {
   const { token } = useAuth();
   const [questions, setQuestions] = useState<ForumQuestion[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAsk, setShowAsk] = useState(false);
   const [askTitle, setAskTitle] = useState("");
@@ -48,6 +94,7 @@ export function ForumScreen({ onSelectQuestion }: Props) {
         setError(err instanceof Error ? err.message : "Failed to load forum");
       } finally {
         setIsLoading(false);
+        setHasLoaded(true);
       }
     },
     [token]
@@ -75,137 +122,211 @@ export function ForumScreen({ onSelectQuestion }: Props) {
     }
   }
 
+  function closeAsk() {
+    setShowAsk(false);
+    setAskTitle("");
+    setAskBody("");
+  }
+
   if (isLoading && questions.length === 0) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={theme.color.primary} size="large" />
+      <View style={styles.container}>
+        <ForumSkeleton />
       </View>
     );
   }
 
   if (error && questions.length === 0) {
-    return <ErrorState message={error} onRetry={() => load()} />;
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ErrorState message={error} onRetry={() => load()} />
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={questions}
-        keyExtractor={(q) => q.id}
-        contentContainerStyle={questions.length === 0 ? styles.flex : styles.list}
-        ListEmptyComponent={<EmptyState title="No questions yet" subtitle="Be the first to ask the community!" />}
-        ListHeaderComponent={
-          <Pressable style={styles.askButton} onPress={() => setShowAsk(true)}>
-            <Text style={styles.askButtonText}>+ Ask a Question</Text>
-          </Pressable>
-        }
-        onEndReached={() => {
-          if (nextCursor) load(nextCursor);
-        }}
-        onEndReachedThreshold={0.4}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => onSelectQuestion(item)}>
-            <Card style={styles.card}>
-              <Text style={styles.questionTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <View style={styles.meta}>
-                <Text style={styles.metaText}>{item.author.name ?? "User"}</Text>
-                <Text style={styles.metaDot}>·</Text>
-                <Text style={styles.metaText}>{item._count?.answers ?? 0} answers</Text>
-                <Text style={styles.metaDot}>·</Text>
-                <Text style={styles.metaText}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-              </View>
-            </Card>
-          </Pressable>
-        )}
-      />
-
-      {/* Ask a Question Modal */}
-      <Modal visible={showAsk} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAsk(false)}>
-        <View style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Ask the Community</Text>
-            <Pressable onPress={() => setShowAsk(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
-            </Pressable>
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder="Question title…"
-            placeholderTextColor={theme.color.textSecondary}
-            value={askTitle}
-            onChangeText={setAskTitle}
-            maxLength={200}
+      {questions.length === 0 && hasLoaded ? (
+        <View style={styles.centered}>
+          <EmptyState
+            icon="message-circle"
+            title="No questions yet"
+            subtitle="Be the first to ask the community — someone here has probably been through it."
+            actionLabel="Ask a question"
+            onAction={() => setShowAsk(true)}
           />
-          <TextInput
-            style={[styles.input, styles.bodyInput]}
-            placeholder="Describe your question…"
-            placeholderTextColor={theme.color.textSecondary}
-            value={askBody}
-            onChangeText={setAskBody}
-            multiline
-            maxLength={5000}
-            textAlignVertical="top"
-          />
-          <Pressable
-            style={[styles.submitBtn, (!askTitle.trim() || !askBody.trim()) && styles.submitDisabled]}
-            onPress={handleAsk}
-            disabled={isSubmitting || !askTitle.trim() || !askBody.trim()}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitBtnText}>Post Question</Text>
-            )}
-          </Pressable>
         </View>
+      ) : (
+        <FlashList
+          data={questions}
+          keyExtractor={(q) => q.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => <QuestionCard item={item} onPress={() => onSelectQuestion(item)} />}
+          onEndReached={() => {
+            if (nextCursor) load(nextCursor);
+          }}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            nextCursor ? (
+              <View style={styles.loadingMore}>
+                <Skeleton width="100%" height={72} radius={theme.radii.xl} />
+              </View>
+            ) : null
+          }
+        />
+      )}
+
+      {/* Floating compose button — the primary action stays reachable no matter how far down the
+          list you've scrolled, which a list-header button doesn't. */}
+      {questions.length > 0 && (
+        <Animated.View entering={FadeInDown.duration(360)} style={styles.fabWrap}>
+          <PressableScale onPress={() => setShowAsk(true)} accessibilityLabel="Ask a question" style={styles.fab}>
+            <Feather name="edit-3" size={18} color={theme.color.onPrimary} />
+            <Text style={styles.fabText}>Ask</Text>
+          </PressableScale>
+        </Animated.View>
+      )}
+
+      <Modal visible={showAsk} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeAsk}>
+        <KeyboardAvoidingView style={styles.modal} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Ask the community</Text>
+            <PressableScale onPress={closeAsk} hitSlop={10} style={styles.modalClose}>
+              <Feather name="x" size={20} color={theme.color.textSecondary} />
+            </PressableScale>
+          </View>
+
+          <View style={styles.modalBody}>
+            <Input
+              label="Question"
+              placeholder="What do you want to ask?"
+              icon="help-circle"
+              value={askTitle}
+              onChangeText={setAskTitle}
+              maxLength={200}
+              helper={`${askTitle.length}/200`}
+            />
+
+            <Input
+              label="Details"
+              placeholder="Add context so people can actually help…"
+              multiline
+              value={askBody}
+              onChangeText={setAskBody}
+              maxLength={5000}
+            />
+
+            {/* PRD §12.3 — the forum is moderated; saying so up front is cheaper than removing
+                posts later. */}
+            <View style={styles.noticeBox}>
+              <Feather name="info" size={15} color={theme.color.info} />
+              <Text style={styles.noticeText}>
+                Questions are public and moderated. Don't share personal medical or contact details.
+              </Text>
+            </View>
+          </View>
+
+          <Animated.View entering={FadeIn.duration(theme.motion.fast)} style={styles.modalActions}>
+            <Button
+              label="Post question"
+              icon="send"
+              size="lg"
+              glow
+              onPress={handleAsk}
+              disabled={!askTitle.trim() || !askBody.trim()}
+              loading={isSubmitting}
+            />
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   container: { flex: 1, backgroundColor: theme.color.background },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.color.background },
-  list: { padding: theme.spacing.lg },
-  askButton: {
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
-    alignItems: "center",
-    marginBottom: theme.spacing.lg,
-  },
-  askButtonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
-  card: { marginBottom: theme.spacing.md },
-  questionTitle: { fontSize: 15, fontWeight: "600", color: theme.color.textPrimary, marginBottom: 6 },
-  meta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 4 },
-  metaText: { fontSize: 12, color: theme.color.textSecondary },
-  metaDot: { fontSize: 12, color: theme.color.textSecondary },
-  modal: { flex: 1, backgroundColor: theme.color.background, padding: theme.spacing.lg },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.lg },
-  modalTitle: { fontSize: 18, fontWeight: "700", color: theme.color.textPrimary },
-  modalCancel: { fontSize: 15, color: theme.color.primary },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    fontSize: 15,
-    color: theme.color.textPrimary,
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
+  list: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl * 2 },
+  skeletonWrap: { padding: theme.spacing.lg, gap: theme.spacing.md },
+  loadingMore: { paddingTop: theme.spacing.xs },
+
+  card: {
     backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.borderSubtle,
+    borderRadius: theme.radii.xl,
+    padding: theme.spacing.lg,
     marginBottom: theme.spacing.md,
+    gap: theme.spacing.md,
   },
-  bodyInput: { minHeight: 140 },
-  submitBtn: {
-    backgroundColor: theme.color.primary,
-    borderRadius: theme.radius,
-    paddingVertical: theme.spacing.md,
+  questionTitle: { ...theme.typography.h3, color: theme.color.textPrimary },
+
+  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: theme.spacing.sm },
+  authorGroup: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, flexShrink: 1 },
+  authorName: { ...theme.typography.caption, color: theme.color.textSecondary, fontWeight: "600", flexShrink: 1 },
+  metaRight: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md },
+  metaText: { ...theme.typography.caption, color: theme.color.textTertiary },
+
+  answerChip: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: theme.spacing.sm,
+    gap: 4,
+    backgroundColor: theme.color.surfaceMuted,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 3,
   },
-  submitDisabled: { opacity: 0.5 },
-  submitBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  answerChipActive: { backgroundColor: theme.color.primarySoft },
+  answerChipText: { ...theme.typography.caption, fontWeight: "800", color: theme.color.textTertiary },
+  answerChipTextActive: { color: theme.color.primary },
+
+  fabWrap: { position: "absolute", right: theme.spacing.lg, bottom: theme.spacing.xl },
+  fab: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.color.primary,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.md,
+    ...theme.glow.primary,
+  },
+  fabText: { color: theme.color.onPrimary, fontWeight: "800", fontSize: 15 },
+
+  modal: { flex: 1, backgroundColor: theme.color.background },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: theme.spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.color.borderSubtle,
+  },
+  modalTitle: { ...theme.typography.h2, color: theme.color.textPrimary },
+  modalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: theme.color.surfaceMuted,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBody: { flex: 1, padding: theme.spacing.lg, gap: theme.spacing.lg },
+  modalActions: {
+    padding: theme.spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: theme.color.borderSubtle,
+  },
+
+  noticeBox: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    alignItems: "flex-start",
+    backgroundColor: theme.color.infoSoft,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+  },
+  noticeText: { ...theme.typography.caption, color: theme.color.textSecondary, flex: 1, lineHeight: 17 },
 });

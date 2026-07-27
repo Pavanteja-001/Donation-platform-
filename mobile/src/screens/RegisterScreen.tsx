@@ -1,15 +1,12 @@
-import React, { useState } from "react";
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { useMemo, useState } from "react";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { updateMe, type BloodGroup, type Gender } from "../lib/api";
 import { theme } from "../lib/theme";
-import { Button, Input, Chip, Card } from "../components/ui";
+import { ProgressBar } from "../components/ProgressBar";
+import { Button, Input, Chip, PressableScale } from "../components/ui";
 
 const BLOOD_GROUPS: BloodGroup[] = [
   "A_POSITIVE",
@@ -32,6 +29,38 @@ const GENDERS: { value: Gender; label: string }[] = [
   { value: "OTHER", label: "Other" },
 ];
 
+/** Groups related fields under a titled, tinted icon — the form reads as three short sections. */
+function Section({
+  icon,
+  title,
+  subtitle,
+  children,
+  tone = theme.color.primary,
+  tint = theme.color.primarySoft,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  tone?: string;
+  tint?: string;
+}) {
+  return (
+    <View style={[styles.card, theme.elevation.level2]}>
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIcon, { backgroundColor: tint }]}>
+          <Feather name={icon} size={15} color={tone} />
+        </View>
+        <View style={styles.sectionTitles}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+        </View>
+      </View>
+      <View style={styles.sectionBody}>{children}</View>
+    </View>
+  );
+}
+
 export function RegisterScreen({
   isSkippable,
   onDone,
@@ -52,6 +81,19 @@ export function RegisterScreen({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Live completion of the six required fields (email is optional). This screen blocks posting
+  // and blood response, so showing how close you are is worth the few lines.
+  const completed = useMemo(
+    () => [name.trim(), dob.trim(), gender, bloodGroup, city.trim(), area.trim()].filter(Boolean).length,
+    [name, dob, gender, bloodGroup, city, area]
+  );
+  const totalRequired = 6;
+  const isComplete = completed === totalRequired;
+
+  function clearFieldError(key: string) {
+    setErrors((prev) => (prev[key] ? { ...prev, [key]: "" } : prev));
+  }
+
   const handleSave = async () => {
     if (!token) return;
 
@@ -70,7 +112,7 @@ export function RegisterScreen({
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
-      setError("Please fix the validation errors below.");
+      setError("Please fix the highlighted fields below.");
       return;
     }
 
@@ -96,132 +138,234 @@ export function RegisterScreen({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Card elevated style={styles.card}>
-        <Text style={styles.title}>Complete your profile</Text>
-        <Text style={styles.hint}>
-          To post needs or respond to blood requests, India eligibility rules require a completed profile.
-        </Text>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Animated.View entering={FadeInDown.duration(360)} style={styles.intro}>
+          <Text style={styles.title}>Complete your profile</Text>
+          <Text style={styles.hint}>
+            India's blood-donation eligibility rules require these details before you can post a need or respond to a
+            blood request.
+          </Text>
 
-        <Input
-          label="Full Name"
-          placeholder="Enter your full name"
-          value={name}
-          onChangeText={(txt) => {
-            setName(txt);
-            if (errors.name) setErrors((prev) => ({ ...prev, name: "" }));
-          }}
-          error={errors.name}
-        />
+          <View style={styles.progressWrap}>
+            <View style={styles.progressLabelRow}>
+              <Text style={styles.progressLabel}>
+                {completed} of {totalRequired} required details
+              </Text>
+              {isComplete && (
+                <Animated.View entering={FadeIn.duration(theme.motion.normal)} style={styles.readyChip}>
+                  <Feather name="check" size={11} color={theme.color.success} />
+                  <Text style={styles.readyChipText}>Ready</Text>
+                </Animated.View>
+              )}
+            </View>
+            <ProgressBar raised={completed} target={totalRequired} showLabel={false} height={6} />
+          </View>
+        </Animated.View>
 
-        <Input
-          label="Email Address (optional)"
-          placeholder="Enter your email address"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={(txt) => {
-            setEmail(txt);
-            if (errors.email) setErrors((prev) => ({ ...prev, email: "" }));
-          }}
-          error={errors.email}
-        />
-
-        <Input
-          label="Date of Birth"
-          placeholder="YYYY-MM-DD"
-          value={dob}
-          onChangeText={(txt) => {
-            setDob(txt);
-            if (errors.dob) setErrors((prev) => ({ ...prev, dob: "" }));
-          }}
-          error={errors.dob}
-        />
-
-        <Input
-          label="Permanent City"
-          placeholder="e.g. Visakhapatnam"
-          value={city}
-          onChangeText={(txt) => {
-            setCity(txt);
-            if (errors.city) setErrors((prev) => ({ ...prev, city: "" }));
-          }}
-          error={errors.city}
-        />
-
-        <Input
-          label="Permanent Area / Locality"
-          placeholder="e.g. Madhurawada"
-          value={area}
-          onChangeText={(txt) => {
-            setArea(txt);
-            if (errors.area) setErrors((prev) => ({ ...prev, area: "" }));
-          }}
-          error={errors.area}
-        />
-
-        <Text style={styles.label}>Gender</Text>
-        <View style={[styles.chipGrid, errors.gender ? { marginBottom: theme.spacing.xs } : null]}>
-          {GENDERS.map((g) => (
-            <Chip
-              key={g.value}
-              label={g.label}
-              active={gender === g.value}
-              onPress={() => {
-                setGender(g.value);
-                if (errors.gender) setErrors((prev) => ({ ...prev, gender: "" }));
+        <Animated.View entering={FadeInDown.delay(60).duration(360)}>
+          <Section icon="user" title="About you" subtitle="Your name as it should appear on records">
+            <Input
+              label="Full name"
+              placeholder="Enter your full name"
+              icon="user"
+              value={name}
+              onChangeText={(txt) => {
+                setName(txt);
+                clearFieldError("name");
               }}
+              error={errors.name || undefined}
             />
-          ))}
-        </View>
-        {errors.gender ? <Text style={styles.fieldError}>{errors.gender}</Text> : null}
 
-        <Text style={styles.label}>Blood Group</Text>
-        <View style={[styles.chipGrid, errors.bloodGroup ? { marginBottom: theme.spacing.xs } : null]}>
-          {BLOOD_GROUPS.map((g) => (
-            <Chip
-              key={g}
-              label={formatGroup(g)}
-              active={bloodGroup === g}
-              onPress={() => {
-                setBloodGroup(g);
-                if (errors.bloodGroup) setErrors((prev) => ({ ...prev, bloodGroup: "" }));
+            <Input
+              label="Email address"
+              placeholder="you@example.com"
+              icon="mail"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              helper="Optional"
+              value={email}
+              onChangeText={(txt) => {
+                setEmail(txt);
+                clearFieldError("email");
               }}
+              error={errors.email || undefined}
             />
-          ))}
-        </View>
-        {errors.bloodGroup ? <Text style={styles.fieldError}>{errors.bloodGroup}</Text> : null}
 
-        {error && <Text style={styles.errorText}>{error}</Text>}
+            <Input
+              label="Date of birth"
+              placeholder="YYYY-MM-DD"
+              icon="calendar"
+              value={dob}
+              onChangeText={(txt) => {
+                setDob(txt);
+                clearFieldError("dob");
+              }}
+              error={errors.dob || undefined}
+            />
+
+            <View>
+              <Text style={styles.label}>Gender</Text>
+              <View style={styles.chipGrid}>
+                {GENDERS.map((g) => (
+                  <Chip
+                    key={g.value}
+                    label={g.label}
+                    active={gender === g.value}
+                    onPress={() => {
+                      setGender(g.value);
+                      clearFieldError("gender");
+                    }}
+                  />
+                ))}
+              </View>
+              {errors.gender ? <FieldError message={errors.gender} /> : null}
+            </View>
+          </Section>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(120).duration(360)}>
+          {/* D-010 — this is the permanent location that blood alerts are matched on, not GPS. */}
+          <Section
+            icon="map-pin"
+            title="Permanent location"
+            subtitle="Blood requests in this city will notify you"
+            tone={theme.color.info}
+            tint={theme.color.infoSoft}
+          >
+            <Input
+              label="City"
+              placeholder="e.g. Visakhapatnam"
+              icon="map-pin"
+              value={city}
+              onChangeText={(txt) => {
+                setCity(txt);
+                clearFieldError("city");
+              }}
+              error={errors.city || undefined}
+            />
+
+            <Input
+              label="Area / locality"
+              placeholder="e.g. Madhurawada"
+              icon="navigation"
+              value={area}
+              onChangeText={(txt) => {
+                setArea(txt);
+                clearFieldError("area");
+              }}
+              error={errors.area || undefined}
+            />
+          </Section>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(180).duration(360)}>
+          <Section
+            icon="droplet"
+            title="Blood group"
+            subtitle="Kept private until you accept a request"
+            tone={theme.color.blood}
+            tint={theme.color.bloodSoft}
+          >
+            <View style={styles.chipGrid}>
+              {BLOOD_GROUPS.map((g) => (
+                <Chip
+                  key={g}
+                  label={formatGroup(g)}
+                  tone="blood"
+                  active={bloodGroup === g}
+                  onPress={() => {
+                    setBloodGroup(g);
+                    clearFieldError("bloodGroup");
+                  }}
+                />
+              ))}
+            </View>
+            {errors.bloodGroup ? <FieldError message={errors.bloodGroup} /> : null}
+          </Section>
+        </Animated.View>
+
+        {error && (
+          <Animated.View entering={FadeIn.duration(theme.motion.fast)} style={styles.errorBox}>
+            <Feather name="alert-circle" size={15} color={theme.color.danger} />
+            <Text style={styles.errorText}>{error}</Text>
+          </Animated.View>
+        )}
 
         <View style={styles.actions}>
-          <Button label="Save & Continue" onPress={handleSave} loading={isSaving} />
+          <Button label="Save & continue" icon="check" size="lg" glow onPress={handleSave} loading={isSaving} />
           {isSkippable && (
-            <TouchableOpacity onPress={onDone} style={styles.skipButton}>
+            <PressableScale onPress={onDone} style={styles.skipButton}>
               <Text style={styles.skipText}>Skip for now</Text>
-            </TouchableOpacity>
+            </PressableScale>
           )}
         </View>
-      </Card>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function FieldError({ message }: { message: string }) {
+  return (
+    <Animated.View entering={FadeIn.duration(theme.motion.fast)} style={styles.fieldErrorRow}>
+      <Feather name="alert-circle" size={12} color={theme.color.danger} />
+      <Text style={styles.fieldErrorText}>{message}</Text>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.md, paddingTop: 24, paddingBottom: 40 },
-  card: {
-    padding: theme.spacing.xl,
-    borderRadius: theme.radius * 1.5,
-    backgroundColor: theme.color.surface,
+  content: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl, gap: theme.spacing.md },
+
+  intro: { paddingHorizontal: theme.spacing.xs, paddingTop: theme.spacing.sm, gap: theme.spacing.sm },
+  title: { ...theme.typography.h1, color: theme.color.textPrimary },
+  hint: { ...theme.typography.bodySmall, color: theme.color.textSecondary },
+  progressWrap: { marginTop: theme.spacing.md, gap: theme.spacing.sm },
+  progressLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  progressLabel: { ...theme.typography.caption, color: theme.color.textSecondary, fontWeight: "700" },
+  readyChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: theme.color.successSoft,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 3,
+    borderRadius: theme.radii.pill,
   },
-  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 6 },
-  hint: { ...theme.typography.caption, fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
-  label: { fontSize: 13, fontWeight: "600", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },
-  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
-  errorText: { color: theme.color.danger, fontSize: 13, marginTop: theme.spacing.md, marginBottom: theme.spacing.md },
-  fieldError: { color: theme.color.danger, fontSize: 12, marginTop: 0, marginBottom: theme.spacing.md },
-  actions: { gap: theme.spacing.md, marginTop: theme.spacing.md },
+  readyChipText: { ...theme.typography.overline, color: theme.color.success },
+
+  card: {
+    backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.borderSubtle,
+    borderRadius: theme.radii.xl,
+    padding: theme.spacing.xl,
+  },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md, marginBottom: theme.spacing.lg },
+  sectionIcon: { width: 32, height: 32, borderRadius: theme.radii.sm, alignItems: "center", justifyContent: "center" },
+  sectionTitles: { flex: 1, gap: 2 },
+  sectionTitle: { ...theme.typography.h3, color: theme.color.textPrimary },
+  sectionSubtitle: { ...theme.typography.caption, color: theme.color.textTertiary },
+  sectionBody: { gap: theme.spacing.lg },
+
+  label: { ...theme.typography.caption, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.sm },
+  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+
+  fieldErrorRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: theme.spacing.sm },
+  fieldErrorText: { ...theme.typography.caption, color: theme.color.danger, fontWeight: "600", flex: 1 },
+
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.color.dangerSoft,
+    padding: theme.spacing.md,
+    borderRadius: theme.radii.md,
+  },
+  errorText: { ...theme.typography.bodySmall, color: theme.color.dangerDeep, fontWeight: "600", flex: 1 },
+
+  actions: { gap: theme.spacing.sm, marginTop: theme.spacing.sm },
   skipButton: { paddingVertical: theme.spacing.md, alignItems: "center" },
-  skipText: { color: theme.color.textSecondary, fontSize: 15, fontWeight: "600" },
+  skipText: { color: theme.color.textSecondary, fontSize: 15, fontWeight: "700" },
 });

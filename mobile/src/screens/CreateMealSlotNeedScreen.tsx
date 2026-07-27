@@ -1,17 +1,22 @@
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import { StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, ZoomIn } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { postMealSlotNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { formatAmount, formatShortDate } from "../lib/needMeta";
 import { PhotoPicker, type PickedPhoto } from "../components/PhotoPicker";
-import { Button, Input, Chip, Card } from "../components/ui";
+import { CreateNeedScaffold, Field } from "../components/CreateNeedScaffold";
+import { Input, Chip, Button, PressableScale } from "../components/ui";
 
 type Mode = "MONEY" | "DELIVER";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_DATES = 60;
 
-// PRD §10.1/§10.2 — post a MEAL_SLOT need. Overhauled with Reanimated and premium styling.
+// PRD §10.1/§10.2 — post a MEAL_SLOT need. Each date becomes a separately bookable MealSlot
+// child entity, which is what makes this type (with BLOOD) one of the two custom modules.
 export function CreateMealSlotNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
@@ -30,7 +35,7 @@ export function CreateMealSlotNeedScreen({ onDone }: { onDone: () => void }) {
     const d = dateInput.trim();
     if (!DATE_RE.test(d)) return setError("Enter a date as YYYY-MM-DD");
     if (dates.includes(d)) return setError("That date is already in the list");
-    if (dates.length >= 60) return setError("A meal-slot need can have at most 60 dates");
+    if (dates.length >= MAX_DATES) return setError(`A meal-slot need can have at most ${MAX_DATES} dates`);
     setError(null);
     setDates((prev) => [...prev, d].sort());
     setDateInput("");
@@ -71,150 +76,198 @@ export function CreateMealSlotNeedScreen({ onDone }: { onDone: () => void }) {
     }
   }
 
+  const cost = Number(costPerSlot);
+  const total = cost > 0 && dates.length > 0 ? cost * dates.length : null;
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-        <Card elevated style={styles.card}>
-          <Text style={styles.title}>Post a Meal Slot Need</Text>
-          <Text style={styles.hint}>An admin verifies every helper request before it goes live.</Text>
+    <CreateNeedScaffold
+      type="MEAL_SLOT"
+      title="Sponsor meal dates"
+      subtitle="Donors book specific calendar dates to sponsor or serve meals."
+      error={error}
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+    >
+      <Input
+        label="Title"
+        placeholder="e.g. Daily lunch programme at shelter home"
+        icon="type"
+        value={title}
+        onChangeText={(txt) => {
+          setTitle(txt);
+          setError(null);
+        }}
+      />
 
-          <Input
-            label="Title"
-            placeholder="E.g., Daily lunch program at shelter home"
-            value={title}
-            onChangeText={(txt) => {
-              setTitle(txt);
-              setError(null);
-            }}
-          />
-          <Input
-            label="Description"
-            placeholder="Describe who these meals will serve"
-            value={description}
-            onChangeText={(txt) => {
-              setDescription(txt);
-              setError(null);
-            }}
-            multiline
-            style={styles.multiline}
-          />
-          <Input
-            label="Meal Type"
-            placeholder="E.g., Lunch, Breakfast, Dinner"
-            value={mealType}
-            onChangeText={(txt) => {
-              setMealType(txt);
-              setError(null);
-            }}
-          />
-          <Input
-            label="Cost per Slot (₹)"
-            placeholder="E.g., 2500"
-            keyboardType="number-pad"
-            value={costPerSlot}
-            onChangeText={(txt) => {
-              setCostPerSlot(txt);
-              setError(null);
-            }}
-          />
+      <Input
+        label="Description"
+        placeholder="Describe who these meals will serve"
+        multiline
+        value={description}
+        onChangeText={(txt) => {
+          setDescription(txt);
+          setError(null);
+        }}
+      />
 
-          <Text style={styles.label}>How can donors help?</Text>
-          <View style={styles.modeRow}>
-            <Chip
-              label="Fund a slot (money)"
-              active={mode === "MONEY"}
-              onPress={() => {
-                setMode("MONEY");
-                setError(null);
-              }}
-            />
-            <Chip
-              label="Cook & serve in person"
-              active={mode === "DELIVER"}
-              onPress={() => {
-                setMode("DELIVER");
-                setError(null);
-              }}
-            />
-          </View>
-          <Text style={styles.fieldHint}>
-            {mode === "MONEY"
-              ? "Donors pay per slot via UPI directly to you, same as a money request."
-              : "Donors pledge to personally cook/serve that date — no app payment."}
-          </Text>
+      <Input
+        label="Meal type"
+        placeholder="e.g. Lunch"
+        icon="coffee"
+        value={mealType}
+        onChangeText={(txt) => {
+          setMealType(txt);
+          setError(null);
+        }}
+      />
 
-          {mode === "MONEY" && (
+      <Input
+        label="Cost per slot"
+        placeholder="2500"
+        prefix="₹"
+        keyboardType="number-pad"
+        value={costPerSlot}
+        onChangeText={(txt) => {
+          setCostPerSlot(txt);
+          setError(null);
+        }}
+      />
+
+      <Field label="How can donors help?">
+        <View style={styles.modeRow}>
+          <Chip
+            label="Sponsor a date"
+            icon="credit-card"
+            active={mode === "MONEY"}
+            onPress={() => {
+              setMode("MONEY");
+              setError(null);
+            }}
+          />
+          <Chip
+            label="Cook & serve"
+            icon="truck"
+            active={mode === "DELIVER"}
+            onPress={() => {
+              setMode("DELIVER");
+              setError(null);
+            }}
+          />
+        </View>
+        <Text style={styles.modeHint}>
+          {mode === "MONEY"
+            ? "Donors pay per date via UPI directly to you."
+            : "Donors pledge to cook and serve on the date they book — no app payment."}
+        </Text>
+      </Field>
+
+      {mode === "MONEY" && (
+        <Animated.View entering={FadeIn.duration(theme.motion.normal)}>
+          <Input
+            label="Your UPI ID"
+            placeholder="name@upi"
+            icon="credit-card"
+            helper="Donors pay this directly — double-check it"
+            autoCapitalize="none"
+            value={upiId}
+            onChangeText={(txt) => {
+              setUpiId(txt);
+              setError(null);
+            }}
+          />
+        </Animated.View>
+      )}
+
+      {/* Each date becomes a bookable slot (§10.2), locked on booking so two donors can't take
+          the same one (§10.3/D-022). */}
+      <Field label="Available dates" helper={`Add each date donors can book — up to ${MAX_DATES}`}>
+        <View style={styles.dateEntryRow}>
+          <View style={styles.dateInput}>
             <Input
-              label="Your UPI ID"
-              placeholder="E.g., name@upi"
-              autoCapitalize="none"
-              value={upiId}
+              placeholder="2026-12-31"
+              icon="calendar"
+              keyboardType="numbers-and-punctuation"
+              value={dateInput}
               onChangeText={(txt) => {
-                setUpiId(txt);
+                setDateInput(txt);
                 setError(null);
               }}
+              onSubmitEditing={handleAddDate}
+              returnKeyType="done"
             />
-          )}
-
-          <Text style={styles.label}>Bookable Dates</Text>
-          <View style={styles.dateRow}>
-            <View style={{ flex: 1 }}>
-              <Input
-                placeholder="YYYY-MM-DD"
-                value={dateInput}
-                onChangeText={(txt) => {
-                  setDateInput(txt);
-                  setError(null);
-                }}
-              />
-            </View>
-            <View style={{ marginTop: 2 }}>
-              <Button label="Add" variant="secondary" onPress={handleAddDate} />
-            </View>
           </View>
+          <Button label="Add" icon="plus" size="md" compact onPress={handleAddDate} />
+        </View>
 
-          {dates.length > 0 && (
-            <View style={styles.dateChipRow}>
-              {dates.map((d) => (
-                <Chip
-                  key={d}
-                  label={`${d} ✕`}
-                  active
+        {dates.length > 0 ? (
+          <View style={styles.dateChips}>
+            {dates.map((d) => (
+              <Animated.View key={d} entering={ZoomIn.duration(theme.motion.fast)}>
+                <PressableScale
                   onPress={() => handleRemoveDate(d)}
-                />
-              ))}
-            </View>
-          )}
-
-          <View style={styles.pickerSection}>
-            <Text style={styles.label}>Photos</Text>
-            <PhotoPicker photos={photos} onChange={setPhotos} />
+                  scaleTo={0.94}
+                  accessibilityLabel={`Remove ${d}`}
+                  style={styles.dateChip}
+                >
+                  <Text style={styles.dateChipText}>{formatShortDate(d)}</Text>
+                  <Feather name="x" size={12} color={theme.color.textSecondary} />
+                </PressableScale>
+              </Animated.View>
+            ))}
           </View>
+        ) : (
+          <View style={styles.emptyDates}>
+            <Feather name="calendar" size={15} color={theme.color.textTertiary} />
+            <Text style={styles.emptyDatesText}>No dates added yet</Text>
+          </View>
+        )}
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
-          <Button
-            label="Submit for Verification"
-            onPress={handleSubmit}
-            loading={isSubmitting}
-          />
-        </Card>
-      </Animated.View>
-    </ScrollView>
+        {total !== null && (
+          <Animated.View entering={FadeIn.duration(theme.motion.fast)} style={styles.totalBox}>
+            <Feather name="bar-chart-2" size={15} color="#8A5A00" />
+            <Text style={styles.totalText}>
+              Total ask: <Text style={styles.totalStrong}>{formatAmount(total)}</Text> across {dates.length}{" "}
+              {dates.length === 1 ? "date" : "dates"}
+            </Text>
+          </Animated.View>
+        )}
+      </Field>
+
+      <PhotoPicker photos={photos} onChange={setPhotos} />
+    </CreateNeedScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg, paddingBottom: 40 },
-  card: { padding: theme.spacing.xl, gap: theme.spacing.md },
-  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 4 },
-  hint: { ...theme.typography.caption, fontSize: 13, color: theme.color.textSecondary, lineHeight: 18, marginBottom: theme.spacing.xs },
-  label: { fontSize: 13, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.xs },
-  fieldHint: { fontSize: 12, color: theme.color.textSecondary, lineHeight: 16, marginBottom: theme.spacing.sm },
-  multiline: { minHeight: 90, textAlignVertical: "top" },
   modeRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
-  dateRow: { flexDirection: "row", gap: theme.spacing.sm, alignItems: "flex-start" },
-  dateChipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.xs },
-  pickerSection: { marginTop: theme.spacing.xs },
-  errorText: { color: theme.color.danger, fontSize: 13, fontWeight: "500" },
+  modeHint: { ...theme.typography.caption, color: theme.color.textSecondary, marginTop: theme.spacing.sm, lineHeight: 17 },
+
+  dateEntryRow: { flexDirection: "row", alignItems: "flex-start", gap: theme.spacing.sm },
+  dateInput: { flex: 1 },
+  dateChips: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.md },
+  dateChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.color.accentSoft,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 7,
+  },
+  dateChipText: { ...theme.typography.caption, fontWeight: "700", color: "#8A5A00" },
+
+  emptyDates: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, marginTop: theme.spacing.md },
+  emptyDatesText: { ...theme.typography.caption, color: theme.color.textTertiary },
+
+  totalBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.color.accentSoft,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  totalText: { ...theme.typography.caption, color: theme.color.textSecondary, flex: 1 },
+  totalStrong: { fontWeight: "800", color: theme.color.textPrimary },
 });

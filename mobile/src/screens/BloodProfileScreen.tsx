@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { updateMe, type BloodGroup, type Gender } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { Button, Input, Chip, Card } from "../components/ui";
+import { formatBloodGroup } from "../lib/needMeta";
+import { Button, Input, Chip } from "../components/ui";
 
 const BLOOD_GROUPS: BloodGroup[] = [
   "A_POSITIVE",
@@ -17,17 +19,14 @@ const BLOOD_GROUPS: BloodGroup[] = [
   "O_NEGATIVE",
 ];
 
-function formatGroup(g: BloodGroup) {
-  return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
-}
-
 const GENDERS: { value: Gender; label: string }[] = [
   { value: "MALE", label: "Male" },
   { value: "FEMALE", label: "Female" },
   { value: "OTHER", label: "Other" },
 ];
 
-// PRD §8.1 — opt-in blood donor profile. Overhauled with Reanimated and premium styling.
+// PRD §8.1 — the opt-in blood donor profile. This is the data that makes a user matchable, and
+// it's sensitive health data (CLAUDE.md §7), so the screen says plainly what it's used for.
 export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
   const { token, user, refreshUser } = useAuth();
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | null>(user?.bloodGroup ?? null);
@@ -57,49 +56,65 @@ export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-        <Card elevated style={styles.card}>
-          <Text style={styles.title}>Blood Donor Profile</Text>
-          <Text style={styles.hint}>
-            Filling this in is what makes you a matchable blood donor. We only use it to
-            find eligible donors nearby — never shown to anyone until you respond to a request.
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Animated.View entering={FadeInDown.duration(360)} style={styles.header}>
+          <View style={styles.headerIcon}>
+            <Feather name="droplet" size={20} color={theme.color.blood} />
+          </View>
+          <Text style={styles.title}>Blood donor profile</Text>
+          <Text style={styles.subtitle}>
+            This is what makes you a matchable donor. It's used only to find eligible donors for a
+            request — never shown to anyone until you choose to respond.
           </Text>
+        </Animated.View>
 
-          <Text style={styles.label}>Blood Group</Text>
-          <View style={styles.chipGrid}>
-            {BLOOD_GROUPS.map((g) => (
-              <Chip
-                key={g}
-                label={formatGroup(g)}
-                active={bloodGroup === g}
-                onPress={() => {
-                  setBloodGroup(g);
-                  setError(null);
-                }}
-              />
-            ))}
+        <Animated.View entering={FadeInDown.delay(60).duration(360)} style={[styles.card, theme.elevation.level2]}>
+          <View>
+            <Text style={styles.label}>Blood group</Text>
+            <View style={styles.chipGrid}>
+              {BLOOD_GROUPS.map((g) => (
+                <Chip
+                  key={g}
+                  label={formatBloodGroup(g)}
+                  tone="blood"
+                  active={bloodGroup === g}
+                  onPress={() => {
+                    setBloodGroup(g);
+                    setError(null);
+                  }}
+                />
+              ))}
+            </View>
           </View>
 
-          <Text style={styles.label}>Gender</Text>
-          <Text style={styles.fieldHint}>Only used to compute the India donation-gap rule (90 days men / 120 days women).</Text>
-          <View style={styles.chipGrid}>
-            {GENDERS.map((g) => (
-              <Chip
-                key={g.value}
-                label={g.label}
-                active={gender === g.value}
-                onPress={() => {
-                  setGender(g.value);
-                  setError(null);
-                }}
-              />
-            ))}
+          <View>
+            <Text style={styles.label}>Gender</Text>
+            {/* D-005 — gender is collected strictly to apply India's donation-gap rule, so the
+                screen states that rather than leaving the user to wonder why it's asked. */}
+            <Text style={styles.fieldHelper}>
+              Used only for India's donation-gap rule — 90 days for men, 120 days for women.
+            </Text>
+            <View style={styles.chipGrid}>
+              {GENDERS.map((g) => (
+                <Chip
+                  key={g.value}
+                  label={g.label}
+                  active={gender === g.value}
+                  onPress={() => {
+                    setGender(g.value);
+                    setError(null);
+                  }}
+                />
+              ))}
+            </View>
           </View>
 
           <Input
-            label="Date of Birth"
+            label="Date of birth"
             placeholder="YYYY-MM-DD"
+            icon="calendar"
+            helper="Donors must be 18 or older"
             value={dob}
             onChangeText={(txt) => {
               setDob(txt);
@@ -108,42 +123,106 @@ export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
           />
 
           <View style={styles.switchRow}>
-            <View style={{ flex: 1, paddingRight: theme.spacing.md }}>
-              <Text style={styles.switchLabel}>Available to Donate</Text>
-              <Text style={styles.switchHint}>Turn off to pause matching without deleting your profile.</Text>
+            <View style={[styles.switchIcon, { backgroundColor: availableToDonate ? theme.color.bloodSoft : theme.color.surfaceMuted }]}>
+              <Feather name="bell" size={15} color={availableToDonate ? theme.color.blood : theme.color.textTertiary} />
+            </View>
+            <View style={styles.switchText}>
+              <Text style={styles.switchLabel}>Available to donate</Text>
+              <Text style={styles.switchHint}>
+                {availableToDonate
+                  ? "You'll be matched to requests in your city"
+                  : "Matching paused — your profile is kept"}
+              </Text>
             </View>
             <Switch
               value={availableToDonate}
               onValueChange={setAvailableToDonate}
-              trackColor={{ false: theme.color.border, true: theme.color.primary }}
+              trackColor={{ false: theme.color.border, true: theme.color.blood }}
               thumbColor={Platform.OS === "android" ? theme.color.surface : undefined}
             />
           </View>
+        </Animated.View>
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
+        {/* CLAUDE.md §7 — blood group + location is sensitive health data; the privacy promise is
+            part of the UI, not just the policy. */}
+        <Animated.View entering={FadeInDown.delay(120).duration(360)} style={styles.privacyBox}>
+          <Feather name="lock" size={15} color={theme.color.info} />
+          <Text style={styles.privacyText}>
+            Your blood group and contact details stay private until you accept a request.
+          </Text>
+        </Animated.View>
 
-          <View style={styles.actions}>
-            <Button label="Save Blood Profile" onPress={handleSave} loading={isSaving} />
-            <Button label="Back" variant="secondary" onPress={onBack} />
-          </View>
-        </Card>
-      </Animated.View>
-    </ScrollView>
+        {error && (
+          <Animated.View entering={FadeIn.duration(theme.motion.fast)} style={styles.errorBox}>
+            <Feather name="alert-circle" size={15} color={theme.color.danger} />
+            <Text style={styles.errorText}>{error}</Text>
+          </Animated.View>
+        )}
+
+        <View style={styles.actions}>
+          <Button label="Save blood profile" icon="check" size="lg" variant="blood" glow onPress={handleSave} loading={isSaving} />
+          <Button label="Back" variant="ghost" onPress={onBack} />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg, paddingBottom: 40 },
-  card: { padding: theme.spacing.xl, gap: theme.spacing.md },
-  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 4 },
-  hint: { ...theme.typography.caption, fontSize: 13, color: theme.color.textSecondary, lineHeight: 18 },
-  label: { fontSize: 13, fontWeight: "700", color: theme.color.textPrimary, marginTop: theme.spacing.xs },
-  fieldHint: { fontSize: 12, color: theme.color.textSecondary, lineHeight: 16, marginBottom: theme.spacing.sm },
-  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
-  switchRow: { flexDirection: "row", alignItems: "center", marginVertical: theme.spacing.sm },
-  switchLabel: { fontSize: 15, fontWeight: "700", color: theme.color.textPrimary },
-  switchHint: { fontSize: 12, color: theme.color.textSecondary, marginTop: 2, lineHeight: 16, fontWeight: "500" },
-  errorText: { color: theme.color.danger, fontSize: 13, fontWeight: "500" },
-  actions: { gap: theme.spacing.md, marginTop: theme.spacing.md },
+  content: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl, gap: theme.spacing.md },
+
+  header: { paddingHorizontal: theme.spacing.xs, paddingTop: theme.spacing.sm, gap: theme.spacing.sm },
+  headerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.color.bloodSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: theme.spacing.xs,
+  },
+  title: { ...theme.typography.h1, color: theme.color.textPrimary },
+  subtitle: { ...theme.typography.bodySmall, color: theme.color.textSecondary },
+
+  card: {
+    backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.borderSubtle,
+    borderRadius: theme.radii.xl,
+    padding: theme.spacing.xl,
+    gap: theme.spacing.xl,
+  },
+
+  label: { ...theme.typography.caption, fontWeight: "700", color: theme.color.textPrimary },
+  fieldHelper: { ...theme.typography.caption, color: theme.color.textTertiary, marginTop: 2 },
+  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginTop: theme.spacing.md },
+
+  switchRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md },
+  switchIcon: { width: 32, height: 32, borderRadius: theme.radii.sm, alignItems: "center", justifyContent: "center" },
+  switchText: { flex: 1, gap: 2 },
+  switchLabel: { ...theme.typography.bodyMedium, fontWeight: "700", color: theme.color.textPrimary },
+  switchHint: { ...theme.typography.caption, color: theme.color.textSecondary },
+
+  privacyBox: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    alignItems: "flex-start",
+    backgroundColor: theme.color.infoSoft,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+  },
+  privacyText: { ...theme.typography.caption, color: theme.color.textSecondary, flex: 1, lineHeight: 17 },
+
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.color.dangerSoft,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+  },
+  errorText: { ...theme.typography.bodySmall, color: theme.color.dangerDeep, fontWeight: "600", flex: 1 },
+
+  actions: { gap: theme.spacing.sm, marginTop: theme.spacing.xs },
 });

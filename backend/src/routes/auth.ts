@@ -6,7 +6,7 @@ import { requestOtp, verifyOtp } from "../lib/otp";
 import { signAuthToken } from "../lib/jwt";
 import { requireAuth } from "../middleware/auth";
 import { computeEligibility } from "../lib/bloodEligibility";
-import { computeTrustTier } from "../lib/trustTier";
+import { computeTrustTierProgress } from "../lib/trustTier";
 
 const router = Router();
 
@@ -19,7 +19,9 @@ async function trustTierPayload(userId: string) {
   const confirmedContributionsCount = await prisma.contribution.count({
     where: { donorId: userId, status: "CONFIRMED" },
   });
-  return { trustTier: computeTrustTier(confirmedContributionsCount), confirmedContributionsCount };
+  // Returns the tier *and* the distance to the next one — thresholds are a server rule, so
+  // clients must never hardcode them (see computeTrustTierProgress).
+  return computeTrustTierProgress(confirmedContributionsCount);
 }
 
 // Roles a new account can self-register as. ADMIN/STAFF accounts are provisioned
@@ -72,7 +74,7 @@ router.post("/otp/verify", async (req, res) => {
   const token = signAuthToken({ sub: user.id, role: user.role, phone: user.phone });
   // Skip DB query for brand new users to optimize signup speed
   const trustPayload = isNewUser
-    ? { trustTier: "BRONZE", confirmedContributionsCount: 0 }
+    ? computeTrustTierProgress(0)
     : await trustTierPayload(user.id);
 
   res.json({ token, user, bloodEligibility: computeEligibility(user), ...trustPayload });
@@ -89,8 +91,7 @@ router.get("/me", requireAuth, async (req, res) => {
   res.json({
     user,
     bloodEligibility: computeEligibility(user),
-    trustTier: computeTrustTier(confirmedContributionsCount),
-    confirmedContributionsCount,
+    ...computeTrustTierProgress(confirmedContributionsCount),
   });
 });
 

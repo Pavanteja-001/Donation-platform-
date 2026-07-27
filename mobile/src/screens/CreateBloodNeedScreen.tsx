@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import { StyleSheet, View } from "react-native";
 import { postBloodNeed, uploadPhotos, type BloodGroup } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { formatBloodGroup } from "../lib/needMeta";
 import { PhotoPicker, type PickedPhoto } from "../components/PhotoPicker";
-import { Button, Input, Chip, Card } from "../components/ui";
+import { CreateNeedScaffold, Field } from "../components/CreateNeedScaffold";
+import { Input, Chip } from "../components/ui";
 
 const BLOOD_GROUPS: BloodGroup[] = [
   "A_POSITIVE",
@@ -18,11 +19,7 @@ const BLOOD_GROUPS: BloodGroup[] = [
   "O_NEGATIVE",
 ];
 
-function formatGroup(g: BloodGroup) {
-  return g.replace("_POSITIVE", "+").replace("_NEGATIVE", "-");
-}
-
-// PRD §8.3 — post a BLOOD need (group + units). Overhauled with Reanimated and premium styling.
+// PRD §8.3 — post a BLOOD need (group + units).
 export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
@@ -60,87 +57,73 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-        <Card elevated style={styles.card}>
-          <Text style={styles.title}>Post a Blood Request</Text>
-          <Text style={styles.hint}>
-            An admin verifies this before it goes live and eligible donors nearby are notified.
-          </Text>
+    <CreateNeedScaffold
+      type="BLOOD"
+      title="Request blood"
+      subtitle="Eligible donors in your city are notified once this is verified."
+      error={error}
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Submit blood request"
+    >
+      <Input
+        label="Title"
+        placeholder="e.g. AB+ blood needed at City Hospital"
+        icon="type"
+        value={title}
+        onChangeText={(txt) => {
+          setTitle(txt);
+          setError(null);
+        }}
+      />
 
-          <Input
-            label="Title"
-            placeholder="E.g., Emergency AB+ blood needed at City Hospital"
-            value={title}
-            onChangeText={(txt) => {
-              setTitle(txt);
-              setError(null);
-            }}
-          />
-          <Input
-            label="Description"
-            placeholder="Describe the situation and specify patient info if needed"
-            value={description}
-            onChangeText={(txt) => {
-              setDescription(txt);
-              setError(null);
-            }}
-            multiline
-            style={styles.multiline}
-          />
+      <Input
+        label="Description"
+        placeholder="Describe the situation and the hospital details"
+        multiline
+        value={description}
+        onChangeText={(txt) => {
+          setDescription(txt);
+          setError(null);
+        }}
+      />
 
-          <Text style={styles.label}>Blood Group Needed</Text>
-          <View style={styles.chipGrid}>
-            {BLOOD_GROUPS.map((g) => (
-              <Chip
-                key={g}
-                label={formatGroup(g)}
-                active={bloodGroup === g}
-                onPress={() => {
-                  setBloodGroup(g);
-                  setError(null);
-                }}
-              />
-            ))}
-          </View>
+      {/* D-012 — urgency is deliberately absent: it's admin/institution-verified, never
+          self-declared, so there is no field for the poster to set it. */}
+      <Field label="Blood group needed" helper="Donors are matched on group, eligibility and city">
+        <View style={styles.chipGrid}>
+          {BLOOD_GROUPS.map((g) => (
+            <Chip
+              key={g}
+              label={formatBloodGroup(g)}
+              tone="blood"
+              active={bloodGroup === g}
+              onPress={() => {
+                setBloodGroup(g);
+                setError(null);
+              }}
+            />
+          ))}
+        </View>
+      </Field>
 
-          <Input
-            label="Units Needed"
-            placeholder="E.g., 2"
-            keyboardType="number-pad"
-            value={unitsNeeded}
-            onChangeText={(txt) => {
-              setUnitsNeeded(txt);
-              setError(null);
-            }}
-          />
+      <Input
+        label="Units needed"
+        placeholder="2"
+        icon="droplet"
+        keyboardType="number-pad"
+        value={unitsNeeded}
+        onChangeText={(txt) => {
+          setUnitsNeeded(txt);
+          setError(null);
+        }}
+      />
 
-          <View style={styles.pickerSection}>
-            <Text style={styles.label}>Photos</Text>
-            <PhotoPicker photos={photos} onChange={setPhotos} />
-          </View>
-
-          {error && <Text style={styles.errorText}>{error}</Text>}
-          <Button
-            label="Submit for Verification"
-            onPress={handleSubmit}
-            loading={isSubmitting}
-          />
-        </Card>
-      </Animated.View>
-    </ScrollView>
+      <PhotoPicker photos={photos} onChange={setPhotos} />
+    </CreateNeedScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg, paddingBottom: 40 },
-  card: { padding: theme.spacing.xl, gap: theme.spacing.md },
-  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 4 },
-  hint: { ...theme.typography.caption, fontSize: 13, color: theme.color.textSecondary, lineHeight: 18, marginBottom: theme.spacing.xs },
-  label: { fontSize: 13, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.xs },
-  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.xs },
-  multiline: { minHeight: 90, textAlignVertical: "top" },
-  pickerSection: { marginTop: theme.spacing.xs },
-  errorText: { color: theme.color.danger, fontSize: 13, fontWeight: "500" },
+  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
 });

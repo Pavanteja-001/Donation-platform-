@@ -1,9 +1,10 @@
-export { Button, type ButtonVariant } from "./Button";
+export { Button, type ButtonVariant, type ButtonSize } from "./Button";
 export { Badge, type BadgeTone } from "./Badge";
 export { Chip } from "./Chip";
-export { Card } from "./Card";
+export { Card, type CardVariant } from "./Card";
+export { PressableScale } from "./PressableScale";
 export { Input } from "./Input";
-export { Avatar } from "./Avatar";
+export { Avatar, type TrustTier } from "./Avatar";
 export { EmptyState } from "./EmptyState";
 export { ErrorState } from "./ErrorState";
 export { Skeleton } from "./Skeleton";

@@ -1,27 +1,61 @@
 import { StyleSheet, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { theme } from "../../lib/theme";
 import { Button } from "./Button";
 
-// PRD Appendix A.5 — one of the four required states on every screen. Most list screens today
-// (Chunk 7 will migrate them) just render a bare "You haven't posted anything yet" <Text>; this
-// gives that pattern a real, consistent shape with an optional call to action.
-export function EmptyState({ title, subtitle, actionLabel, onAction }: { title: string; subtitle?: string; actionLabel?: string; onAction?: () => void }) {
+type IconName = keyof typeof Feather.glyphMap;
+
+// PRD Appendix A.5 — one of the four required states on every screen. An empty screen should
+// still feel designed: an icon gives the eye somewhere to land instead of two lines of grey text
+// floating in the middle of nothing.
+export function EmptyState({
+  title,
+  subtitle,
+  icon = "inbox",
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: IconName;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   return (
-    <View style={styles.container}>
+    <Animated.View entering={FadeInDown.duration(theme.motion.slow)} style={styles.container}>
+      <View style={styles.iconWrap}>
+        <Feather name={icon} size={26} color={theme.color.textTertiary} />
+      </View>
       <Text style={styles.title}>{title}</Text>
       {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
       {actionLabel && onAction && (
         <View style={styles.action}>
-          <Button label={actionLabel} onPress={onAction} variant="secondary" />
+          <Button label={actionLabel} onPress={onAction} variant="secondary" compact />
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
-  title: { ...theme.typography.bodyMedium, color: theme.color.textPrimary, textAlign: "center" },
-  subtitle: { ...theme.typography.caption, color: theme.color.textSecondary, textAlign: "center", marginTop: theme.spacing.xs },
-  action: { marginTop: theme.spacing.lg },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.color.surfaceMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: theme.spacing.lg,
+  },
+  title: { ...theme.typography.h3, color: theme.color.textPrimary, textAlign: "center" },
+  subtitle: {
+    ...theme.typography.bodySmall,
+    color: theme.color.textSecondary,
+    textAlign: "center",
+    marginTop: theme.spacing.sm,
+    maxWidth: 280,
+  },
+  action: { marginTop: theme.spacing.xl },
 });

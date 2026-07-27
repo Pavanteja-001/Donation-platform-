@@ -1,91 +1,105 @@
-import { ScrollView, StyleSheet, Text, Pressable, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import type { NeedType } from "../lib/api";
+import { TYPE_META } from "../lib/needMeta";
 import { theme } from "../lib/theme";
+import { PressableScale } from "../components/ui";
 import type { AppNavigationProp, RootStackParamList } from "../navigation/types";
 
-const TYPES: { route: keyof RootStackParamList; label: string; hint: string; icon: string }[] = [
-  { route: "CreateMoney", label: "Money", hint: "Raise funds toward a target amount", icon: "dollar-sign" },
-  { route: "CreateKit", label: "Kit", hint: "Grocery or education kits — funded or delivered", icon: "package" },
-  { route: "CreateBlood", label: "Blood", hint: "Request a blood group, eligibility-matched", icon: "droplet" },
-  { route: "CreateMealSlot", label: "Meal Slot", hint: "Sponsor specific calendar dates", icon: "calendar" },
-  { route: "CreateGoods", label: "Goods", hint: "A specific item someone can claim and give", icon: "gift" },
-  { route: "CreateSkillRequest", label: "Volunteer", hint: "Request skilled volunteers for a task or event", icon: "users" },
+// Each entry pairs a route with its need type, so the icon and colour come from the shared
+// TYPE_META table rather than being restated here — a MONEY need looks the same in the chooser,
+// the feed and the detail screen.
+const TYPES: { route: keyof RootStackParamList; type: NeedType; label: string; hint: string }[] = [
+  { route: "CreateMoney", type: "MONEY", label: "Money", hint: "Raise funds toward a target amount" },
+  { route: "CreateKit", type: "KIT", label: "Kit", hint: "Grocery or education kits — funded or delivered" },
+  { route: "CreateBlood", type: "BLOOD", label: "Blood", hint: "Request a blood group, eligibility-matched" },
+  { route: "CreateMealSlot", type: "MEAL_SLOT", label: "Meal slot", hint: "Sponsor specific calendar dates" },
+  { route: "CreateGoods", type: "GOODS", label: "Goods", hint: "A specific item someone can claim and give" },
+  { route: "CreateSkillRequest", type: "SKILL_REQUEST", label: "Volunteer", hint: "Request skilled volunteers for a task or event" },
 ];
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-function ChooserCard({ item, index }: { item: typeof TYPES[0]; index: number }) {
+function ChooserCard({ item, index }: { item: (typeof TYPES)[number]; index: number }) {
   const navigation = useNavigation<AppNavigationProp>();
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-    };
-  });
+  const meta = TYPE_META[item.type];
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 100).duration(400)}>
-      <AnimatedPressable
+    <Animated.View entering={FadeInDown.delay(index * 60).duration(360)}>
+      <PressableScale
         onPress={() => navigation.navigate(item.route as never)}
-        onPressIn={() => (scale.value = withSpring(0.97, { damping: 15 }))}
-        onPressOut={() => (scale.value = withSpring(1, { damping: 15 }))}
-        style={[styles.card, theme.elevation.level1, animatedStyle]}
+        scaleTo={0.98}
+        accessibilityLabel={`${item.label}: ${item.hint}`}
+        style={[styles.card, theme.elevation.level2]}
       >
-        <View style={styles.iconCircle}>
-          <Feather name={item.icon as any} size={20} color={theme.color.primary} />
+        <View style={[styles.iconTile, { backgroundColor: meta.tint }]}>
+          <Feather name={meta.icon} size={20} color={meta.color} />
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.label}>{item.label}</Text>
           <Text style={styles.hint}>{item.hint}</Text>
         </View>
-        <Feather name="chevron-right" size={20} color={theme.color.textSecondary} />
-      </AnimatedPressable>
+        <Feather name="chevron-right" size={20} color={theme.color.textTertiary} />
+      </PressableScale>
     </Animated.View>
   );
 }
 
 export function CreateNeedChooserScreen() {
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>What do you need help with?</Text>
-      <Text style={styles.subtitle}>Choose a category below to create your helper request.</Text>
-      <View style={styles.listContainer}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <Animated.View entering={FadeInDown.duration(360)} style={styles.header}>
+        <Text style={styles.title}>What do you need help with?</Text>
+        <Text style={styles.subtitle}>Choose a category to create your request.</Text>
+      </Animated.View>
+
+      <View style={styles.list}>
         {TYPES.map((t, idx) => (
           <ChooserCard key={t.route} item={t} index={idx} />
         ))}
       </View>
+
+      {/* PRD §6.3 — set the expectation before the form, not after submitting it. */}
+      <Animated.View entering={FadeInDown.delay(TYPES.length * 60).duration(360)} style={styles.noticeBox}>
+        <Feather name="shield" size={15} color={theme.color.info} />
+        <Text style={styles.noticeText}>Every request is reviewed by an admin before it goes live to donors.</Text>
+      </Animated.View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg, paddingBottom: 40 },
-  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: 2 },
-  subtitle: { ...theme.typography.caption, fontSize: 14, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
-  listContainer: { gap: theme.spacing.md },
+  content: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl, gap: theme.spacing.md },
+
+  header: { paddingHorizontal: theme.spacing.xs, paddingTop: theme.spacing.sm, gap: theme.spacing.xs },
+  title: { ...theme.typography.h1, color: theme.color.textPrimary },
+  subtitle: { ...theme.typography.bodySmall, color: theme.color.textSecondary },
+
+  list: { gap: theme.spacing.md },
   card: {
     backgroundColor: theme.color.surface,
     borderWidth: 1,
-    borderColor: theme.color.border,
-    borderRadius: theme.radius * 1.5,
+    borderColor: theme.color.borderSubtle,
+    borderRadius: theme.radii.xl,
     padding: theme.spacing.lg,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.md,
   },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.color.primary + "12",
-    alignItems: "center",
-    justifyContent: "center",
+  iconTile: { width: 46, height: 46, borderRadius: theme.radii.md, alignItems: "center", justifyContent: "center" },
+  textContainer: { flex: 1, gap: 2 },
+  label: { ...theme.typography.h3, color: theme.color.textPrimary },
+  hint: { ...theme.typography.caption, color: theme.color.textSecondary, lineHeight: 17 },
+
+  noticeBox: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    alignItems: "flex-start",
+    backgroundColor: theme.color.infoSoft,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    marginTop: theme.spacing.xs,
   },
-  textContainer: { flex: 1 },
-  label: { fontSize: 16, fontWeight: "700", color: theme.color.textPrimary },
-  hint: { fontSize: 13, color: theme.color.textSecondary, marginTop: 2, lineHeight: 18, fontWeight: "500" },
+  noticeText: { ...theme.typography.caption, color: theme.color.textSecondary, flex: 1, lineHeight: 17 },
 });

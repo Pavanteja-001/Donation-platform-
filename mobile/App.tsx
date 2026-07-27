@@ -1,5 +1,7 @@
 import { useEffect } from "react";
-import { ActivityIndicator, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { createNavigationContainerRef, NavigationContainer } from "@react-navigation/native";
@@ -47,10 +49,14 @@ function Root() {
     };
   }, []);
 
+  // Branded boot state rather than a bare spinner — this is the first frame of the app, and a
+  // system spinner on a blank screen is indistinguishable from a hang.
   if (isLoading) {
     return (
       <SafeAreaView style={styles.loading}>
-        <ActivityIndicator color={theme.color.primary} size="large" />
+        <Animated.View entering={FadeIn.duration(320)} style={styles.brandMark}>
+          <Feather name="droplet" size={30} color={theme.color.onPrimary} />
+        </Animated.View>
       </SafeAreaView>
     );
   }
@@ -92,4 +98,13 @@ export default function App() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   loading: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.color.background },
+  brandMark: {
+    width: 68,
+    height: 68,
+    borderRadius: theme.radii.xl,
+    backgroundColor: theme.color.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    ...theme.glow.primary,
+  },
 });

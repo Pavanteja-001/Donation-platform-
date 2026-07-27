@@ -1,14 +1,29 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { fetchCertificate, type Certificate } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { Card, Button, ErrorState } from "../components/ui";
+import { TYPE_META } from "../lib/needMeta";
+import { Button, ErrorState, Skeleton } from "../components/ui";
 
-// PRD §14.2 — certificate view. Disclaimer (D-006) is always shown.
-// Overhauled with premium styling and animated entrance.
+function CertificateSkeleton() {
+  return (
+    <View style={[styles.card, styles.skeletonCard]}>
+      <Skeleton width={84} height={84} radius={42} />
+      <Skeleton width="55%" height={14} style={{ marginTop: theme.spacing.lg }} />
+      <Skeleton width="80%" height={24} style={{ marginTop: theme.spacing.sm }} />
+      <Skeleton width="100%" height={1} style={{ marginTop: theme.spacing.xl }} />
+      <Skeleton width="70%" height={16} style={{ marginTop: theme.spacing.xl }} />
+      <Skeleton width="50%" height={22} style={{ marginTop: theme.spacing.md }} />
+      <Skeleton width="85%" height={16} style={{ marginTop: theme.spacing.md }} />
+    </View>
+  );
+}
+
+// PRD §14.2 — certificate view. The disclaimer (D-006) is always shown: this is a platform
+// record and a thank-you, never an official, medical or government document.
 export function CertificateScreen({ contributionId }: { contributionId: string }) {
   const { token } = useAuth();
   const [certificate, setCertificate] = useState<Certificate | null>(null);
@@ -27,10 +42,7 @@ export function CertificateScreen({ contributionId }: { contributionId: string }
     setIsSharing(true);
     try {
       const message = `I contributed ${certificate.summary} toward "${certificate.needTitle}" on DonationPlatform! Check it out.`;
-      await Share.share({
-        message,
-        title: "Certificate of Contribution",
-      });
+      await Share.share({ message, title: "Certificate of Contribution" });
     } catch (err) {
       Alert.alert("Error", "Could not share certificate");
     } finally {
@@ -38,66 +50,88 @@ export function CertificateScreen({ contributionId }: { contributionId: string }
     }
   };
 
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <ErrorState message={error} />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {error && (
-        <View style={styles.centered}>
-          <ErrorState message={error} />
-        </View>
-      )}
-      
-      {!certificate && !error && (
-        <View style={styles.centered}>
-          <ActivityIndicator color={theme.color.primary} size="large" />
-        </View>
-      )}
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {!certificate ? (
+        <CertificateSkeleton />
+      ) : (
+        <>
+          <Animated.View entering={FadeInDown.duration(420)}>
+            <View style={[styles.card, theme.elevation.level3]}>
+              {/* Double-ruled frame — the visual language of a certificate, done with borders
+                  rather than an image so it stays crisp at any density. */}
+              <View style={styles.innerFrame}>
+                <View style={styles.seal}>
+                  <Feather name="award" size={34} color={theme.color.primary} />
+                </View>
 
-      {certificate && (
-        <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-          <Card elevated style={styles.card}>
-            <View style={styles.sealCircle}>
-              <Feather name="award" size={36} color={theme.color.primary} />
+                <Text style={styles.eyebrow}>DonationPlatform</Text>
+                <Text style={styles.title}>Certificate of Contribution</Text>
+
+                <View style={styles.rule} />
+
+                <Text style={styles.presentedTo}>This certifies that</Text>
+                <Text style={styles.donorName}>{certificate.donorName}</Text>
+                <Text style={styles.presentedTo}>has generously contributed</Text>
+                <Text style={styles.summary}>{certificate.summary}</Text>
+                <Text style={styles.presentedTo}>toward</Text>
+                <Text style={styles.needTitle}>“{certificate.needTitle}”</Text>
+
+                <View style={styles.typeChip}>
+                  <Feather
+                    name={TYPE_META[certificate.needType].icon}
+                    size={12}
+                    color={TYPE_META[certificate.needType].color}
+                  />
+                  <Text style={[styles.typeChipText, { color: TYPE_META[certificate.needType].color }]}>
+                    {TYPE_META[certificate.needType].label}
+                  </Text>
+                </View>
+
+                <View style={styles.rule} />
+
+                <View style={styles.footerRow}>
+                  <View style={styles.footerItem}>
+                    <Text style={styles.footerLabel}>Confirmed</Text>
+                    <Text style={styles.footerValue}>
+                      {new Date(certificate.confirmedAt).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </Text>
+                  </View>
+                  <View style={styles.footerDivider} />
+                  <View style={styles.footerItem}>
+                    <Text style={styles.footerLabel}>Verification ID</Text>
+                    <Text style={styles.footerId} numberOfLines={1}>
+                      {certificate.certificateId}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
+          </Animated.View>
 
-            <Text style={styles.eyebrow}>DonationPlatform</Text>
-            <Text style={styles.title}>Certificate of Contribution</Text>
-            
-            <View style={styles.divider} />
+          {/* D-006 — deliberately outside the certificate frame. Inside it, a disclaimer starts to
+              look like part of the credential; outside, it reads as what it is. */}
+          <Animated.View entering={FadeInDown.delay(120).duration(360)} style={styles.disclaimerBox}>
+            <Feather name="info" size={15} color={theme.color.textSecondary} />
+            <Text style={styles.disclaimerText}>{certificate.disclaimer}</Text>
+          </Animated.View>
 
-            <Text style={styles.body}>
-              This certifies that{"\n"}
-              <Text style={styles.bold}>{certificate.donorName}</Text>{"\n"}
-              has generously contributed{"\n"}
-              <Text style={styles.amountText}>{certificate.summary}</Text>{"\n"}
-              toward{"\n"}
-              <Text style={styles.bold}>"{certificate.needTitle}"</Text>{"\n"}
-              ({certificate.needType.replace("_", " ")}).
-            </Text>
-
-            <View style={styles.divider} />
-
-            <Text style={styles.date}>Confirmed {new Date(certificate.confirmedAt).toLocaleDateString(undefined, {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}</Text>
-            <Text style={styles.refId}>Verification ID: {certificate.certificateId}</Text>
-
-            <View style={styles.disclaimerBox}>
-              <Feather name="info" size={14} color={theme.color.textSecondary} style={{ marginRight: 6, marginTop: 1 }} />
-              <Text style={styles.disclaimerText}>{certificate.disclaimer}</Text>
-            </View>
-          </Card>
-
-          <View style={styles.actionsContainer}>
-            <Button
-              label="Share Certificate"
-              onPress={handleShare}
-              variant="primary"
-              loading={isSharing}
-            />
-          </View>
-        </Animated.View>
+          <Animated.View entering={FadeInDown.delay(180).duration(360)} style={styles.actions}>
+            <Button label="Share certificate" icon="share-2" size="lg" glow onPress={handleShare} loading={isSharing} />
+          </Animated.View>
+        </>
       )}
     </ScrollView>
   );
@@ -105,46 +139,90 @@ export function CertificateScreen({ contributionId }: { contributionId: string }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg, paddingBottom: 40 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 80 },
+  content: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl, gap: theme.spacing.md },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl, backgroundColor: theme.color.background },
+
   card: {
     backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.borderSubtle,
+    borderRadius: theme.radii.xxl,
+    padding: theme.spacing.sm,
+  },
+  skeletonCard: { alignItems: "center", padding: theme.spacing.xxl },
+  innerFrame: {
+    borderWidth: 1,
+    borderColor: theme.color.primary,
+    borderRadius: theme.radii.xl,
+    paddingVertical: theme.spacing.xxl,
+    paddingHorizontal: theme.spacing.xl,
+    alignItems: "center",
+  },
+
+  seal: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: theme.color.primarySoft,
     borderWidth: 2,
     borderColor: theme.color.primary,
-    borderRadius: theme.radius * 1.5,
-    padding: theme.spacing.xl,
-    alignItems: "center",
-  },
-  sealCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: theme.color.primary + "12",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
   },
-  eyebrow: { fontSize: 12, fontWeight: "700", color: theme.color.primary, letterSpacing: 1.5, textTransform: "uppercase" },
-  title: { fontSize: 22, fontWeight: "700", color: theme.color.textPrimary, marginTop: 4, textAlign: "center" },
-  divider: {
-    width: "60%",
-    height: 1,
-    backgroundColor: theme.color.border,
-    marginVertical: theme.spacing.lg,
+  eyebrow: { ...theme.typography.overline, color: theme.color.primary, letterSpacing: 1.6, textTransform: "uppercase" },
+  title: { ...theme.typography.h2, color: theme.color.textPrimary, marginTop: theme.spacing.xs, textAlign: "center" },
+
+  rule: { width: "55%", height: 1, backgroundColor: theme.color.border, marginVertical: theme.spacing.xl },
+
+  presentedTo: { ...theme.typography.bodySmall, color: theme.color.textSecondary, textAlign: "center" },
+  donorName: {
+    ...theme.typography.h1,
+    color: theme.color.textPrimary,
+    textAlign: "center",
+    marginVertical: theme.spacing.sm,
   },
-  body: { fontSize: 15, color: theme.color.textPrimary, lineHeight: 28, textAlign: "center" },
-  bold: { fontWeight: "700", color: theme.color.textPrimary, fontSize: 16 },
-  amountText: { fontSize: 18, fontWeight: "700", color: theme.color.primary },
-  date: { fontSize: 13, color: theme.color.textSecondary, fontWeight: "600" },
-  refId: { fontSize: 11, color: theme.color.textSecondary, marginTop: 2, fontWeight: "500" },
-  disclaimerBox: {
-    marginTop: theme.spacing.xl,
-    padding: theme.spacing.md,
-    backgroundColor: theme.color.background,
-    borderRadius: theme.radius,
+  summary: {
+    ...theme.typography.numeric,
+    color: theme.color.primary,
+    textAlign: "center",
+    marginVertical: theme.spacing.sm,
+  },
+  needTitle: {
+    ...theme.typography.h3,
+    color: theme.color.textPrimary,
+    textAlign: "center",
+    marginTop: theme.spacing.sm,
+  },
+
+  typeChip: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: theme.color.surfaceMuted,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    marginTop: theme.spacing.lg,
   },
-  disclaimerText: { flex: 1, fontSize: 11, color: theme.color.textSecondary, lineHeight: 16 },
-  actionsContainer: { marginTop: theme.spacing.xl },
+  typeChipText: { ...theme.typography.overline, textTransform: "uppercase" },
+
+  footerRow: { flexDirection: "row", alignItems: "center", alignSelf: "stretch" },
+  footerItem: { flex: 1, alignItems: "center", gap: 3 },
+  footerDivider: { width: 1, height: 32, backgroundColor: theme.color.borderSubtle },
+  footerLabel: { ...theme.typography.overline, color: theme.color.textTertiary, textTransform: "uppercase" },
+  footerValue: { ...theme.typography.caption, color: theme.color.textPrimary, fontWeight: "700", textAlign: "center" },
+  footerId: { ...theme.typography.caption, color: theme.color.textSecondary, fontWeight: "600" },
+
+  disclaimerBox: {
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    alignItems: "flex-start",
+    backgroundColor: theme.color.surfaceMuted,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+  },
+  disclaimerText: { ...theme.typography.caption, color: theme.color.textSecondary, flex: 1, lineHeight: 17 },
+
+  actions: { marginTop: theme.spacing.xs },
 });

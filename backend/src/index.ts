@@ -22,7 +22,7 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cors());
 
-// Rate limit: 200 requests per 15-minute window per IP
+// Rate limit: 200 requests per 15-minute window per IP for general API
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -30,9 +30,21 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Strict rate limit: 15 requests per 15-minute window per IP for OTP authentication routes
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { error: "Too many OTP attempts from this IP, please try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api/auth/otp/", otpLimiter);
 app.use("/api/", apiLimiter);
 
-app.use(express.json());
+// Enforce 1mb body parser payload ceiling to prevent memory exhaustion DoS attacks
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

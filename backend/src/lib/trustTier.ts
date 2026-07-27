@@ -11,3 +11,37 @@ export function computeTrustTier(confirmedContributionsCount: number): TrustTier
   if (confirmedContributionsCount >= SILVER_THRESHOLD) return "SILVER";
   return "BRONZE";
 }
+
+export interface TrustTierProgress {
+  trustTier: TrustTier;
+  confirmedContributionsCount: number;
+  /** The tier after the current one, or null at GOLD (the top). */
+  nextTier: TrustTier | null;
+  /** Confirmed contributions required to reach `nextTier`, or null at GOLD. */
+  nextTierAt: number | null;
+  /** How many more are needed right now, or null at GOLD. */
+  contributionsToNextTier: number | null;
+}
+
+/**
+ * The tier plus how far the donor is from the next one.
+ *
+ * The thresholds are the server's business rule, so the client must not hardcode them — without
+ * this the app can show a tier badge but has no way to say "3 more to Silver", and any client
+ * that tried would silently drift the moment product tunes the numbers above.
+ */
+export function computeTrustTierProgress(confirmedContributionsCount: number): TrustTierProgress {
+  const trustTier = computeTrustTier(confirmedContributionsCount);
+
+  const nextTierAt =
+    trustTier === "BRONZE" ? SILVER_THRESHOLD : trustTier === "SILVER" ? GOLD_THRESHOLD : null;
+  const nextTier: TrustTier | null = trustTier === "BRONZE" ? "SILVER" : trustTier === "SILVER" ? "GOLD" : null;
+
+  return {
+    trustTier,
+    confirmedContributionsCount,
+    nextTier,
+    nextTierAt,
+    contributionsToNextTier: nextTierAt === null ? null : Math.max(0, nextTierAt - confirmedContributionsCount),
+  };
+}

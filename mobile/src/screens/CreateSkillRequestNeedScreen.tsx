@@ -1,12 +1,10 @@
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import { postSkillRequestNeed } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { theme } from "../lib/theme";
-import { Button, Input, Card } from "../components/ui";
+import { CreateNeedScaffold } from "../components/CreateNeedScaffold";
+import { Input } from "../components/ui";
 
-// PRD §13 — post a SKILL_REQUEST need. An admin verifies before it goes live.
+// PRD §13 — post a SKILL_REQUEST need (scribe, mentor, event volunteer).
 export function CreateSkillRequestNeedScreen({ onDone }: { onDone: () => void }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
@@ -51,85 +49,88 @@ export function CreateSkillRequestNeedScreen({ onDone }: { onDone: () => void })
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-        <Card elevated style={styles.card}>
-          <Text style={styles.heading}>Post a Volunteering Need</Text>
-          <Text style={styles.hint}>An admin verifies every volunteer request before it goes live.</Text>
+    <CreateNeedScaffold
+      type="SKILL_REQUEST"
+      title="Request volunteers"
+      subtitle="Ask for skilled help — a scribe, a mentor, or hands at an event."
+      error={error}
+      onSubmit={handleSubmit}
+      isSubmitting={isSubmitting}
+      submitLabel="Post volunteering need"
+    >
+      <Input
+        label="Title"
+        placeholder="e.g. Volunteers needed for blood camp"
+        icon="type"
+        value={title}
+        onChangeText={(txt) => {
+          setTitle(txt);
+          setError(null);
+        }}
+      />
 
-          <Input
-            label="Title"
-            placeholder="E.g., Volunteers needed for blood camp"
-            value={title}
-            onChangeText={(txt) => { setTitle(txt); setError(null); }}
-          />
-          <Input
-            label="Description"
-            placeholder="Describe the need in detail…"
-            value={description}
-            onChangeText={(txt) => { setDescription(txt); setError(null); }}
-            multiline
-          />
-          <Input
-            label="Role / Skill Needed"
-            placeholder="E.g., Medical volunteer, Driver, Organiser"
-            value={roleNeeded}
-            onChangeText={(txt) => { setRoleNeeded(txt); setError(null); }}
-          />
-          <Input
-            label="Number of Volunteers"
-            placeholder="1"
-            value={volunteersNeeded}
-            onChangeText={(txt) => { setVolunteersNeeded(txt); setError(null); }}
-            keyboardType="number-pad"
-          />
-          <Input
-            label="Date (YYYY-MM-DD)"
-            placeholder="2024-12-31"
-            value={date}
-            onChangeText={(txt) => { setDate(txt); setError(null); }}
-            keyboardType="numbers-and-punctuation"
-          />
-          <Input
-            label="Time (HH:MM)"
-            placeholder="09:00"
-            value={time}
-            onChangeText={(txt) => { setTime(txt); setError(null); }}
-          />
-          <Input
-            label="City (optional)"
-            placeholder="Hyderabad"
-            value={city}
-            onChangeText={setCity}
-          />
-          <Input
-            label="Area (optional)"
-            placeholder="Gachibowli"
-            value={area}
-            onChangeText={setArea}
-          />
+      <Input
+        label="Description"
+        placeholder="Describe the task, who it helps, and what's involved"
+        multiline
+        value={description}
+        onChangeText={(txt) => {
+          setDescription(txt);
+          setError(null);
+        }}
+      />
 
-          {error && <Text style={styles.error}>{error}</Text>}
+      <Input
+        label="Role / skill needed"
+        placeholder="e.g. Medical volunteer, driver, organiser"
+        icon="tool"
+        value={roleNeeded}
+        onChangeText={(txt) => {
+          setRoleNeeded(txt);
+          setError(null);
+        }}
+      />
 
-          <View style={styles.buttonWrap}>
-            <Button
-              label={isSubmitting ? "Submitting…" : "Post Volunteering Need"}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-            />
-          </View>
-        </Card>
-      </Animated.View>
-    </ScrollView>
+      <Input
+        label="Number of volunteers"
+        placeholder="1"
+        icon="users"
+        keyboardType="number-pad"
+        value={volunteersNeeded}
+        onChangeText={(txt) => {
+          setVolunteersNeeded(txt);
+          setError(null);
+        }}
+      />
+
+      <Input
+        label="Date"
+        placeholder="2026-12-31"
+        icon="calendar"
+        helper="Format: YYYY-MM-DD"
+        keyboardType="numbers-and-punctuation"
+        value={date}
+        onChangeText={(txt) => {
+          setDate(txt);
+          setError(null);
+        }}
+      />
+
+      <Input
+        label="Time"
+        placeholder="09:00"
+        icon="clock"
+        helper="Format: HH:MM"
+        value={time}
+        onChangeText={(txt) => {
+          setTime(txt);
+          setError(null);
+        }}
+      />
+
+      <Input label="City" placeholder="Hyderabad" icon="map-pin" helper="Optional" value={city} onChangeText={setCity} />
+
+      <Input label="Area" placeholder="Gachibowli" icon="navigation" helper="Optional" value={area} onChangeText={setArea} />
+    </CreateNeedScaffold>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.color.background },
-  content: { padding: theme.spacing.lg },
-  card: { padding: theme.spacing.lg },
-  heading: { fontSize: 18, fontWeight: "700", color: theme.color.textPrimary, marginBottom: theme.spacing.xs },
-  hint: { fontSize: 13, color: theme.color.textSecondary, marginBottom: theme.spacing.lg },
-  error: { color: theme.color.danger, fontSize: 13, marginBottom: theme.spacing.md },
-  buttonWrap: { marginTop: theme.spacing.md },
-});

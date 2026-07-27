@@ -5,6 +5,27 @@
 
 ---
 
+### Session 33 — Performance & Security Hardening (QA Audit & Indexing Pass)
+
+**What was done:**
+
+1. **Database Indexing Strategies (`schema.prisma`):**
+   - Added composite index `@@index([bloodGroup, city, availableToDonate])` on `User` to accelerate blood donor matching queries (`notifyEligibleBloodDonors`).
+   - Added composite indexes `@@index([status, city])` and `@@index([linkedInstitutionId])` on `Need` to optimize feed filtering and institution lookups.
+   - Added composite indexes `@@index([needId, status])` and `@@index([status])` on `Contribution` for instant fulfillment verification.
+   - Added index `@@index([createdAt])` on `ForumQuestion` for paginated Q&A ordering.
+   - Synced indexes directly to Railway PostgreSQL database via `npx prisma db push`.
+
+2. **Backend Security & Hardening Pass (PRD §20):**
+   - Configured `express.json({ limit: "1mb" })` body parser ceiling to prevent memory exhaustion DoS attacks.
+   - Added strict `otpLimiter` (15 requests per 15 minutes per IP) on `/api/auth/otp/` routes to prevent SMS/OTP spam.
+   - Audited public route `select` clauses in `needs.ts` and `forum.ts` — confirmed only non-sensitive author fields (`id`, `name`, `profilePhotoUrl`, `role`) are exposed.
+
+3. **Build & Type Verification:**
+   - All 4 applications (`backend`, `web-panel`, `admin`, `mobile`) build 100% clean with zero errors.
+
+---
+
 ### Session 32 — Final Audit: 100% PRD & TASKS Completion & Wiring
 
 **What was done:**

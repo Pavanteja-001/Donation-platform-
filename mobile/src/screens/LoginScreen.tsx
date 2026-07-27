@@ -1,13 +1,34 @@
-import { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import Animated, { FadeInDown, FadeInUp, FadeOut } from "react-native-reanimated";
+import { useEffect, useRef, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  cancelAnimation,
+} from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { requestOtp, verifyOtp } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
-import { Button, Input, Card } from "../components/ui";
+import { Button, Input, PressableScale } from "../components/ui";
 
 type Step = "phone" | "otp";
+
+const OTP_LENGTH = 6;
 
 // Normalise to 10 digits — strips leading +91/91 prefix if user pastes a full number.
 function normalise(raw: string): string {
@@ -15,6 +36,62 @@ function normalise(raw: string): string {
   if (s.startsWith("+91")) s = s.slice(3);
   else if (s.startsWith("91") && s.length > 10) s = s.slice(2);
   return s.replace(/\D/g, "").slice(0, 10);
+}
+
+/**
+ * Six separate cells driven by one hidden TextInput. Tapping anywhere on the row focuses the
+ * real field; the cells are pure presentation. A single 6-character text box is the usual
+ * shortcut here, but it gives no sense of progress while typing a code.
+ */
+function OtpInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<TextInput>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const caret = useSharedValue(1);
+
+  useEffect(() => {
+    if (isFocused) {
+      caret.value = withRepeat(withSequence(withTiming(0, { duration: 520 }), withTiming(1, { duration: 520 })), -1, true);
+    } else {
+      cancelAnimation(caret);
+      caret.value = 1;
+    }
+    return () => cancelAnimation(caret);
+  }, [isFocused, caret]);
+
+  const caretStyle = useAnimatedStyle(() => ({ opacity: caret.value }));
+
+  return (
+    <Pressable onPress={() => inputRef.current?.focus()} style={styles.otpRow}>
+      {Array.from({ length: OTP_LENGTH }).map((_, i) => {
+        const char = value[i];
+        const isActive = isFocused && i === Math.min(value.length, OTP_LENGTH - 1);
+        return (
+          <View key={i} style={[styles.otpCell, char ? styles.otpCellFilled : null, isActive && styles.otpCellActive]}>
+            {char ? (
+              <Text style={styles.otpChar}>{char}</Text>
+            ) : isActive ? (
+              <Animated.View style={[styles.caret, caretStyle]} />
+            ) : null}
+          </View>
+        );
+      })}
+
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={(txt) => onChange(txt.replace(/\D/g, "").slice(0, OTP_LENGTH))}
+        keyboardType="number-pad"
+        maxLength={OTP_LENGTH}
+        autoComplete="sms-otp"
+        textContentType="oneTimeCode"
+        autoFocus
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        style={styles.hiddenInput}
+        caretHidden
+      />
+    </Pressable>
+  );
 }
 
 export function LoginScreen() {
@@ -57,12 +134,8 @@ export function LoginScreen() {
     setError(null);
     setIsSubmitting(true);
     try {
-      const { token, user, bloodEligibility, trustTier, confirmedContributionsCount } = await verifyOtp(
-        "+91" + phone,
-        code,
-        name || undefined
-      );
-      await signIn(token, user, bloodEligibility, { trustTier, confirmedContributionsCount });
+      const { token, user, bloodEligibility, ...trust } = await verifyOtp("+91" + phone, code, name || undefined);
+      await signIn(token, user, bloodEligibility, trust);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Incorrect or expired OTP");
     } finally {
@@ -71,188 +144,196 @@ export function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={styles.innerContainer}>
-        {/* Top Logo Section with FadeInUp */}
-        <Animated.View entering={FadeInUp.delay(100).duration(500)} style={styles.logoContainer}>
-          <View style={styles.iconCircle}>
-            <Feather name="droplet" size={32} color={theme.color.primary} />
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeInUp.delay(80).duration(500)} style={styles.logoContainer}>
+          <View style={styles.brandMark}>
+            <Feather name="droplet" size={30} color={theme.color.onPrimary} />
           </View>
           <Text style={styles.title}>DonationPlatform</Text>
           <Text style={styles.subtitle}>Connecting donors and saving lives instantly</Text>
         </Animated.View>
 
-        {/* Input Card Container with FadeInDown */}
-        <Animated.View entering={FadeInDown.delay(200).duration(600)}>
-          <Card elevated style={styles.card}>
-            {step === "phone" ? (
-              <Animated.View
-                key="phone-step"
-                entering={FadeInDown.duration(300)}
-                exiting={FadeOut.duration(200)}
+        <Animated.View entering={FadeInDown.delay(160).duration(520)} style={[styles.card, theme.elevation.level2]}>
+          {step === "phone" ? (
+            <Animated.View key="phone-step" entering={FadeInDown.duration(300)} exiting={FadeOut.duration(180)} style={styles.stepBody}>
+              <Text style={styles.cardHeader}>Welcome</Text>
+              <Text style={styles.cardSubheader}>Enter your phone number and we'll send you a code</Text>
+
+              <Input
+                label="Phone number"
+                placeholder="98765 43210"
+                keyboardType="phone-pad"
+                autoComplete="tel"
+                maxLength={10}
+                value={phone}
+                onChangeText={(txt) => {
+                  setPhone(normalise(txt));
+                  if (error) setError(null);
+                }}
+                prefix="+91"
+                icon="phone"
+                error={error ?? undefined}
+              />
+
+              <Button
+                label="Send code"
+                icon="arrow-right"
+                iconPosition="right"
+                size="lg"
+                glow
+                onPress={handleRequestOtp}
+                disabled={phone.length < 10}
+                loading={isSubmitting}
+              />
+            </Animated.View>
+          ) : (
+            <Animated.View key="otp-step" entering={FadeInDown.duration(300)} exiting={FadeOut.duration(180)} style={styles.stepBody}>
+              <Text style={styles.cardHeader}>Verify your number</Text>
+              <Text style={styles.cardSubheader}>
+                We sent a 6-digit code to <Text style={styles.phoneHighlight}>+91 {phone}</Text>
+              </Text>
+
+              <OtpInput
+                value={code}
+                onChange={(v) => {
+                  setCode(v);
+                  if (error) setError(null);
+                }}
+              />
+
+              {!isRegistered && (
+                <Animated.View entering={FadeInDown.duration(280)}>
+                  <Input label="Full name" placeholder="Your full name" icon="user" value={name} onChangeText={setName} />
+                </Animated.View>
+              )}
+
+              {/* D-015 — the static dev OTP must never reach production. Surfacing it in-app keeps
+                  that fact visible to anyone testing rather than buried in a decision doc. */}
+              {__DEV__ && (
+                <View style={styles.devHint}>
+                  <Feather name="info" size={13} color={theme.color.warning} />
+                  <Text style={styles.devHintText}>Dev build — the OTP is always 123456</Text>
+                </View>
+              )}
+
+              {error && (
+                <Animated.View entering={FadeInDown.duration(200)} style={styles.errorBox}>
+                  <Feather name="alert-circle" size={14} color={theme.color.danger} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </Animated.View>
+              )}
+
+              <Button
+                label="Verify & continue"
+                icon="check"
+                size="lg"
+                glow
+                onPress={handleVerifyOtp}
+                disabled={code.length < OTP_LENGTH}
+                loading={isSubmitting}
+              />
+
+              <PressableScale
+                onPress={() => {
+                  setError(null);
+                  setCode("");
+                  setStep("phone");
+                }}
+                style={styles.backButton}
               >
-                <Text style={styles.cardHeader}>Log In / Register</Text>
-                <Text style={styles.cardSubheader}>Enter your phone number to get started</Text>
-
-                <Input
-                  label="Phone Number"
-                  placeholder="98765 43210"
-                  keyboardType="phone-pad"
-                  autoComplete="tel"
-                  maxLength={10}
-                  value={phone}
-                  onChangeText={(txt) => setPhone(normalise(txt))}
-                  prefix="+91"
-                />
-
-                {error && <Text style={styles.error}>{error}</Text>}
-
-                <Button
-                  label="Send OTP"
-                  onPress={handleRequestOtp}
-                  disabled={phone.length < 10}
-                  loading={isSubmitting}
-                />
-              </Animated.View>
-            ) : (
-              <Animated.View
-                key="otp-step"
-                entering={FadeInDown.duration(300)}
-                exiting={FadeOut.duration(200)}
-              >
-                <Text style={styles.cardHeader}>Verify OTP</Text>
-                <Text style={styles.cardSubheader}>Enter the 6-digit code sent to +91 {phone}</Text>
-
-                <Input
-                  label="OTP Code"
-                  placeholder="123456"
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  value={code}
-                  onChangeText={(txt) => setCode(txt.replace(/\D/g, ""))}
-                />
-
-                {!isRegistered && (
-                  <Input
-                    label="Full Name"
-                    placeholder="Your Full Name"
-                    value={name}
-                    onChangeText={setName}
-                  />
-                )}
-
-                {__DEV__ && (
-                  <View style={styles.devHintContainer}>
-                    <Feather name="info" size={14} color={theme.color.warning} />
-                    <Text style={styles.devHint}>Dev build: OTP is always 123456</Text>
-                  </View>
-                )}
-
-                {error && <Text style={styles.error}>{error}</Text>}
-
-                <Button
-                  label="Verify & Continue"
-                  onPress={handleVerifyOtp}
-                  disabled={code.length < 6}
-                  loading={isSubmitting}
-                />
-
-                <TouchableOpacity onPress={() => { setError(null); setStep("phone"); }} style={styles.backButton}>
-                  <Feather name="arrow-left" size={14} color={theme.color.primary} />
-                  <Text style={styles.backText}>Change phone number</Text>
-                </TouchableOpacity>
-              </Animated.View>
-            )}
-          </Card>
+                <Feather name="arrow-left" size={14} color={theme.color.primary} />
+                <Text style={styles.backText}>Change phone number</Text>
+              </PressableScale>
+            </Animated.View>
+          )}
         </Animated.View>
-      </View>
+
+        <Text style={styles.legal}>By continuing you agree to our terms and privacy policy.</Text>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.color.background,
-  },
-  innerContainer: {
-    flex: 1,
+  container: { flex: 1, backgroundColor: theme.color.background },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.xxl,
   },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: theme.spacing.xxl,
-  },
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.color.primary + "12", // 7% opacity primary color
+
+  logoContainer: { alignItems: "center", marginBottom: theme.spacing.xxl },
+  brandMark: {
+    width: 68,
+    height: 68,
+    borderRadius: theme.radii.xl,
+    backgroundColor: theme.color.primary,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: theme.spacing.md,
-  },
-  title: {
-    ...theme.typography.h1,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.xs,
-  },
-  subtitle: {
-    ...theme.typography.caption,
-    color: theme.color.textSecondary,
-    fontSize: 14,
-    textAlign: "center",
-  },
-  card: {
-    padding: theme.spacing.xl,
-    borderRadius: theme.radius * 1.5,
-    backgroundColor: theme.color.surface,
-  },
-  cardHeader: {
-    ...theme.typography.h2,
-    color: theme.color.textPrimary,
-    marginBottom: theme.spacing.xs,
-  },
-  cardSubheader: {
-    ...theme.typography.caption,
-    fontSize: 13,
-    color: theme.color.textSecondary,
     marginBottom: theme.spacing.lg,
+    ...theme.glow.primary,
   },
-  error: {
-    color: theme.color.danger,
-    marginBottom: theme.spacing.md,
-    fontSize: 14,
+  title: { ...theme.typography.h1, color: theme.color.textPrimary, marginBottom: theme.spacing.xs },
+  subtitle: { ...theme.typography.bodySmall, color: theme.color.textSecondary, textAlign: "center" },
+
+  card: {
+    backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.borderSubtle,
+    borderRadius: theme.radii.xxl,
+    padding: theme.spacing.xl,
   },
-  devHintContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: theme.color.warning + "12",
-    padding: theme.spacing.sm,
-    borderRadius: theme.radius / 2,
-    marginBottom: theme.spacing.md,
-  },
-  devHint: {
-    color: "#B27A00",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  backButton: {
-    flexDirection: "row",
+  stepBody: { gap: theme.spacing.lg },
+  cardHeader: { ...theme.typography.h2, color: theme.color.textPrimary },
+  cardSubheader: { ...theme.typography.bodySmall, color: theme.color.textSecondary, marginTop: -theme.spacing.md },
+  phoneHighlight: { color: theme.color.textPrimary, fontWeight: "700" },
+
+  otpRow: { flexDirection: "row", justifyContent: "space-between", gap: theme.spacing.sm },
+  otpCell: {
+    flex: 1,
+    aspectRatio: 0.85,
+    borderRadius: theme.radii.md,
+    borderWidth: 1.5,
+    borderColor: theme.color.border,
+    backgroundColor: theme.color.background,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    marginTop: theme.spacing.lg,
-    paddingVertical: theme.spacing.xs,
   },
-  backText: {
-    color: theme.color.primary,
-    fontSize: 14,
-    fontWeight: "600",
+  otpCellFilled: { borderColor: theme.color.primary, backgroundColor: theme.color.surface },
+  otpCellActive: { borderColor: theme.color.primary, backgroundColor: theme.color.surface },
+  otpChar: { fontSize: 22, fontWeight: "800", color: theme.color.textPrimary },
+  caret: { width: 2, height: 22, borderRadius: 1, backgroundColor: theme.color.primary },
+  // Covers the cell row so taps land on the real input, but stays invisible.
+  hiddenInput: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: 0, color: "transparent" },
+
+  devHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.color.warningSoft,
+    padding: theme.spacing.md,
+    borderRadius: theme.radii.md,
   },
+  devHintText: { ...theme.typography.caption, color: "#92400E", fontWeight: "600" },
+
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.color.dangerSoft,
+    padding: theme.spacing.md,
+    borderRadius: theme.radii.md,
+  },
+  errorText: { ...theme.typography.caption, color: theme.color.dangerDeep, fontWeight: "600", flex: 1 },
+
+  backButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.spacing.sm, paddingVertical: theme.spacing.sm },
+  backText: { color: theme.color.primary, fontSize: 14, fontWeight: "700" },
+
+  legal: { ...theme.typography.caption, color: theme.color.textTertiary, textAlign: "center", marginTop: theme.spacing.xl },
 });

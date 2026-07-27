@@ -48,6 +48,12 @@ export type TrustTier = "BRONZE" | "SILVER" | "GOLD";
 export interface TrustTierInfo {
   trustTier: TrustTier;
   confirmedContributionsCount: number;
+  // Distance to the next tier. Thresholds are a server-side business rule and must never be
+  // hardcoded here. Optional so the app degrades gracefully against a backend deployed before
+  // these fields existed — callers should treat `undefined` as "progress unknown", not "at top".
+  nextTier?: TrustTier | null;
+  nextTierAt?: number | null;
+  contributionsToNextTier?: number | null;
 }
 
 export type NeedType = "MONEY" | "BLOOD" | "KIT" | "GOODS" | "MEAL_SLOT" | "SKILL_REQUEST" | "QUESTION";
@@ -137,7 +143,9 @@ export interface Need {
   createdAt: string;
 }
 
-export type ContributionKind = "MONEY" | "KIT" | "BLOOD" | "MEAL_SLOT" | "GOODS";
+// Mirrors the backend `ContributionKind` Prisma enum. SKILL_REQUEST is a real value the API can
+// return (volunteer pledges) — it was missing here, so that response shape was untypeable.
+export type ContributionKind = "MONEY" | "KIT" | "BLOOD" | "MEAL_SLOT" | "GOODS" | "SKILL_REQUEST";
 export type ContributionStatus = "PENDING_CONFIRMATION" | "CONFIRMED" | "REJECTED";
 
 export interface Contribution {
