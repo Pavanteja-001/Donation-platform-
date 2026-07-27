@@ -120,8 +120,11 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
   async function handleContributionDecision(id: string, decision: "confirm" | "reject") {
     if (!token) return;
     setBusy(true);
+    // `contributions` is null until the fetch lands — mapping over it unguarded would throw.
     setContributions((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: decision === "confirm" ? "CONFIRMED" : "REJECTED" } : c))
+      prev
+        ? prev.map((c) => (c.id === id ? { ...c, status: decision === "confirm" ? "CONFIRMED" : "REJECTED" } : c))
+        : prev
     );
     try {
       await (decision === "confirm" ? confirmContribution : rejectContribution)(token, id);

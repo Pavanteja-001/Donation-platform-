@@ -17,7 +17,7 @@ import {
 import { shareNeedViaWhatsApp } from "../lib/whatsapp";
 import { buildUpiDeepLink, buildUpiQrCodeUrl } from "../lib/upi";
 import { useAuth } from "../context/AuthContext";
-import { EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { EmptyState, ErrorState } from "../components/ui";
 import { PageSkeleton } from "../components/SkeletonLoader";
 
 function isMoneyPayload(payload: Need["payload"]): payload is MoneyPayload {
@@ -59,16 +59,7 @@ function formatContributionAmount(c: Contribution): string {
   return `₹${c.amount?.toLocaleString("en-IN")}`;
 }
 
-function DetailSkeleton() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "24px" }}>
-      <Skeleton width="120px" height={16} />
-      <Skeleton width="60%" height={32} />
-      <Skeleton width="100%" height={80} style={{ borderRadius: "8px" }} />
-      <Skeleton width="100%" height={160} style={{ borderRadius: "8px" }} />
-    </div>
-  );
-}
+// (The local DetailSkeleton was superseded by the shared <PageSkeleton /> used below.)
 
 export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () => void }) {
   const { token, user } = useAuth();
