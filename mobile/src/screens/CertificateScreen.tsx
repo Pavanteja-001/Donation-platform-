@@ -5,6 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { fetchCertificate, type Certificate } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { useBottomInset } from "../lib/safeArea";
 import { TYPE_META } from "../lib/needMeta";
 import { Button, ErrorState, Skeleton } from "../components/ui";
 import { Gradient } from "../components/Gradient";
@@ -26,6 +27,7 @@ function CertificateSkeleton() {
 // PRD §14.2 — certificate view. The disclaimer (D-006) is always shown: this is a platform
 // record and a thank-you, never an official, medical or government document.
 export function CertificateScreen({ contributionId }: { contributionId: string }) {
+  const bottomInset = useBottomInset();
   const { token } = useAuth();
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function CertificateScreen({ contributionId }: { contributionId: string }
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]} showsVerticalScrollIndicator={false}>
       {!certificate ? (
         <CertificateSkeleton />
       ) : (

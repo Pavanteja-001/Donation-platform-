@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { fetchLocations, updateMe, type AreaLocation, type BloodGroup, type DistrictLocation, type Gender } from "../lib/api";
 import { getCurrentGpsLocation } from "../lib/locationUtils";
 import { theme } from "../lib/theme";
+import { useBottomInset } from "../lib/safeArea";
 import { Gradient } from "../components/Gradient";
 import { IconPlate, litRamp } from "../components/Depth";
 import { ProgressBar } from "../components/ProgressBar";
@@ -78,6 +79,7 @@ export function RegisterScreen({
   isSkippable: boolean;
   onDone: () => void;
 }) {
+  const bottomInset = useBottomInset();
   const { token, user, refreshUser } = useAuth();
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -213,7 +215,7 @@ export function RegisterScreen({
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.flex}
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]} keyboardShouldPersistTaps="handled">
         <Animated.View entering={FadeInDown.duration(360)} style={styles.intro}>
           <Text style={styles.title}>Your donor profile</Text>
           <Text style={styles.hint}>

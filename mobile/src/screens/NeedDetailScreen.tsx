@@ -45,6 +45,7 @@ import { isProfileComplete } from "../lib/profile";
 import { shareNeedViaWhatsApp } from "../lib/whatsapp";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { theme } from "../lib/theme";
+import { useBottomInset } from "../lib/safeArea";
 import { IconPlate, litRamp } from "../components/Depth";
 import { BloodBagIllustration } from "../components/illustrations";
 import {
@@ -149,6 +150,7 @@ function DetailSkeleton() {
 }
 
 export function NeedDetailScreen({ needId, initialNeed }: { needId: string; initialNeed?: Need }) {
+  const bottomInset = useBottomInset();
   const { token, user, bloodEligibility } = useAuth();
   const navigation = useNavigation<any>();
   const { width: screenWidth } = useWindowDimensions();
@@ -511,7 +513,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
   return (
     <Animated.ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}
       showsVerticalScrollIndicator={false}
       onScroll={onScroll}
       scrollEventThrottle={16}

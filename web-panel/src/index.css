@@ -943,3 +943,84 @@ form textarea:focus {
   font-weight: 800;
   box-shadow: var(--elevation-1);
 }
+
+
+/* --- Detail / label-over-value grid ------------------------------------------------------ */
+
+/* `minmax(0, …)` is load-bearing: grid items default to `min-width: auto`, so a long unbroken
+   string (an email, a long place name) refuses to shrink and spills into the next column. */
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 16px 28px;
+}
+
+.detail-field {
+  min-width: 0;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 3px;
+}
+
+.detail-value {
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.detail-value a {
+  color: var(--color-primary);
+}
+
+.detail-empty {
+  color: var(--color-text-tertiary);
+  font-weight: 400;
+}
+
+/* A label inside the grid must not stretch — the grid column already sets the width, and the
+   global `form input { width: 100% }` then fills it correctly. */
+.detail-grid > label {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* --- Input type corrections -------------------------------------------------------------- */
+
+/* `form input { display: block }` above beats the UA stylesheet's `[hidden] { display: none }`,
+   which made every PhotoPicker's file input visible as a stray "Choose files" control next to
+   its own "+ Add" tile. */
+form input[hidden] {
+  display: none !important;
+}
+
+/* Checkboxes and radios are not text fields: a 100%-wide checkbox is what makes an
+   "Accepting bookings" row render as a lone box floating above its label. */
+form input[type="checkbox"],
+form input[type="radio"] {
+  display: inline-block;
+  width: auto;
+  margin-top: 0;
+  padding: 0;
+  box-shadow: none;
+  accent-color: var(--color-primary);
+}
+
+/* A checkbox and its text on one line, top-aligned so a two-line description still reads. */
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.checkbox-row input {
+  margin-top: 3px;
+  flex: none;
+}

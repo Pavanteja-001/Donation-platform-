@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Modal, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Feather } from "@expo/vector-icons";
 import { updateNeedLocation, type Need } from "../lib/api";
@@ -74,6 +75,7 @@ export function LocationPinModal({
   onSaved: (updated: Need) => void;
 }) {
   const { token } = useAuth();
+  const insets = useSafeAreaInsets();
   const webViewRef = useRef<any>(null);
   const initialLat = need.latitude ?? FALLBACK_LAT;
   const initialLng = need.longitude ?? FALLBACK_LNG;
@@ -129,7 +131,7 @@ export function LocationPinModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, theme.elevation.level3]}>
+        <View style={[styles.sheet, theme.elevation.level3, { paddingBottom: Math.max(insets.bottom, theme.spacing.lg) }]}>
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heading}>

@@ -5,6 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { updateMe, type BloodGroup, type Gender } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { useBottomInset } from "../lib/safeArea";
 import { Gradient } from "../components/Gradient";
 import { BloodBagIllustration } from "../components/illustrations";
 import { formatBloodGroup } from "../lib/needMeta";
@@ -30,6 +31,7 @@ const GENDERS: { value: Gender; label: string }[] = [
 // PRD §8.1 — the opt-in blood donor profile. This is the data that makes a user matchable, and
 // it's sensitive health data (CLAUDE.md §7), so the screen says plainly what it's used for.
 export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
+  const bottomInset = useBottomInset();
   const { token, user, refreshUser } = useAuth();
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | null>(user?.bloodGroup ?? null);
   const [gender, setGender] = useState<Gender | null>(user?.gender ?? null);
@@ -59,7 +61,7 @@ export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(360)} style={styles.header}>
           <BloodBagIllustration size={64} fillLevel={0.85} />
           <Text style={styles.title}>Blood donor profile</Text>

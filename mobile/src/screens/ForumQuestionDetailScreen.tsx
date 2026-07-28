@@ -1,6 +1,7 @@
 // PRD §12 — Forum question detail: the full question, its answers, and a reply form.
 import { useState, useCallback, useEffect } from "react";
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
@@ -46,6 +47,7 @@ export function ForumQuestionDetailScreen({
   questionId: string;
   initialQuestion?: ForumQuestion;
 }) {
+  const insets = useSafeAreaInsets();
   const { token, user } = useAuth();
   const navigation = useNavigation<any>();
   const [question, setQuestion] = useState<ForumQuestion | null>(initialQuestion ?? null);
@@ -243,7 +245,7 @@ export function ForumQuestionDetailScreen({
       />
 
       {/* Docked composer — an answer form buried under a long answer list is one nobody finds. */}
-      <View style={styles.composer}>
+      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, theme.spacing.lg) }]}>
         <Input
           placeholder="Write your answer…"
           multiline

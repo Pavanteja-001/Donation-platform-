@@ -827,3 +827,84 @@ export function clearAllNotifications(token: string) {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+
+// --- Orphanages & meal sponsorship ----------------------------------------------------------
+export type MealType = "BREAKFAST" | "LUNCH" | "DINNER";
+export type BookingStatus = "PENDING" | "ACCEPTED" | "CONFIRMED" | "REJECTED" | "CANCELLED";
+
+export interface Orphanage {
+  id: string;
+  name: string | null;
+  legalName: string | null;
+  city: string | null;
+  area: string | null;
+  address: string | null;
+  about: string | null;
+  coverPhotoUrl: string | null;
+  /** Public photos of the home's work. Never KYC documents — those aren't exposed by the API. */
+  galleryPhotos: string[];
+  childrenCount: number | null;
+  staffCount: number | null;
+  roomsCount: number | null;
+  /** Null means the home doesn't offer that meal for sponsorship. */
+  breakfastCost: number | null;
+  lunchCost: number | null;
+  dinnerCost: number | null;
+  acceptingBookings: boolean;
+}
+
+/** Only ever `{date, mealType}` — the API deliberately exposes nothing about who booked it. */
+export interface TakenSlot {
+  date: string;
+  mealType: MealType;
+}
+
+export interface SlotBooking {
+  id: string;
+  date: string;
+  mealType: MealType;
+  purpose: string | null;
+  peopleCount: number | null;
+  amount: number;
+  status: BookingStatus;
+  rejectionReason: string | null;
+  createdAt: string;
+  orphanage?: { id: string; name: string | null; city: string | null; area: string | null; coverPhotoUrl: string | null };
+}
+
+export function fetchOrphanages(token: string, search?: string) {
+  const query = search ? `?search=${encodeURIComponent(search)}` : "";
+  return request<{ orphanages: Orphanage[] }>(`/api/orphanages${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchOrphanage(token: string, id: string) {
+  return request<{ orphanage: Orphanage }>(`/api/orphanages/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchAvailability(token: string, id: string) {
+  return request<{ taken: TakenSlot[] }>(`/api/orphanages/${id}/availability`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function bookSlot(
+  token: string,
+  orphanageId: string,
+  data: { date: string; mealType: MealType; purpose?: string; peopleCount?: number }
+) {
+  return request<{ booking: SlotBooking }>(`/api/orphanages/${orphanageId}/bookings`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchMyBookings(token: string) {
+  return request<{ bookings: SlotBooking[] }>("/api/orphanages/me/bookings", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

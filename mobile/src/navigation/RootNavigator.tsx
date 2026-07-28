@@ -13,6 +13,9 @@ import { RegisterScreen } from "../screens/RegisterScreen";
 import { ForumScreen } from "../screens/ForumScreen";
 import { ForumQuestionDetailScreen } from "../screens/ForumQuestionDetailScreen";
 import { NotificationsScreen } from "../screens/NotificationsScreen";
+import { OrphanagesScreen } from "../screens/OrphanagesScreen";
+import { OrphanageDetailScreen } from "../screens/OrphanageDetailScreen";
+import { BookSlotScreen } from "../screens/BookSlotScreen";
 import { CreateSkillRequestNeedScreen } from "../screens/CreateSkillRequestNeedScreen";
 import { theme } from "../lib/theme";
 import { useAuth } from "../context/AuthContext";
@@ -26,6 +29,29 @@ type Props<Name extends keyof RootStackParamList> = NativeStackScreenProps<RootS
 // Thin adapters — every screen component still takes plain onBack/onDone/needId-style props
 // (unchanged from before this chunk, minimizing the diff to their actual logic); these just
 // translate that interface to/from React Navigation's route/navigation props in one place.
+function OrphanagesRoute({ navigation }: Props<"Orphanages">) {
+  return (
+    <OrphanagesScreen
+      onSelect={(home) => navigation.navigate("OrphanageDetail", { orphanageId: home.id, initial: home })}
+    />
+  );
+}
+
+function OrphanageDetailRoute({ navigation, route }: Props<"OrphanageDetail">) {
+  return (
+    <OrphanageDetailScreen
+      orphanageId={route.params.orphanageId}
+      initial={route.params.initial}
+      onBook={(home) => navigation.navigate("BookSlot", { home })}
+    />
+  );
+}
+
+function BookSlotRoute({ navigation, route }: Props<"BookSlot">) {
+  // Back to the home's page after booking, where the calendar now shows the slot as taken.
+  return <BookSlotScreen home={route.params.home} onDone={() => navigation.goBack()} />;
+}
+
 function NotificationsRoute({ navigation }: Props<"Notifications">) {
   return <NotificationsScreen onOpenNeed={(needId) => navigation.navigate("NeedDetail", { needId })} />;
 }
@@ -83,6 +109,9 @@ export function RootNavigator() {
       <Stack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="NeedDetail" component={NeedDetailRoute} options={{ title: "Need" }} />
       <Stack.Screen name="Notifications" component={NotificationsRoute} options={{ title: "Notifications" }} />
+      <Stack.Screen name="Orphanages" component={OrphanagesRoute} options={{ title: "Orphanages & Old Age Homes" }} />
+      <Stack.Screen name="OrphanageDetail" component={OrphanageDetailRoute} options={{ title: "Home details" }} />
+      <Stack.Screen name="BookSlot" component={BookSlotRoute} options={{ title: "Book a slot" }} />
       <Stack.Screen name="CreateNeedChooser" component={CreateNeedChooserScreen} options={{ title: "Post a need" }} />
       <Stack.Screen name="CreateMoney" component={CreateMoneyRoute} options={{ title: "Money need" }} />
       <Stack.Screen name="CreateKit" component={CreateKitRoute} options={{ title: "Kit need" }} />

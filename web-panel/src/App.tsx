@@ -5,6 +5,8 @@ import { DashboardLayout } from "./components/DashboardLayout";
 import { DashboardOverviewPage } from "./pages/DashboardOverviewPage";
 import { MyNeedsPage } from "./pages/MyNeedsPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
+import { OrphanageProfilePage } from "./pages/OrphanageProfilePage";
+import { BookingsPage } from "./pages/BookingsPage";
 import { NeedDetailRouteWrapper } from "./pages/NeedDetailRouteWrapper";
 import { PostNeedPage } from "./pages/PostNeedPage";
 import { CreateMoneyNeedPage } from "./pages/CreateMoneyNeedPage";
@@ -63,6 +65,8 @@ function Root() {
         <Route path="/needs" element={<MyNeedsPage />} />
         <Route path="/needs/:needId" element={<NeedDetailRouteWrapper />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/home-profile" element={<OrphanageProfilePage />} />
+        <Route path="/bookings" element={<BookingsPage />} />
         <Route path="/post" element={<PostNeedPage />} />
         <Route path="/post/money" element={<CreateMoneyWrapper />} />
         <Route path="/post/kit" element={<CreateKitWrapper />} />

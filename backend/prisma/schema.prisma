@@ -98,6 +98,32 @@ model User {
   kycStatus          KycStatus         @default(NOT_SUBMITTED)
   kycRejectionReason String?
 
+  // --- Orphanage / old-age-home public profile (institutionType == ORPHANAGE) --------------
+  // Shown in the mobile directory, edited by the home itself from the web panel. Kept separate
+  // from the KYC block above on purpose: KYC is private paperwork an admin reviews, this is the
+  // public listing a donor browses.
+  about         String?
+  childrenCount Int?
+  staffCount    Int?
+  roomsCount    Int?
+  coverPhotoUrl String?
+
+  /// Photos of the home's past work — meals served, celebrations, facilities. Public, shown as a
+  /// gallery in the app.
+  ///
+  /// Deliberately NOT `kycPhotos`: those are identity documents (registration certificates, ID
+  /// proofs) that only an admin reviewing KYC should ever see. Keeping the two arrays separate is
+  /// what stops a private document ending up in a public gallery.
+  galleryPhotos String[] @default([])
+
+  // Per-meal sponsorship price in rupees. Null = that meal isn't offered.
+  breakfastCost Int?
+  lunchCost     Int?
+  dinnerCost    Int?
+
+  /// A home can close its calendar entirely (renovation, festival) without being delisted.
+  acceptingBookings Boolean @default(true)
+
   // Set only for STAFF accounts — which ADMIN created them (D-018).
   createdByAdminId String?
   createdByAdmin   User?   @relation("StaffCreatedBy", fields: [createdByAdminId], references: [id])
@@ -112,6 +138,9 @@ model User {
   forumQuestions         ForumQuestion[] @relation("QuestionsAuthored")
   forumAnswers           ForumAnswer[]  @relation("AnswersAuthored")
   notifications          Notification[] @relation("NotificationsReceived")
+
+  bookingsReceived SlotBooking[] @relation("BookingsForOrphanage")
+  bookingsMade     SlotBooking[] @relation("BookingsByDonor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -184,6 +213,72 @@ enum NotificationType {
   FORUM_ANSWER
   /// Admin/staff only: a new need is waiting in the verification queue.
   VERIFICATION_QUEUE
+}
+
+/// A donor sponsoring a meal at an orphanage / old-age home on a date they choose.
+///
+/// Deliberately NOT the existing MEAL_SLOT Need. That flow is institution-driven — the home
+/// publishes a fixed list of dates and a donor picks one (§10.2). Here the home publishes
+/// nothing: **every future date is open**, and a date only becomes unavailable because someone
+/// booked it.
+///
+/// PRIVACY: availability is public, the booking is not. Other donors may learn that a date+meal
+/// is taken and nothing else — never who booked it, for what occasion, or for how many people.
+model SlotBooking {
+  id String @id @default(cuid())
+
+  orphanageId String
+  orphanage   User   @relation("BookingsForOrphanage", fields: [orphanageId], references: [id], onDelete: Cascade)
+
+  donorId String
+  donor   User   @relation("BookingsByDonor", fields: [donorId], references: [id], onDelete: Cascade)
+
+  /// Calendar day; the meal type carries the time of day.
+  date     DateTime
+  mealType MealType
+
+  /// "Birthday celebration", "In memory of..." — so the home can prepare. Never shown to others.
+  purpose     String?
+  peopleCount Int?
+
+  /// Rupees, copied from the home's price at booking time so a later price change cannot
+  /// rewrite what a donor already agreed to pay.
+  amount Int
+
+  status BookingStatus @default(PENDING)
+
+  /// Mandatory on REJECTED, mirroring D-017 for needs — the donor is always told why.
+  rejectionReason String?
+
+  /// Payment proof (D-001: no gateway; the donor pays the home directly, then submits the UTR).
+  utr      String? @unique
+  proofUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One sponsor per meal per day per home, enforced by the database so two donors racing for
+  /// the same slot cannot both win — the same guarantee D-022 gives published meal slots.
+  @@unique([orphanageId, date, mealType])
+  @@index([orphanageId, date])
+  @@index([donorId, createdAt])
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum BookingStatus {
+  /// Waiting on the home to accept.
+  PENDING
+  /// The home accepted; the donor now pays and submits proof.
+  ACCEPTED
+  /// Payment confirmed by the home (or admin) — the sponsorship is complete.
+  CONFIRMED
+  REJECTED
+  CANCELLED
 }
 
 enum NeedStatus {

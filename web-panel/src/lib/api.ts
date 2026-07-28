@@ -23,6 +23,19 @@ export interface AuthUser {
   kycPhotos?: string[];
   kycStatus?: KycStatus;
   kycRejectionReason?: string | null;
+
+  // Orphanage / old-age-home public listing (only meaningful when institutionType === ORPHANAGE).
+  // Returned by /api/auth/me, which sends the caller's whole own row.
+  about?: string | null;
+  childrenCount?: number | null;
+  staffCount?: number | null;
+  roomsCount?: number | null;
+  coverPhotoUrl?: string | null;
+  galleryPhotos?: string[];
+  breakfastCost?: number | null;
+  lunchCost?: number | null;
+  dinnerCost?: number | null;
+  acceptingBookings?: boolean;
 }
 
 export type NeedType = "MONEY" | "BLOOD" | "KIT" | "GOODS" | "MEAL_SLOT" | "SKILL_REQUEST" | "QUESTION";
@@ -460,7 +473,11 @@ export async function uploadProfilePhoto(token: string, file: File): Promise<str
 
 // Signs + uploads each file in sequence and returns their public URLs, ready to pass as
 // Need.photos.
-export async function uploadPhotos(token: string, files: File[], folder: "need-photos"): Promise<string[]> {
+export async function uploadPhotos(
+  token: string,
+  files: File[],
+  folder: "contribution-proofs" | "need-photos" | "need-qr" | "kyc-docs" | "profile-photos"
+): Promise<string[]> {
   const urls: string[] = [];
   for (const file of files) {
     const signed = await signUpload(token, file.type, folder);
@@ -650,4 +667,85 @@ export function deleteNotification(token: string, id: string) {
 
 export function clearAllNotifications(token: string) {
   return request<{ deleted: number }>("/api/notifications", { method: "DELETE", headers: authHeaders(token) });
+}
+
+// --- Orphanage profile & meal sponsorship ---------------------------------------------------
+export type MealType = "BREAKFAST" | "LUNCH" | "DINNER";
+export type BookingStatus = "PENDING" | "ACCEPTED" | "CONFIRMED" | "REJECTED" | "CANCELLED";
+
+export interface OrphanageProfile {
+  id: string;
+  name: string | null;
+  about: string | null;
+  childrenCount: number | null;
+  staffCount: number | null;
+  roomsCount: number | null;
+  coverPhotoUrl: string | null;
+  galleryPhotos: string[];
+  breakfastCost: number | null;
+  lunchCost: number | null;
+  dinnerCost: number | null;
+  acceptingBookings: boolean;
+}
+
+export interface SlotBooking {
+  id: string;
+  date: string;
+  mealType: MealType;
+  purpose: string | null;
+  peopleCount: number | null;
+  amount: number;
+  status: BookingStatus;
+  rejectionReason: string | null;
+  createdAt: string;
+  donor: { id: string; name: string | null; phone: string };
+}
+
+/** Null on a cost field clears it, which is how a home says "we don't offer this meal". */
+export function updateOrphanageProfile(
+  token: string,
+  data: Partial<{
+    about: string | null;
+    childrenCount: number | null;
+    staffCount: number | null;
+    roomsCount: number | null;
+    coverPhotoUrl: string | null;
+    galleryPhotos: string[];
+    breakfastCost: number | null;
+    lunchCost: number | null;
+    dinnerCost: number | null;
+    acceptingBookings: boolean;
+  }>
+) {
+  return request<{ profile: OrphanageProfile }>("/api/bookings/profile", {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function fetchBookings(token: string) {
+  return request<{ bookings: SlotBooking[] }>("/api/bookings", { headers: authHeaders(token) });
+}
+
+export function acceptBooking(token: string, id: string) {
+  return request<{ booking: SlotBooking }>(`/api/bookings/${id}/accept`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export function rejectBooking(token: string, id: string, reason: string) {
+  return request<{ booking: SlotBooking }>(`/api/bookings/${id}/reject`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function confirmBooking(token: string, id: string) {
+  return request<{ booking: SlotBooking }>(`/api/bookings/${id}/confirm`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
 }

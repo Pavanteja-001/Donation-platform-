@@ -233,11 +233,11 @@ const styles = StyleSheet.create({
   tabBarWrap: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
-    // Transparent so the blurred pill sits on the scene rather than on an opaque strip. The
-    // scene is still inset by the bar's measured height, so nothing scrolls underneath and
-    // nothing is hidden — making the bar `position: absolute` (content flowing under the glass)
-    // would need a bottom inset added to all five tab screens' lists.
-    backgroundColor: "transparent",
+    // Canvas-coloured, NOT transparent. The bar is laid out (not absolutely positioned), so a
+    // transparent wrapper exposes the raw window background behind it — black on Android — which
+    // reads as a flickering strip under the floating pill. The BlurView inside still frosts what
+    // sits behind the pill; it just has the canvas to work with rather than a hole.
+    backgroundColor: theme.color.background,
   },
   tabBar: {
     flexDirection: "row",

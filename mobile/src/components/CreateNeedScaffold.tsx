@@ -5,6 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import type { NeedType } from "../lib/api";
 import { TYPE_META } from "../lib/needMeta";
 import { theme } from "../lib/theme";
+import { useBottomInset } from "../lib/safeArea";
 import { Button } from "./ui";
 import { Gradient } from "./Gradient";
 import { IconPlate, litRamp } from "./Depth";
@@ -38,6 +39,7 @@ export function CreateNeedScaffold({
   isSubmitting: boolean;
   submitLabel?: string;
 }) {
+  const bottomInset = useBottomInset();
   const meta = TYPE_META[type];
   // Blood posts get the deeper crimson CTA; every other type uses the brand crimson.
   const isBlood = type === "BLOOD";
@@ -45,7 +47,7 @@ export function CreateNeedScaffold({
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

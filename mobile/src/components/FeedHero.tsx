@@ -149,6 +149,7 @@ function GlassButton({
  */
 export function FeedHero({ needs }: { needs: Need[] }) {
   const { user } = useAuth();
+  const navigation = useNavigation<AppNavigationProp>();
   const insets = useSafeAreaInsets();
   const openCreate = useCreateNeedFlow();
   const openForum = useForumFlow();
@@ -185,6 +186,11 @@ export function FeedHero({ needs }: { needs: Need[] }) {
 
         <View style={styles.actions}>
           <NotificationBell />
+          <GlassButton
+            icon="home"
+            onPress={() => navigation.navigate("Orphanages")}
+            label="Orphanages and old age homes"
+          />
           <GlassButton icon="message-circle" onPress={openForum} label="Community forum" />
           <GlassButton icon="plus" onPress={openCreate} label="Post a need" />
         </View>

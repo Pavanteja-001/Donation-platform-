@@ -25,6 +25,7 @@ function useUnreadCount(token: string | null) {
 export function DashboardLayout() {
   const { user, signOut, token } = useAuth();
   const unread = useUnreadCount(token);
+  const isOrphanage = user?.institutionType === "ORPHANAGE";
   const navigate = useNavigate();
 
   const handleSignOut = () => {
@@ -53,6 +54,25 @@ export function DashboardLayout() {
           >
             My Needs
           </NavLink>
+
+          {/* Only orphanages/old-age homes run meal sponsorship, so the links stay hidden for
+              other institution types rather than leading to a "not for you" page. */}
+          {isOrphanage && (
+            <>
+              <NavLink
+                to="/bookings"
+                className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+              >
+                Meal Sponsorships
+              </NavLink>
+              <NavLink
+                to="/home-profile"
+                className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+              >
+                Home Profile
+              </NavLink>
+            </>
+          )}
 
           <NavLink
             to="/notifications"

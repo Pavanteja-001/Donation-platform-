@@ -1137,3 +1137,36 @@ form textarea:focus {
 .meta-row > strong {
   min-width: 96px;
 }
+/* --- Input type corrections -------------------------------------------------------------- */
+
+/* `form input { display: block }` above beats the UA stylesheet's `[hidden] { display: none }`,
+   which made every PhotoPicker's file input visible as a stray "Choose files" control next to
+   its own "+ Add" tile. */
+form input[hidden] {
+  display: none !important;
+}
+
+/* Checkboxes and radios are not text fields: a 100%-wide checkbox is what makes an
+   "Accepting bookings" row render as a lone box floating above its label. */
+form input[type="checkbox"],
+form input[type="radio"] {
+  display: inline-block;
+  width: auto;
+  margin-top: 0;
+  padding: 0;
+  box-shadow: none;
+  accent-color: var(--color-primary);
+}
+
+/* A checkbox and its text on one line, top-aligned so a two-line description still reads. */
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.checkbox-row input {
+  margin-top: 3px;
+  flex: none;
+}
