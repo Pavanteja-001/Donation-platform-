@@ -66,6 +66,24 @@ function formatContributionAmount(c: Contribution): string {
 const NON_TERMINAL: Need["status"][] = ["PENDING_VERIFICATION", "LIVE", "PARTIALLY_FULFILLED"];
 const URGENCIES: Urgency[] = ["NORMAL", "URGENT", "EMERGENCY"];
 
+/** One label/value pair in the requester grid. Renders "Not provided" rather than blank, so a
+    missing field is visibly missing instead of looking like a layout bug. */
+function DetailField({ label, value, href }: { label: string; value?: string | null; href?: string }) {
+  const shown = value && value.trim() ? value : null;
+  return (
+    <div className="detail-field">
+      <div className="detail-label">{label}</div>
+      <div className="detail-value">
+        {shown ? href ? <a href={href}>{shown}</a> : shown : <span className="detail-empty">Not provided</span>}
+      </div>
+    </div>
+  );
+}
+
+function isNewAccount(createdAt: string): boolean {
+  return Date.now() - new Date(createdAt).getTime() < 24 * 60 * 60 * 1000;
+}
+
 export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () => void }) {
   const { token, isAdmin } = useAuth();
   const [need, setNeed] = useState<Need | null>(null);
@@ -191,19 +209,63 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
       </div>
       <p>{need.description}</p>
 
+      {/* Requester details — the point of the verification step is a human check, and that means
+          being able to call the person and see where they say they are. The API only returns
+          these fields to ADMIN/STAFF, so they're rendered defensively: an older backend (or a
+          non-admin session) simply shows fewer rows rather than "undefined". */}
+      <div className="card" style={{ margin: "16px 0", padding: 16 }}>
+        <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>Requester details</h3>
+        <div className="detail-grid">
+          <DetailField label="Name" value={need.postedBy.name} />
+          <DetailField
+            label="Phone"
+            value={need.postedBy.phone}
+            href={need.postedBy.phone ? `tel:${need.postedBy.phone}` : undefined}
+          />
+          <DetailField
+            label="Email"
+            value={need.postedBy.email}
+            href={need.postedBy.email ? `mailto:${need.postedBy.email}` : undefined}
+          />
+          <DetailField
+            label="Registered location"
+            value={[need.postedBy.area, need.postedBy.city].filter(Boolean).join(", ") || null}
+          />
+          <DetailField
+            label="Member since"
+            value={need.postedBy.createdAt ? new Date(need.postedBy.createdAt).toLocaleDateString() : null}
+          />
+        </div>
+        {/* A brand-new account posting an urgent request is the classic fraud pattern, so the
+            gap between signup and posting is worth surfacing rather than leaving to arithmetic. */}
+        {need.postedBy.createdAt && isNewAccount(need.postedBy.createdAt) && (
+          <div className="callout callout-warning" style={{ marginTop: 12, marginBottom: 0 }}>
+            <strong>New account</strong>
+            <span style={{ fontSize: 13 }}>
+              This account was created less than 24 hours before you're viewing it. Worth an extra check.
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* The request's own location, kept distinct from the requester's registered one above —
+          when those two disagree it's exactly what a verifier wants to notice. */}
       {(need.city || need.area || (need.latitude && need.longitude)) && (
-        <div style={{ margin: "12px 0", fontSize: "14px", color: "var(--color-text-secondary)" }}>
-          📍 <strong>Location:</strong> {[need.area, need.city].filter(Boolean).join(", ")}
-          {need.latitude && need.longitude && (
-            <a
-              href={`https://www.google.com/maps?q=${need.latitude},${need.longitude}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{ marginLeft: 12, color: "var(--color-primary)", fontWeight: 600 }}
-            >
-              🗺️ Open in Google Maps ({need.latitude.toFixed(4)}, {need.longitude.toFixed(4)})
-            </a>
-          )}
+        <div className="meta-rows">
+          <div className="meta-row">
+            <strong>📍 Location</strong>
+            <span>{[need.area, need.city].filter(Boolean).join(", ") || "Not set"}</span>
+            {need.latitude && need.longitude && (
+              <a
+                href={`https://www.google.com/maps?q=${need.latitude},${need.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-action-secondary"
+              >
+                🗺️ Open in Google Maps ({need.latitude.toFixed(4)}, {need.longitude.toFixed(4)})
+              </a>
+            )}
+          </div>
         </div>
       )}
 
@@ -242,10 +304,24 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
         </p>
       )}
       {blood && (
-        <p className="hint">
-          Progress: {blood.units_fulfilled} / {blood.units_needed} units · blood group: {formatGroup(blood.blood_group)}
-          {need.linkedInstitutionId ? ` · institution-verified: ${need.institutionVerified ? "yes" : "no"}` : ""}
-        </p>
+        <div className="meta-rows">
+          <div className="meta-row">
+            <strong>Blood group</strong>
+            <span className="badge">{formatGroup(blood.blood_group)}</span>
+          </div>
+          <div className="meta-row">
+            <strong>Progress</strong>
+            <span>
+              {blood.units_fulfilled} / {blood.units_needed} units
+            </span>
+          </div>
+          {need.linkedInstitutionId && (
+            <div className="meta-row">
+              <strong>Institution</strong>
+              <span>{need.institutionVerified ? "Verified by the linked institution" : "Awaiting institution verification"}</span>
+            </div>
+          )}
+        </div>
       )}
       {mealSlot && (
         <>
@@ -279,8 +355,8 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
       {error && <p className="error">{error}</p>}
 
       {NON_TERMINAL.includes(need.status) && (
-        <p className="hint">
-          Urgency (D-012 — never self-declared):{" "}
+        <div className="meta-row" style={{ marginBottom: 16 }}>
+          <strong>Urgency</strong>
           {URGENCIES.map((u) => (
             <button
               key={u}
@@ -288,12 +364,11 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
               className={need.urgency === u ? "chip active" : "chip"}
               onClick={() => handleUrgencyChange(u)}
               disabled={busy || need.urgency === u}
-              style={{ marginLeft: 4 }}
             >
               {u}
             </button>
           ))}
-        </p>
+        </div>
       )}
 
       {need.status === "PENDING_VERIFICATION" && (

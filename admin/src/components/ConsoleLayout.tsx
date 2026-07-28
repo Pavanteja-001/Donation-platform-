@@ -1,8 +1,30 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { fetchUnreadCount } from "../lib/api";
+
+function useUnreadCount(token: string | null) {
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!token) return;
+    let alive = true;
+    const poll = () =>
+      fetchUnreadCount(token)
+        .then(({ unreadCount }) => alive && setUnread(unreadCount))
+        .catch(() => {});
+    poll();
+    const timer = setInterval(poll, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [token]);
+  return unread;
+}
 
 export function ConsoleLayout() {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin, signOut, token } = useAuth();
+  const unread = useUnreadCount(token);
   const navigate = useNavigate();
 
   const handleSignOut = () => {
@@ -63,6 +85,14 @@ export function ConsoleLayout() {
             className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
           >
             Locations
+          </NavLink>
+
+          <NavLink
+            to="/notifications"
+            className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+          >
+            Notifications
+            {unread > 0 && <span className="nav-badge">{unread > 9 ? "9+" : unread}</span>}
           </NavLink>
 
           <NavLink

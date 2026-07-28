@@ -1057,3 +1057,83 @@ form textarea:focus {
   background-color: #fdf6e7;
   border-color: rgba(217, 119, 6, 0.28);
 }
+
+/* Unread count beside a sidebar nav item — the console is a long-lived tab, so a queued
+   request has to announce itself without the admin navigating anywhere. */
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background-image: var(--grad-danger);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: var(--elevation-1);
+}
+
+/* --- Detail / verification layout -------------------------------------------------------- */
+
+/* A label-over-value grid. `minmax(0, …)` rather than `minmax(200px, …)` is the important part:
+   grid items default to `min-width: auto`, so a long unbroken string (an email address) refuses
+   to shrink and spills into the neighbouring column instead of wrapping. */
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 16px 28px;
+}
+
+.detail-field {
+  min-width: 0;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 3px;
+}
+
+.detail-value {
+  font-size: 14px;
+  font-weight: 500;
+  /* Emails and long place names break rather than overflow their cell. */
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.detail-value a {
+  color: var(--color-primary);
+}
+
+.detail-empty {
+  color: var(--color-text-tertiary);
+  font-weight: 400;
+}
+
+/* The meta lines under the requester card (location, progress, urgency) — evenly spaced rows
+   instead of bare paragraphs at inconsistent margins. */
+.meta-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.meta-row > strong {
+  min-width: 96px;
+}

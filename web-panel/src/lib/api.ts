@@ -598,4 +598,56 @@ export function fetchLocations() {
   return request<{ districts: DistrictLocation[] }>("/api/locations");
 }
 
+// --- Notification inbox ---------------------------------------------------------------------
+//
+// Web users have no push token at all, so for an institution or a staff member this list IS the
+// notification channel — not a history of something they already saw on a phone.
+export type NotificationType =
+  | "BLOOD_REQUEST"
+  | "CONTRIBUTION_RECEIVED"
+  | "CONTRIBUTION_CONFIRMED"
+  | "NEED_STATUS"
+  | "FORUM_ANSWER"
+  | "VERIFICATION_QUEUE";
 
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  needId: string | null;
+  forumId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export function fetchNotifications(token: string) {
+  return request<{ notifications: AppNotification[]; nextCursor: string | null; unreadCount: number }>(
+    "/api/notifications",
+    { headers: authHeaders(token) }
+  );
+}
+
+export function fetchUnreadCount(token: string) {
+  return request<{ unreadCount: number }>("/api/notifications/unread-count", { headers: authHeaders(token) });
+}
+
+export function markNotificationRead(token: string, id: string) {
+  return fetch(`${API_URL}/api/notifications/${id}/read`, { method: "POST", headers: authHeaders(token) }).then(
+    () => undefined
+  );
+}
+
+export function markAllNotificationsRead(token: string) {
+  return request<{ updated: number }>("/api/notifications/read-all", { method: "POST", headers: authHeaders(token) });
+}
+
+export function deleteNotification(token: string, id: string) {
+  return fetch(`${API_URL}/api/notifications/${id}`, { method: "DELETE", headers: authHeaders(token) }).then((res) => {
+    if (!res.ok && res.status !== 204) throw new Error(`Request failed (${res.status})`);
+  });
+}
+
+export function clearAllNotifications(token: string) {
+  return request<{ deleted: number }>("/api/notifications", { method: "DELETE", headers: authHeaders(token) });
+}

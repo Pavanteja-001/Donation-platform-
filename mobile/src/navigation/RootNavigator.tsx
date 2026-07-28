@@ -12,6 +12,7 @@ import { BloodProfileScreen } from "../screens/BloodProfileScreen";
 import { RegisterScreen } from "../screens/RegisterScreen";
 import { ForumScreen } from "../screens/ForumScreen";
 import { ForumQuestionDetailScreen } from "../screens/ForumQuestionDetailScreen";
+import { NotificationsScreen } from "../screens/NotificationsScreen";
 import { CreateSkillRequestNeedScreen } from "../screens/CreateSkillRequestNeedScreen";
 import { theme } from "../lib/theme";
 import { useAuth } from "../context/AuthContext";
@@ -25,6 +26,10 @@ type Props<Name extends keyof RootStackParamList> = NativeStackScreenProps<RootS
 // Thin adapters — every screen component still takes plain onBack/onDone/needId-style props
 // (unchanged from before this chunk, minimizing the diff to their actual logic); these just
 // translate that interface to/from React Navigation's route/navigation props in one place.
+function NotificationsRoute({ navigation }: Props<"Notifications">) {
+  return <NotificationsScreen onOpenNeed={(needId) => navigation.navigate("NeedDetail", { needId })} />;
+}
+
 function NeedDetailRoute({ route }: Props<"NeedDetail">) {
   return <NeedDetailScreen needId={route.params.needId} initialNeed={route.params.initialNeed} />;
 }
@@ -77,6 +82,7 @@ export function RootNavigator() {
       <Stack.Screen name="Register" component={RegisterRoute} options={{ title: "Register Profile", headerShown: false }} />
       <Stack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="NeedDetail" component={NeedDetailRoute} options={{ title: "Need" }} />
+      <Stack.Screen name="Notifications" component={NotificationsRoute} options={{ title: "Notifications" }} />
       <Stack.Screen name="CreateNeedChooser" component={CreateNeedChooserScreen} options={{ title: "Post a need" }} />
       <Stack.Screen name="CreateMoney" component={CreateMoneyRoute} options={{ title: "Money need" }} />
       <Stack.Screen name="CreateKit" component={CreateKitRoute} options={{ title: "Kit need" }} />

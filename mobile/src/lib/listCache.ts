@@ -48,6 +48,27 @@ export function clearAllListCaches() {
   clearContributionsCache();
 }
 
+/**
+ * Applies an updated Need to EVERY cached list that holds it.
+ *
+ * Patching one cache and not the others is silently wrong: updating a need's map pin from
+ * My Needs used to refresh `myNeedsCache` only, so the feed kept the old coordinates — and
+ * since the feed hands its copy to the detail screen as `initialNeed`, opening that need
+ * straight afterwards showed the pre-update location. On a second device, with no local cache
+ * at all, the same need looked correct. "Correct everywhere except the device that made the
+ * change" is the signature of exactly this bug.
+ *
+ * `postedBy` is preserved from the cached copy because list endpoints include that relation
+ * while a mutation response (e.g. PATCH /needs/:id/location) returns the bare Need.
+ */
+export function patchNeedInCaches(updated: Need): void {
+  const apply = (list: Need[]) =>
+    list.map((n) => (n.id === updated.id ? { ...n, ...updated, postedBy: n.postedBy } : n));
+
+  if (needsFeedCache.data) needsFeedCache.data = apply(needsFeedCache.data);
+  if (myNeedsCache.data) myNeedsCache.data = apply(myNeedsCache.data);
+}
+
 /** Shared staleness window for all three list screens. */
 export const CACHE_TTL_MS = 15000;
 

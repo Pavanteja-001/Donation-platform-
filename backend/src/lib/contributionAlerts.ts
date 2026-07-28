@@ -1,8 +1,8 @@
 import type { Need } from "@prisma/client";
 import { ContributionKind } from "@prisma/client";
-import { prisma } from "./prisma";
 import { parseBloodPayload } from "./bloodNeed";
-import { sendPushNotifications } from "./pushNotifications";
+import { NotificationType } from "@prisma/client";
+import { notify } from "./notifications";
 
 /**
  * Tells the person who posted a need that someone has stepped forward.
@@ -23,31 +23,19 @@ export async function notifyPosterOfContribution(
   need: Pick<Need, "id" | "title" | "type" | "postedById" | "payload">,
   kind: ContributionKind
 ): Promise<void> {
-  const poster = await prisma.user.findUnique({
-    where: { id: need.postedById },
-    select: { expoPushToken: true },
-  });
-  if (!poster?.expoPushToken) return;
-
   const blood = need.type === "BLOOD" ? parseBloodPayload(need.payload) : null;
   const group = blood ? blood.blood_group.replace("_POSITIVE", "+").replace("_NEGATIVE", "-") : null;
-
   const { title, body } = messageFor(kind, need.title, group);
 
-  await sendPushNotifications([
-    {
-      to: poster.expoPushToken,
-      title,
-      body,
-      // A blood responder is time-critical — the beneficiary is expected to call them back, so
-      // it goes to the high-priority channel like an emergency alert. Everything else is a
-      // normal-priority "come and confirm this when you can".
-      priority: kind === ContributionKind.BLOOD ? "high" : "default",
-      channelId: kind === ContributionKind.BLOOD ? "emergency" : "default",
-      // Deep-links to the need, where the donor's details and the confirm button live.
-      data: { needId: need.id },
-    },
-  ]);
+  await notify({
+    recipientIds: [need.postedById],
+    type: NotificationType.CONTRIBUTION_RECEIVED,
+    title,
+    body,
+    needId: need.id,
+    // A blood responder is time-critical — the beneficiary is expected to call them back.
+    urgent: kind === ContributionKind.BLOOD,
+  });
 }
 
 function messageFor(kind: ContributionKind, needTitle: string, bloodGroup: string | null) {

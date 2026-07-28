@@ -3,7 +3,8 @@ import { Role } from "@prisma/client";
 import { prisma } from "./prisma";
 import { computeEligibility } from "./bloodEligibility";
 import { parseBloodPayload } from "./bloodNeed";
-import { sendPushNotifications } from "./pushNotifications";
+import { NotificationType } from "@prisma/client";
+import { notify } from "./notifications";
 
 // PRD §8.4 — a one-time push to every eligible donor when a BLOOD need goes LIVE.
 export async function notifyEligibleBloodDonors(need: Need): Promise<{ notified: number }> {
@@ -33,19 +34,17 @@ export async function notifyEligibleBloodDonors(need: Need): Promise<{ notified:
     return { notified: 0 };
   }
 
-  await sendPushNotifications(
-    eligible.map((donor) => ({
-      to: donor.expoPushToken!,
-      title: need.urgency === "EMERGENCY" ? "🚨 Emergency blood request nearby" : "Blood request nearby",
-      body: `${need.title} — ${blood.blood_group.replace("_", " ")} needed in ${need.area ?? need.city}`,
-      priority: need.urgency === "EMERGENCY" ? "high" : "default",
-      // Routes Android to the MAX-importance channel (louder pattern, always heads-up) for
-      // Emergency; both channels play the default sound.
-      channelId: need.urgency === "EMERGENCY" ? "emergency" : "default",
-      data: { needId: need.id },
-    }))
-  );
+  // Routed through `notify` so each matched donor also gets an inbox row — a blood alert that
+  // failed to deliver (dead token, silenced channel) is the exact case where the donor most
+  // needs to still find it in the app.
+  await notify({
+    recipientIds: eligible.map((d) => d.id),
+    type: NotificationType.BLOOD_REQUEST,
+    title: need.urgency === "EMERGENCY" ? "🚨 Emergency blood request nearby" : "Blood request nearby",
+    body: `${need.title} — ${blood.blood_group.replace("_", " ")} needed in ${need.area ?? need.city}`,
+    needId: need.id,
+    urgent: need.urgency === "EMERGENCY",
+  });
 
-  console.log(`[blood-match] Sent push notification to ${eligible.length} eligible donors.`);
   return { notified: eligible.length };
 }

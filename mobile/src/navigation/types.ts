@@ -17,6 +17,7 @@ export type TabParamList = {
 export type RootStackParamList = {
   Tabs: undefined;
   NeedDetail: { needId: string; initialNeed?: Need };
+  Notifications: undefined;
   CreateNeedChooser: undefined;
   CreateMoney: undefined;
   CreateKit: undefined;

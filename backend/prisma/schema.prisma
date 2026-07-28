@@ -110,7 +110,8 @@ model User {
   contributionsConfirmed Contribution[] @relation("ContributionsConfirmed")
 
   forumQuestions         ForumQuestion[] @relation("QuestionsAuthored")
-  forumAnswers           ForumAnswer[]   @relation("AnswersAuthored")
+  forumAnswers           ForumAnswer[]  @relation("AnswersAuthored")
+  notifications          Notification[] @relation("NotificationsReceived")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -142,6 +143,49 @@ enum Urgency {
 //   DRAFT -> PENDING_VERIFICATION -> LIVE -> PARTIALLY_FULFILLED -> FULFILLED
 //                        \-> REJECTED         \-> EXPIRED / CANCELLED (terminal)
 // Transitions are enforced in src/lib/needLifecycle.ts, not just documented here.
+/// Notification history — the inbox behind the push.
+///
+/// Push alone is lossy: a token can be dead, the channel can be silenced, the phone can be off,
+/// and Expo drops anything undelivered. This platform has already hit every one of those. A row
+/// here is the durable record — the push is just the tap on the shoulder, and everything stays
+/// readable in-app afterwards even when delivery failed entirely.
+model Notification {
+  id String @id @default(cuid())
+
+  recipientId String
+  recipient   User   @relation("NotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  type  NotificationType
+  title String
+  body  String
+
+  /// Deep-link target, so tapping the row opens the thing it's about.
+  needId   String?
+  forumId  String?
+
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  /// Newest-first per recipient is the only query this table serves.
+  @@index([recipientId, createdAt])
+}
+
+enum NotificationType {
+  /// A blood request matching this donor's group and city went live.
+  BLOOD_REQUEST
+  /// Someone offered to donate on a need this user posted.
+  CONTRIBUTION_RECEIVED
+  /// The beneficiary/admin confirmed this user's contribution.
+  CONTRIBUTION_CONFIRMED
+  /// A need this user posted was verified, rejected or cancelled by an admin.
+  NEED_STATUS
+  /// Someone answered this user's forum question.
+  FORUM_ANSWER
+  /// Admin/staff only: a new need is waiting in the verification queue.
+  VERIFICATION_QUEUE
+}
+
 enum NeedStatus {
   DRAFT
   PENDING_VERIFICATION

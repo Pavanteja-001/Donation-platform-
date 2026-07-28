@@ -4,6 +4,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
 import { StaffPage } from "./pages/StaffPage";
 import { NeedsPage } from "./pages/NeedsPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { NeedDetailRouteWrapper } from "./pages/NeedDetailRouteWrapper";
 import { PostNeedPage } from "./pages/PostNeedPage";
 import { InstitutionsPage } from "./pages/InstitutionsPage";
@@ -68,6 +69,7 @@ function Root() {
         <Route path="/" element={<Navigate to="/needs" replace />} />
         <Route path="/needs" element={<NeedsPage />} />
         <Route path="/needs/:needId" element={<NeedDetailRouteWrapper />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/institutions" element={<InstitutionsPage />} />
         <Route path="/users" element={<UsersPage />} />
         

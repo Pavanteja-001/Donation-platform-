@@ -11,7 +11,8 @@ import { parseBloodPayload } from "../lib/bloodNeed";
 import { parseMealSlotPayload } from "../lib/mealSlotNeed";
 import { parseGoodsPayload } from "../lib/goodsNeed";
 import { CERTIFICATE_DISCLAIMER, summarizeContribution } from "../lib/contributionSummary";
-import { sendPushNotifications } from "../lib/pushNotifications";
+import { NotificationType } from "@prisma/client";
+import { notify } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
@@ -219,18 +220,18 @@ router.post("/:id/confirm", async (req, res) => {
       : []),
   ]);
 
-  // PRD §17 — send best-effort push notification to donor when their contribution is confirmed
-  const donor = await prisma.user.findUnique({ where: { id: contribution.donorId }, select: { expoPushToken: true } });
-  if (donor?.expoPushToken) {
-    sendPushNotifications([
-      {
-        to: donor.expoPushToken,
-        title: "Contribution Confirmed 🎉",
-        body: `Your contribution for "${contribution.need.title}" has been confirmed! Thank you for helping.`,
-        data: { contributionId: contribution.id, needId: contribution.need.id },
-      },
-    ]);
-  }
+  // PRD §17 — the donor is told their contribution was confirmed. Stored as well as pushed, so
+  // the thank-you survives a failed delivery (and the donor without a push token still sees it).
+  notify({
+    recipientIds: [contribution.donorId],
+    type: NotificationType.CONTRIBUTION_CONFIRMED,
+    title: "Contribution confirmed 🎉",
+    body: `Your contribution for "${contribution.need.title}" has been confirmed. Thank you for helping.`,
+    needId: contribution.need.id,
+  }).catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error("[notify] confirmation alert failed:", err);
+  });
 
   invalidateNeedCaches();
   res.json({ contribution: updatedContribution });

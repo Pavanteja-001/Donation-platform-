@@ -6,7 +6,8 @@ import { z } from "zod";
 import { Role } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
-import { sendPushNotifications } from "../lib/pushNotifications";
+import { NotificationType } from "@prisma/client";
+import { notify } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
@@ -90,20 +91,16 @@ router.post("/:id/answers", async (req, res) => {
 
   // PRD §17 — send push notification to question author if someone else answered
   if (question.authorId !== req.user!.sub) {
-    const questionAuthor = await prisma.user.findUnique({
-      where: { id: question.authorId },
-      select: { expoPushToken: true },
+    notify({
+      recipientIds: [question.authorId],
+      type: NotificationType.FORUM_ANSWER,
+      title: "New answer to your question 💬",
+      body: `${answer.author.name ?? "A community member"} answered: "${question.title}"`,
+      forumId: question.id,
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("[notify] forum answer alert failed:", err);
     });
-    if (questionAuthor?.expoPushToken) {
-      sendPushNotifications([
-        {
-          to: questionAuthor.expoPushToken,
-          title: "New answer to your question 💬",
-          body: `${answer.author.name ?? "A community member"} answered: "${question.title}"`,
-          data: { questionId: question.id, answerId: answer.id },
-        },
-      ]);
-    }
   }
 
   res.status(201).json({ answer });

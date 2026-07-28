@@ -1,6 +1,7 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -9,7 +10,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import type { Need } from "../lib/api";
+import { fetchUnreadCount, type Need } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { isMoneyPayload, num } from "../lib/needMeta";
@@ -19,6 +20,7 @@ import { AnimatedCounter } from "./AnimatedCounter";
 import { DonorsIllustration, RupeeStackIllustration, UrgentPulseIllustration } from "./illustrations";
 import { useCreateNeedFlow, useForumFlow } from "./CreateNeedAction";
 import { Avatar, PressableScale } from "./ui";
+import type { AppNavigationProp } from "../navigation/types";
 
 function greetingFor(date = new Date()): string {
   const hour = date.getHours();
@@ -89,6 +91,36 @@ function GlassStat({
   );
 }
 
+function NotificationBell() {
+  const { token } = useAuth();
+  const navigation = useNavigation<AppNavigationProp>();
+  const [unread, setUnread] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) return;
+      fetchUnreadCount(token)
+        .then(({ unreadCount }) => setUnread(unreadCount))
+        .catch(() => {});
+    }, [token])
+  );
+
+  return (
+    <View>
+      <GlassButton
+        icon="bell"
+        onPress={() => navigation.navigate("Notifications")}
+        label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+      />
+      {unread > 0 && (
+        <View style={styles.badge} pointerEvents="none">
+          <Text style={styles.badgeText}>{unread > 9 ? "9+" : unread}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function GlassButton({
   icon,
   onPress,
@@ -152,6 +184,7 @@ export function FeedHero({ needs }: { needs: Need[] }) {
         </View>
 
         <View style={styles.actions}>
+          <NotificationBell />
           <GlassButton icon="message-circle" onPress={openForum} label="Community forum" />
           <GlassButton icon="plus" onPress={openCreate} label="Post a need" />
         </View>
@@ -218,6 +251,22 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   glassChipText: { ...theme.typography.overline, color: "#FFFFFF", textTransform: "uppercase" },
+
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: theme.color.emergency,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.9)",
+  },
+  badgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
 
   statsStrip: {
     flexDirection: "row",

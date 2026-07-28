@@ -13,6 +13,7 @@ import { goodsPayloadInputSchema, parseGoodsPayload } from "../lib/goodsNeed";
 import { expireIfPastDeadline, expireManyIfPastDeadline } from "../lib/needExpiry";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 import { notifyPosterOfContribution } from "../lib/contributionAlerts";
+import { notifyVerificationQueue } from "../lib/notifications";
 import { cached, CacheKey, CacheTtl, invalidateNeedCaches } from "../lib/cache";
 
 const router = Router();
@@ -436,6 +437,17 @@ router.post("/:id/submit", async (req, res) => {
     where: { id: need.id },
     data: { status: NeedStatus.PENDING_VERIFICATION },
   });
+
+  // Tell whoever staffs the queue. Until now a submitted request sat unseen until an admin
+  // happened to open the console — which for an urgent blood request is the difference between
+  // minutes and hours. Best-effort: never blocks the poster's submit.
+  notifyVerificationQueue({ id: updated.id, title: updated.title, type: updated.type, city: updated.city }).catch(
+    (err) => {
+      // eslint-disable-next-line no-console
+      console.error("[notify] verification-queue alert failed:", err);
+    }
+  );
+
   res.json({ need: updated });
 });
 
@@ -607,12 +619,25 @@ router.get("/mine", async (req, res) => {
 router.get("/:id", async (req, res) => {
   const needId = req.params.id;
   const userId = req.user!.sub;
+  const callerIsAdminOrStaff = req.user!.role === Role.ADMIN || req.user!.role === Role.STAFF;
+
+  // Admin/staff are verifying this request, which means calling the person who posted it and
+  // checking their story — so they get contact details and the poster's own registered location.
+  // Everyone else gets name and role only: a donor browsing the feed has no business receiving a
+  // beneficiary's phone number or address (CLAUDE.md §7).
+  //
+  // The role is known before the query, so the columns are chosen up front rather than fetched
+  // and stripped afterwards — the private fields never enter the process for a non-admin caller,
+  // so no future refactor can accidentally leak them by forgetting to strip.
+  const postedBySelect = callerIsAdminOrStaff
+    ? { id: true, name: true, role: true, phone: true, email: true, city: true, area: true, createdAt: true }
+    : { id: true, name: true, role: true };
 
   const [needRaw, myContribution] = await Promise.all([
     prisma.need.findUnique({
       where: { id: needId },
       include: {
-        postedBy: { select: { id: true, name: true, role: true } },
+        postedBy: { select: postedBySelect },
         // MEAL_SLOT only (empty for every other type) — donors need the actual per-date
         // breakdown to pick a slot (§10.5), not just an aggregate count.
         mealSlots: { orderBy: { date: "asc" } },

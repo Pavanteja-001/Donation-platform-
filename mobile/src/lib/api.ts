@@ -760,3 +760,70 @@ export interface SkillRequestPayload {
   time: string;
 }
 
+// --- Notification inbox -------------------------------------------------------------------
+//
+// The durable record behind each push. Push is lossy (dead token, silenced channel, phone off,
+// no token at all on a web-only institution account), so the app reads history from here rather
+// than relying on what the OS happened to deliver.
+export type NotificationType =
+  | "BLOOD_REQUEST"
+  | "CONTRIBUTION_RECEIVED"
+  | "CONTRIBUTION_CONFIRMED"
+  | "NEED_STATUS"
+  | "FORUM_ANSWER"
+  | "VERIFICATION_QUEUE";
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  needId: string | null;
+  forumId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export function fetchNotifications(token: string, cursor?: string) {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return request<{ notifications: AppNotification[]; nextCursor: string | null; unreadCount: number }>(
+    `/api/notifications${query}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+}
+
+export function fetchUnreadCount(token: string) {
+  return request<{ unreadCount: number }>("/api/notifications/unread-count", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function markNotificationRead(token: string, id: string) {
+  return fetch(`${API_URL}/api/notifications/${id}/read`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(() => undefined);
+}
+
+export function markAllNotificationsRead(token: string) {
+  return request<{ updated: number }>("/api/notifications/read-all", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function deleteNotification(token: string, id: string) {
+  return fetch(`${API_URL}/api/notifications/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  }).then((res) => {
+    if (!res.ok && res.status !== 204) throw new Error(`Request failed (${res.status})`);
+  });
+}
+
+export function clearAllNotifications(token: string) {
+  return request<{ deleted: number }>("/api/notifications", {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

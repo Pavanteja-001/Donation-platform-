@@ -5,7 +5,7 @@ import { FlashList } from "@shopify/flash-list";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { fetchMyNeeds, type Need } from "../lib/api";
-import { myNeedsCache, isStale } from "../lib/listCache";
+import { myNeedsCache, isStale, patchNeedInCaches } from "../lib/listCache";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import {
@@ -251,13 +251,14 @@ export function MyNeedsScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => 
     setIsRefreshing(false);
   }
 
-  // Patch the saved need in place (and in the shared cache) so the card flips to "Pinned on map"
-  // without a refetch — and so the needs map picks it up on its next focus.
+  // Patch the saved need in place so the card flips to "Pinned on map" without a refetch.
+  // `patchNeedInCaches` updates the feed cache too — patching only this screen's cache left the
+  // feed (and the detail screen it seeds with `initialNeed`) showing the old location.
   const handleLocationSaved = useCallback((updated: Need) => {
-    const apply = (list: Need[]) =>
-      list.map((n) => (n.id === updated.id ? { ...n, ...updated, postedBy: n.postedBy } : n));
-    setNeeds((prev) => (prev ? apply(prev) : prev));
-    if (myNeedsCache.data) myNeedsCache.data = apply(myNeedsCache.data);
+    setNeeds((prev) =>
+      prev ? prev.map((n) => (n.id === updated.id ? { ...n, ...updated, postedBy: n.postedBy } : n)) : prev
+    );
+    patchNeedInCaches(updated);
   }, []);
 
   const renderItem = useCallback(
