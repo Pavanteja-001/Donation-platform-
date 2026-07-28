@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as ImagePicker from "expo-image-picker";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
@@ -11,9 +11,7 @@ import { Avatar, Badge, Button, PressableScale, type TrustTier } from "../compon
 import { Gradient } from "../components/Gradient";
 import { TierEmblem } from "../components/illustrations";
 import { TactileSwitch } from "../components/TactileSwitch";
-import { ProgressBar } from "../components/ProgressBar";
-import { AnimatedCounter } from "../components/AnimatedCounter";
-import { updateMe, uploadProfilePhoto } from "../lib/api";
+import { fetchMemberships, updateMe, uploadProfilePhoto, type VolunteerApplication } from "../lib/api";
 import type { AppNavigationProp } from "../navigation/types";
 
 type IconName = keyof typeof Feather.glyphMap;
@@ -40,9 +38,9 @@ function Section({ icon, title, children, tone = theme.color.primary, tint = the
 }
 
 /** One label/value line. `muted` marks a value the user hasn't filled in yet. */
-function InfoRow({ icon, label, value, muted }: { icon: IconName; label: string; value: string; muted?: boolean }) {
+function InfoRow({ icon, label, value, muted, isLast }: { icon: IconName; label: string; value: string; muted?: boolean; isLast?: boolean }) {
   return (
-    <View style={styles.infoRow}>
+    <View style={[styles.infoRow, isLast && styles.infoRowLast]}>
       <View style={styles.infoLabelGroup}>
         <Feather name={icon} size={14} color={theme.color.textTertiary} />
         <Text style={styles.infoLabel}>{label}</Text>
@@ -55,10 +53,22 @@ function InfoRow({ icon, label, value, muted }: { icon: IconName; label: string;
 }
 
 export function ProfileScreen() {
-  const { token, user, trustTierInfo, refreshUser, signOut } = useAuth();
+  const { token, user, trustTierInfo, refreshUser } = useAuth();
   const navigation = useNavigation<AppNavigationProp>();
   const [isToggling, setIsToggling] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [memberships, setMemberships] = useState<VolunteerApplication[] | null>(null);
+
+  // Refreshed on focus, so approving a volunteer in the panel shows up as soon as the user
+  // returns to this tab rather than on a cold start.
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) return;
+      fetchMemberships(token)
+        .then(({ applications }) => setMemberships(applications))
+        .catch(() => setMemberships([]));
+    }, [token])
+  );
 
   const handleToggleAvailability = async (value: boolean) => {
     if (!token) return;
@@ -131,72 +141,25 @@ export function ProfileScreen() {
           <Text style={styles.phone}>{user?.phone}</Text>
           {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
 
-          {/* The tier is the one genuine achievement on this screen, so it gets the emblem and
-              the text sits beside it — a flat "BRONZE DONOR" pill reads as metadata, not as
-              something earned. */}
           {tier ? (
             <View style={styles.tierRow}>
               <TierEmblem tier={tier} size={52} />
               <View style={styles.tierText}>
                 <Text style={styles.tierName}>{TIER_LABEL[tier]} donor</Text>
-                {trustTierInfo?.nextTier && trustTierInfo.contributionsToNextTier != null && (
+                {trustTierInfo?.nextTier && trustTierInfo.contributionsToNextTier != null ? (
                   <Text style={styles.tierNext}>
                     {trustTierInfo.contributionsToNextTier === 0
                       ? `${TIER_LABEL[trustTierInfo.nextTier]} unlocked`
                       : `${trustTierInfo.contributionsToNextTier} more to ${TIER_LABEL[trustTierInfo.nextTier]}`}
                   </Text>
-                )}
+                ) : tier === "GOLD" ? (
+                  <Text style={styles.tierNext}>Top tier donor</Text>
+                ) : null}
               </View>
               {user?.role ? <Badge label={user.role} tone="neutral" /> : null}
             </View>
           ) : (
             <View style={styles.badgeRow}>{user?.role ? <Badge label={user.role} tone="neutral" /> : null}</View>
-          )}
-
-          {trustTierInfo && (
-            <>
-              {/* Two raised blocks instead of a divided strip: a hairline divider reads as one
-                  flat panel split in half, whereas separate lit tiles read as objects. */}
-              <View style={styles.statsStrip}>
-                <View style={[styles.statBlock, theme.elevation.level1]}>
-                  <Gradient colors={theme.gradient.surfaceSheen} direction="diagonal" style={StyleSheet.absoluteFill as never} />
-                  <AnimatedCounter value={trustTierInfo.confirmedContributionsCount} style={styles.statValue} />
-                  <Text style={styles.statLabel}>Confirmed contributions</Text>
-                </View>
-                <View style={[styles.statBlock, theme.elevation.level1]}>
-                  <Gradient colors={theme.gradient.surfaceSheen} direction="diagonal" style={StyleSheet.absoluteFill as never} />
-                  <Text style={[styles.statValue, styles.statValueBlood]}>
-                    {formatBloodGroup(user?.bloodGroup ?? null)}
-                  </Text>
-                  <Text style={styles.statLabel}>Blood group</Text>
-                </View>
-              </View>
-
-              {/* Thresholds come from the server (D-014 trust tiers) — never hardcoded here, so
-                  tuning them is a backend-only change. Absent fields mean an older backend, in
-                  which case we simply show no progress rather than guessing. */}
-              {trustTierInfo.nextTier && trustTierInfo.nextTierAt != null && (
-                <View style={styles.tierProgress}>
-                  <View style={styles.tierProgressLabels}>
-                    <Text style={styles.tierProgressText}>
-                      {trustTierInfo.contributionsToNextTier === 0
-                        ? `${TIER_LABEL[trustTierInfo.nextTier]} unlocked`
-                        : `${trustTierInfo.contributionsToNextTier} more to ${TIER_LABEL[trustTierInfo.nextTier]}`}
-                    </Text>
-                    <Text style={styles.tierProgressCount}>
-                      {trustTierInfo.confirmedContributionsCount}/{trustTierInfo.nextTierAt}
-                    </Text>
-                  </View>
-                  <ProgressBar
-                    raised={trustTierInfo.confirmedContributionsCount}
-                    target={trustTierInfo.nextTierAt}
-                    tone="accent"
-                    showLabel={false}
-                    height={6}
-                  />
-                </View>
-              )}
-            </>
           )}
         </View>
       </Animated.View>
@@ -242,24 +205,64 @@ export function ProfileScreen() {
             label="Blood group"
             value={formatBloodGroup(user?.bloodGroup ?? null)}
             muted={!user?.bloodGroup}
+            isLast
           />
         </Section>
       </Animated.View>
 
-      {/* Actions */}
-      <Animated.View entering={FadeInDown.delay(240).duration(360)} style={styles.actions}>
-        <Button
-          label="Edit profile details"
-          icon="edit-2"
-          onPress={() => navigation.navigate("Register", { isSkippable: true })}
-        />
-        <Button
-          label="My contributions & certificates"
-          icon="award"
-          variant="secondary"
-          onPress={() => navigation.navigate("Tabs", { screen: "Activity" } as any)}
-        />
-        <Button label="Log out" icon="log-out" variant="danger" onPress={signOut} />
+      {/* Volunteering — approved applications are what make someone an official member, so an
+          approved badge is a real credential rather than decoration. A pending one is shown too,
+          otherwise an application seems to vanish after it's sent. */}
+      <Animated.View entering={FadeInDown.delay(180).duration(360)}>
+        <Section icon="users" title="Volunteering" tone={theme.color.info} tint={theme.color.infoSoft}>
+          {memberships === null ? (
+            <Text style={styles.volunteerEmpty}>Loading…</Text>
+          ) : memberships.length === 0 ? (
+            <>
+              <Text style={styles.volunteerEmpty}>
+                You're not volunteering with any organisation yet.
+              </Text>
+              <Button
+                label="Find an NGO"
+                icon="search"
+                variant="secondary"
+                size="sm"
+                onPress={() => navigation.navigate("Ngos")}
+                style={{ marginTop: theme.spacing.sm }}
+              />
+            </>
+          ) : (
+            <View style={styles.volunteerList}>
+              {memberships.map((m) => {
+                const approved = m.status === "APPROVED";
+                const rejected = m.status === "REJECTED";
+                return (
+                  <PressableScale
+                    key={m.id}
+                    onPress={() => m.ngo && navigation.navigate("NgoDetail", { ngoId: m.ngo.id })}
+                    scaleTo={0.98}
+                    style={[styles.volunteerPill, approved && styles.volunteerPillApproved]}
+                  >
+                    <Feather
+                      name={approved ? "check-circle" : rejected ? "x-circle" : "clock"}
+                      size={14}
+                      color={approved ? theme.color.success : rejected ? theme.color.danger : theme.color.warning}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.volunteerName} numberOfLines={1}>
+                        {m.ngo?.name ?? m.ngo?.legalName ?? "Organisation"}
+                      </Text>
+                      <Text style={styles.volunteerStatus}>
+                        {approved ? "Official volunteer" : rejected ? "Not accepted" : "Application pending"}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={16} color={theme.color.textTertiary} />
+                  </PressableScale>
+                );
+              })}
+            </View>
+          )}
+        </Section>
       </Animated.View>
     </ScrollView>
   );
@@ -278,6 +281,17 @@ const styles = StyleSheet.create({
   },
 
   identityCard: { alignItems: "center", borderRadius: theme.radii.xxl },
+  editButton: {
+    position: "absolute",
+    top: theme.spacing.md,
+    right: theme.spacing.md,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.color.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   avatarWrap: { position: "relative", marginBottom: theme.spacing.lg },
   cameraOverlay: {
     position: "absolute",
@@ -330,6 +344,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.color.borderSubtle,
   },
+  infoRowLast: { borderBottomWidth: 0 },
   infoLabelGroup: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
   infoLabel: { ...theme.typography.bodySmall, color: theme.color.textSecondary },
   infoValue: { ...theme.typography.bodySmall, fontWeight: "700", color: theme.color.textPrimary, flexShrink: 1 },
@@ -366,6 +381,22 @@ const styles = StyleSheet.create({
   },
   statValueBlood: { color: theme.color.blood },
 
+
+  volunteerEmpty: { ...theme.typography.bodySmall, color: theme.color.textSecondary },
+  volunteerList: { gap: theme.spacing.sm },
+  volunteerPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.color.border,
+    backgroundColor: theme.color.surface,
+  },
+  volunteerPillApproved: { borderColor: "rgba(14,159,110,0.3)", backgroundColor: theme.color.successSoft },
+  volunteerName: { ...theme.typography.bodyMedium, color: theme.color.textPrimary, fontWeight: "700" },
+  volunteerStatus: { ...theme.typography.caption, color: theme.color.textSecondary },
 
   actions: { gap: theme.spacing.sm, marginTop: theme.spacing.xs },
 });

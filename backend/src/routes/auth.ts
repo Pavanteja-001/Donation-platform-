@@ -127,7 +127,18 @@ const updateMeSchema = z.object({
 
   // Profile photo (any role)
   profilePhotoUrl: z.string().url("Enter a valid URL").optional().nullable(),
+
+  // Public listing content, INSTITUTION only (enforced in the handler below). Every institution
+  // type needs these — an NGO's page shows the same about/cover/gallery an orphanage's does —
+  // so they live here rather than on the orphanage-specific endpoint, which also owns meal
+  // prices and capacity.
+  about: z.string().trim().max(2000).optional().nullable(),
+  coverPhotoUrl: z.string().url("Enter a valid URL").optional().nullable(),
+  galleryPhotos: z.array(z.string().url()).optional(),
 });
+
+/** Listing fields a donor account has no business setting — there is no public donor page. */
+const INSTITUTION_ONLY_FIELDS = ["about", "coverPhotoUrl", "galleryPhotos"] as const;
 
 router.patch("/me", requireAuth, async (req, res) => {
   const parsed = updateMeSchema.safeParse(req.body);
@@ -136,6 +147,16 @@ router.patch("/me", requireAuth, async (req, res) => {
   }
 
   const data = parsed.data;
+
+  // A donor setting `galleryPhotos` would be publishing to a page that doesn't exist; refuse
+  // rather than storing content nothing renders.
+  const usesInstitutionFields = INSTITUTION_ONLY_FIELDS.some((f) => data[f] !== undefined);
+  if (usesInstitutionFields) {
+    const me = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { role: true } });
+    if (me?.role !== Role.INSTITUTION) {
+      return res.status(403).json({ error: "Only an institution account has a public listing" });
+    }
+  }
 
   // Validate KYC details if the institution is submitting for approval
   if (data.kycStatus === KycStatus.PENDING_APPROVAL) {

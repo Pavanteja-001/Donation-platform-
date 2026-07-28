@@ -9,6 +9,7 @@ import { needsFeedCache, isStale } from "../lib/listCache";
 import { useAuth } from "../context/AuthContext";
 import { NeedCard } from "../components/NeedCard";
 import { FeedHero } from "../components/FeedHero";
+import { ExploreOrganisations } from "../components/ExploreOrganisations";
 import { EmergencySpotlight } from "../components/EmergencySpotlight";
 import { theme } from "../lib/theme";
 import { EmptyState, ErrorState, Skeleton, Chip } from "../components/ui";
@@ -163,6 +164,10 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
       {needs.length === 0 ? (
         <>
           <FeedHero needs={[]} />
+          {/* Deliberately kept in the empty branch too. This is the one screen state where a donor
+              has nothing to act on, so the organisation directories are the most useful thing on
+              it — hiding them here would strand anyone who opens the app on a quiet day. */}
+          <ExploreOrganisations />
           <View style={styles.centered}>
             <EmptyState
               icon="inbox"
@@ -247,6 +252,7 @@ function FeedListHeader({
     <View style={styles.headerBlock}>
       <FeedHero needs={needs} />
       <EmergencySpotlight needs={needs} onSelectNeed={onSelectNeed} />
+      <ExploreOrganisations />
 
       <ScrollView
         horizontal

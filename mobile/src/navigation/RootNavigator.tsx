@@ -16,6 +16,8 @@ import { NotificationsScreen } from "../screens/NotificationsScreen";
 import { OrphanagesScreen } from "../screens/OrphanagesScreen";
 import { OrphanageDetailScreen } from "../screens/OrphanageDetailScreen";
 import { BookSlotScreen } from "../screens/BookSlotScreen";
+import { NgosScreen } from "../screens/NgosScreen";
+import { NgoDetailScreen } from "../screens/NgoDetailScreen";
 import { CreateSkillRequestNeedScreen } from "../screens/CreateSkillRequestNeedScreen";
 import { theme } from "../lib/theme";
 import { useAuth } from "../context/AuthContext";
@@ -29,6 +31,14 @@ type Props<Name extends keyof RootStackParamList> = NativeStackScreenProps<RootS
 // Thin adapters — every screen component still takes plain onBack/onDone/needId-style props
 // (unchanged from before this chunk, minimizing the diff to their actual logic); these just
 // translate that interface to/from React Navigation's route/navigation props in one place.
+function NgosRoute({ navigation }: Props<"Ngos">) {
+  return <NgosScreen onSelect={(ngo) => navigation.navigate("NgoDetail", { ngoId: ngo.id, initial: ngo })} />;
+}
+
+function NgoDetailRoute({ route }: Props<"NgoDetail">) {
+  return <NgoDetailScreen ngoId={route.params.ngoId} initial={route.params.initial} />;
+}
+
 function OrphanagesRoute({ navigation }: Props<"Orphanages">) {
   return (
     <OrphanagesScreen
@@ -112,6 +122,8 @@ export function RootNavigator() {
       <Stack.Screen name="Orphanages" component={OrphanagesRoute} options={{ title: "Orphanages & Old Age Homes" }} />
       <Stack.Screen name="OrphanageDetail" component={OrphanageDetailRoute} options={{ title: "Home details" }} />
       <Stack.Screen name="BookSlot" component={BookSlotRoute} options={{ title: "Book a slot" }} />
+      <Stack.Screen name="Ngos" component={NgosRoute} options={{ title: "NGOs" }} />
+      <Stack.Screen name="NgoDetail" component={NgoDetailRoute} options={{ title: "Organisation" }} />
       <Stack.Screen name="CreateNeedChooser" component={CreateNeedChooserScreen} options={{ title: "Post a need" }} />
       <Stack.Screen name="CreateMoney" component={CreateMoneyRoute} options={{ title: "Money need" }} />
       <Stack.Screen name="CreateKit" component={CreateKitRoute} options={{ title: "Kit need" }} />

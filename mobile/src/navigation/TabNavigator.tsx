@@ -11,6 +11,7 @@ import { NeedsMapScreen } from "../screens/NeedsMapScreen";
 import { MyNeedsScreen } from "../screens/MyNeedsScreen";
 import { MyContributionsScreen } from "../screens/MyContributionsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
+import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { useCreateNeedFlow } from "../components/CreateNeedAction";
 import { PressableScale } from "../components/ui";
@@ -181,6 +182,33 @@ function ActivityTabScreen() {
   );
 }
 
+function ProfileHeaderActions() {
+  const navigation = useNavigation<AppNavigationProp>();
+  const { signOut } = useAuth();
+  return (
+    <View style={styles.headerRightGroup}>
+      <PressableScale
+        onPress={() => navigation.navigate("Register", { isSkippable: true })}
+        scaleTo={0.9}
+        hitSlop={8}
+        accessibilityLabel="Edit profile"
+        style={styles.headerButton}
+      >
+        <Feather name="edit-2" size={19} color={theme.color.primary} />
+      </PressableScale>
+      <PressableScale
+        onPress={signOut}
+        scaleTo={0.9}
+        hitSlop={8}
+        accessibilityLabel="Log out"
+        style={[styles.headerButton, styles.logoutHeaderButton]}
+      >
+        <Feather name="log-out" size={19} color={theme.color.danger} />
+      </PressableScale>
+    </View>
+  );
+}
+
 export function TabNavigator() {
   return (
     <Tab.Navigator
@@ -209,7 +237,14 @@ export function TabNavigator() {
         options={{ title: "My needs", headerRight: () => <CreateNeedButton /> }}
       />
       <Tab.Screen name="Activity" component={ActivityTabScreen} options={{ title: "Activity", headerTitle: "My contributions" }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: "Profile" }} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: "Profile",
+          headerRight: () => <ProfileHeaderActions />,
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -229,6 +264,15 @@ const styles = StyleSheet.create({
   },
   headerButtonLeft: { marginLeft: theme.spacing.lg },
   headerButtonRight: { marginRight: theme.spacing.lg },
+  headerRightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    marginRight: theme.spacing.lg,
+  },
+  logoutHeaderButton: {
+    backgroundColor: theme.color.dangerSoft,
+  },
 
   tabBarWrap: {
     paddingHorizontal: theme.spacing.lg,

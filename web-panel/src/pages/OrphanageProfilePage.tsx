@@ -2,8 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { updateOrphanageProfile } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { PhotoPicker } from "../components/PhotoPicker";
-import { uploadPhotos } from "../lib/api";
-import { EmptyState } from "../components/ui";
+import { updateMe, uploadPhotos } from "../lib/api";
 
 /**
  * Where a home sets what donors see in the mobile directory, and what a meal costs to sponsor.
@@ -58,17 +57,6 @@ export function OrphanageProfilePage() {
     setGallery(user.galleryPhotos ?? []);
   }, [user]);
 
-  if (user && user.institutionType !== "ORPHANAGE") {
-    return (
-      <div>
-        <h2>Home profile</h2>
-        <EmptyState
-          title="Only for orphanages and old-age homes"
-          subtitle="This page configures the meal-sponsorship listing, which applies to orphanage and old-age-home accounts. Your account is registered as a different institution type."
-        />
-      </div>
-    );
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -89,18 +77,28 @@ export function OrphanageProfilePage() {
         galleryUrls = [...gallery, ...uploaded];
       }
 
-      await updateOrphanageProfile(token, {
-        galleryPhotos: galleryUrls,
-        about: about.trim() || null,
-        childrenCount: toNullableInt(childrenCount) ?? null,
-        staffCount: toNullableInt(staffCount) ?? null,
-        roomsCount: toNullableInt(roomsCount) ?? null,
-        breakfastCost: toNullableInt(breakfastCost) ?? null,
-        lunchCost: toNullableInt(lunchCost) ?? null,
-        dinnerCost: toNullableInt(dinnerCost) ?? null,
-        acceptingBookings,
-        coverPhotoUrl: cover,
-      });
+      if (isOrphanage) {
+        // Orphanage endpoint — it owns capacity, meal pricing and the bookings switch.
+        await updateOrphanageProfile(token, {
+          galleryPhotos: galleryUrls,
+          about: about.trim() || null,
+          childrenCount: toNullableInt(childrenCount) ?? null,
+          staffCount: toNullableInt(staffCount) ?? null,
+          roomsCount: toNullableInt(roomsCount) ?? null,
+          breakfastCost: toNullableInt(breakfastCost) ?? null,
+          lunchCost: toNullableInt(lunchCost) ?? null,
+          dinnerCost: toNullableInt(dinnerCost) ?? null,
+          acceptingBookings,
+          coverPhotoUrl: cover,
+        });
+      } else {
+        // Every other institution type edits the shared listing fields via its own profile.
+        await updateMe(token, {
+          about: about.trim() || null,
+          coverPhotoUrl: cover,
+          galleryPhotos: galleryUrls,
+        });
+      }
 
       setCoverFiles([]);
       setGallery(galleryUrls);
@@ -115,13 +113,15 @@ export function OrphanageProfilePage() {
   }
 
   const isApproved = user?.kycStatus === "APPROVED";
+  // Capacity and meal pricing only mean something for a home that serves meals.
+  const isOrphanage = user?.institutionType === "ORPHANAGE";
 
   return (
     <div>
-      <h2>Home profile</h2>
+      <h2>Public profile</h2>
       <p className="hint">
-        This is what donors see in the app when they browse homes. Leave a meal price empty if you
-        don't offer that meal for sponsorship.
+        This is what people see when they find your organisation in the app.
+        {isOrphanage ? " Leave a meal price empty if you don't offer that meal for sponsorship." : ""}
       </p>
 
       {/* Filling this in is pointless until KYC clears, because an unapproved home isn't listed
@@ -155,6 +155,8 @@ export function OrphanageProfilePage() {
           />
         </label>
 
+        {isOrphanage && (
+          <>
         <h3 style={{ marginTop: 24, fontSize: 15 }}>Capacity</h3>
         <div className="detail-grid">
           <label>
@@ -189,6 +191,9 @@ export function OrphanageProfilePage() {
             <input type="number" min={0} placeholder="Not offered" value={dinnerCost} onChange={(e) => setDinnerCost(e.target.value)} />
           </label>
         </div>
+
+          </>
+        )}
 
         <h3 style={{ marginTop: 24, fontSize: 15 }}>Cover photo</h3>
         <p className="hint" style={{ marginTop: 0 }}>Shown at the top of your listing.</p>
@@ -245,6 +250,8 @@ export function OrphanageProfilePage() {
         {/* No cap on the gallery — a home can show as much of its work as it wants. */}
         <PhotoPicker files={galleryFiles} onChange={setGalleryFiles} max={Infinity} />
 
+        {isOrphanage && (
+          <>
         <h3 style={{ marginTop: 24, fontSize: 15 }}>Availability</h3>
         <label className="checkbox-row">
           <input
@@ -259,6 +266,9 @@ export function OrphanageProfilePage() {
             </span>
           </span>
         </label>
+
+          </>
+        )}
 
         <button type="submit" disabled={isSaving} style={{ marginTop: 24 }}>
           {isSaving ? "Saving…" : "Save profile"}

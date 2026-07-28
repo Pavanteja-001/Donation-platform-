@@ -1,3 +1,5 @@
+import { File, UploadType } from "expo-file-system";
+
 // EXPO_PUBLIC_API_URL is inlined at build time (Expo's built-in env support).
 // Defaults to the backend's local dev port (see backend/README.md).
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -511,11 +513,28 @@ export function signUpload(token: string, contentType: string, folder: "contribu
 }
 
 export async function uploadToSignedUrl(uploadUrl: string, localUri: string, contentType: string): Promise<void> {
-  const fileRes = await fetch(localUri);
-  const blob = await fileRes.blob();
-  const putRes = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
-  if (!putRes.ok) {
-    throw new Error(`Upload failed (${putRes.status})`);
+  // Streams the file straight from disk to the bucket.
+  //
+  // This used to be `fetch(localUri).then(r => r.blob())` and a PUT of that blob. React Native's
+  // Blob copies the whole file into the native blob store and hands it back through base64 —
+  // which inflates it by a third and holds all of it in JS memory. A 5MB phone photo became
+  // ~7MB of string, and several in a row is where uploads stall or the app is killed on the
+  // low-end Android devices this app targets. (It's also what emits the "Response.blob() is
+  // using React Native's Blob" warning.)
+  //
+  // `File.upload` hands the path to the native networking stack instead: nothing is read into
+  // JS at all, so memory stays flat regardless of file size.
+  const file = new File(localUri);
+  const result = await file.upload(uploadUrl, {
+    httpMethod: "PUT",
+    uploadType: UploadType.BINARY_CONTENT,
+    // S3 signs the PUT against this exact content type — a mismatch fails the signature check.
+    headers: { "Content-Type": contentType },
+    mimeType: contentType,
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Upload failed (${result.status})`);
   }
 }
 
@@ -905,6 +924,73 @@ export function bookSlot(
 
 export function fetchMyBookings(token: string) {
   return request<{ bookings: SlotBooking[] }>("/api/orphanages/me/bookings", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// --- NGOs & volunteering --------------------------------------------------------------------
+export type VolunteerStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string | null;
+  photoUrl: string | null;
+}
+
+export interface Ngo {
+  id: string;
+  name: string | null;
+  legalName: string | null;
+  city: string | null;
+  area: string | null;
+  address: string | null;
+  about: string | null;
+  coverPhotoUrl: string | null;
+  galleryPhotos: string[];
+  teamCount?: number;
+  volunteerCount?: number;
+  /** Only on the detail response. */
+  teamMembers?: TeamMember[];
+}
+
+export interface VolunteerApplication {
+  id: string;
+  status: VolunteerStatus;
+  rejectionReason: string | null;
+  message?: string | null;
+  availability?: string | null;
+  skills?: string | null;
+  createdAt: string;
+  ngo?: { id: string; name: string | null; legalName: string | null; city: string | null; coverPhotoUrl: string | null };
+}
+
+export function fetchNgos(token: string, search?: string) {
+  const query = search ? `?search=${encodeURIComponent(search)}` : "";
+  return request<{ ngos: Ngo[] }>(`/api/ngos${query}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function fetchNgo(token: string, id: string) {
+  return request<{ ngo: Ngo; myApplication: VolunteerApplication | null }>(`/api/ngos/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function applyToVolunteer(
+  token: string,
+  ngoId: string,
+  data: { message?: string; availability?: string; skills?: string }
+) {
+  return request<{ application: VolunteerApplication }>(`/api/ngos/${ngoId}/volunteer`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+}
+
+/** The organisations this user volunteers with — drives the profile badges. */
+export function fetchMemberships(token: string) {
+  return request<{ applications: VolunteerApplication[] }>("/api/ngos/me/memberships", {
     headers: { Authorization: `Bearer ${token}` },
   });
 }

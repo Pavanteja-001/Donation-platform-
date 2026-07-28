@@ -149,7 +149,6 @@ function GlassButton({
  */
 export function FeedHero({ needs }: { needs: Need[] }) {
   const { user } = useAuth();
-  const navigation = useNavigation<AppNavigationProp>();
   const insets = useSafeAreaInsets();
   const openCreate = useCreateNeedFlow();
   const openForum = useForumFlow();
@@ -184,13 +183,12 @@ export function FeedHero({ needs }: { needs: Need[] }) {
           </Text>
         </View>
 
+        {/* Alerts, then the two things you *do* here. Orphanages and NGOs used to sit in this row
+            as bare glyphs — but they're places you browse, not actions, and a 38px `home` icon
+            meaning "orphanages" is unguessable. They now live in the labelled Explore row below
+            the hero. */}
         <View style={styles.actions}>
           <NotificationBell />
-          <GlassButton
-            icon="home"
-            onPress={() => navigation.navigate("Orphanages")}
-            label="Orphanages and old age homes"
-          />
           <GlassButton icon="message-circle" onPress={openForum} label="Community forum" />
           <GlassButton icon="plus" onPress={openCreate} label="Post a need" />
         </View>

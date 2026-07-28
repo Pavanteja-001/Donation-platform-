@@ -26,6 +26,7 @@ export function DashboardLayout() {
   const { user, signOut, token } = useAuth();
   const unread = useUnreadCount(token);
   const isOrphanage = user?.institutionType === "ORPHANAGE";
+  const isNgo = user?.institutionType === "NGO";
   const navigate = useNavigate();
 
   const handleSignOut = () => {
@@ -55,8 +56,17 @@ export function DashboardLayout() {
             My Needs
           </NavLink>
 
-          {/* Only orphanages/old-age homes run meal sponsorship, so the links stay hidden for
-              other institution types rather than leading to a "not for you" page. */}
+          {/* Volunteering is an NGO concern; meal sponsorship is an orphanage one. Each set of
+              links is hidden for the other type rather than leading to a "not for you" page. */}
+          {isNgo && (
+            <NavLink
+              to="/volunteers"
+              className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+            >
+              Volunteers &amp; Team
+            </NavLink>
+          )}
+
           {isOrphanage && (
             <>
               <NavLink
@@ -65,14 +75,15 @@ export function DashboardLayout() {
               >
                 Meal Sponsorships
               </NavLink>
-              <NavLink
-                to="/home-profile"
-                className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
-              >
-                Home Profile
-              </NavLink>
             </>
           )}
+
+          <NavLink
+            to="/home-profile"
+            className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+          >
+            Public Profile
+          </NavLink>
 
           <NavLink
             to="/notifications"

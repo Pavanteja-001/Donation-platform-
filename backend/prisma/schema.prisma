@@ -142,6 +142,10 @@ model User {
   bookingsReceived SlotBooking[] @relation("BookingsForOrphanage")
   bookingsMade     SlotBooking[] @relation("BookingsByDonor")
 
+  teamMembers          TeamMember[]            @relation("InstitutionTeam")
+  volunteerApplicants  VolunteerApplication[]  @relation("ApplicationsToNgo")
+  volunteerApplications VolunteerApplication[] @relation("ApplicationsByUser")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -279,6 +283,69 @@ enum BookingStatus {
   CONFIRMED
   REJECTED
   CANCELLED
+}
+
+/// A person on an institution's public team ("our team" on the NGO's page).
+///
+/// Not a User row: most team members will never log in, and inventing accounts for them would
+/// put unverifiable people in the platform's user table. This is presentational content the
+/// institution controls, same as its gallery.
+model TeamMember {
+  id String @id @default(cuid())
+
+  institutionId String
+  institution   User   @relation("InstitutionTeam", fields: [institutionId], references: [id], onDelete: Cascade)
+
+  name     String
+  role     String?
+  photoUrl String?
+
+  /// Manual ordering — a founder should be able to sit above a volunteer coordinator.
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([institutionId, position])
+}
+
+/// Someone offering to volunteer with an NGO, and the NGO's decision on it.
+///
+/// APPROVED is what makes a user an official member of that NGO — the mobile profile reads this
+/// table to show which organisations someone volunteers with.
+model VolunteerApplication {
+  id String @id @default(cuid())
+
+  ngoId String
+  ngo   User   @relation("ApplicationsToNgo", fields: [ngoId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("ApplicationsByUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Why they want to help / what they can offer. Shown only to the NGO.
+  message String?
+  /// Free text — "weekends", "evenings after 6" — rather than a rigid schedule model.
+  availability String?
+  /// "Teaching", "Medical", "Logistics".
+  skills String?
+
+  status VolunteerStatus @default(PENDING)
+
+  /// Mandatory on REJECTED (mirrors D-017) — the applicant is always told why.
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One live application per person per NGO — re-applying updates the existing row rather than
+  /// stacking duplicates in the NGO's queue.
+  @@unique([ngoId, userId])
+  @@index([ngoId, status])
+}
+
+enum VolunteerStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum NeedStatus {

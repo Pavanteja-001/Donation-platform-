@@ -245,6 +245,10 @@ export function updateMe(
     kycDocumentUrl: string;
     kycPhotos: string[];
     kycStatus: KycStatus;
+    // Public listing content — institution accounts only (the server enforces it).
+    about: string | null;
+    coverPhotoUrl: string | null;
+    galleryPhotos: string[];
   }>
 ) {
   return request<{ user: AuthUser }>("/api/auth/me", {
@@ -747,5 +751,66 @@ export function confirmBooking(token: string, id: string) {
   return request<{ booking: SlotBooking }>(`/api/bookings/${id}/confirm`, {
     method: "POST",
     headers: authHeaders(token),
+  });
+}
+
+// --- NGO team & volunteers ------------------------------------------------------------------
+export type VolunteerStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string | null;
+  photoUrl: string | null;
+  position: number;
+}
+
+export interface VolunteerApplication {
+  id: string;
+  status: VolunteerStatus;
+  message: string | null;
+  availability: string | null;
+  skills: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  user: { id: string; name: string | null; phone: string; city: string | null; area: string | null; createdAt: string };
+}
+
+export function fetchTeam(token: string) {
+  return request<{ team: TeamMember[] }>("/api/volunteers/team", { headers: authHeaders(token) });
+}
+
+export function addTeamMember(token: string, data: { name: string; role?: string; photoUrl?: string; position?: number }) {
+  return request<{ member: TeamMember }>("/api/volunteers/team", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteTeamMember(token: string, id: string) {
+  return fetch(`${API_URL}/api/volunteers/team/${id}`, { method: "DELETE", headers: authHeaders(token) }).then((res) => {
+    if (!res.ok && res.status !== 204) throw new Error(`Request failed (${res.status})`);
+  });
+}
+
+export function fetchVolunteerApplications(token: string) {
+  return request<{ applications: VolunteerApplication[] }>("/api/volunteers/applications", {
+    headers: authHeaders(token),
+  });
+}
+
+export function approveVolunteer(token: string, id: string) {
+  return request<{ application: VolunteerApplication }>(`/api/volunteers/applications/${id}/approve`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export function rejectVolunteer(token: string, id: string, reason: string) {
+  return request<{ application: VolunteerApplication }>(`/api/volunteers/applications/${id}/reject`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ reason }),
   });
 }
