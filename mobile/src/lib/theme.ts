@@ -109,6 +109,19 @@ export const theme = {
     plateNeutral: ["#FFFFFF", "#F7ECEC", "#EADCDC"] as string[],
     /** Highlight arc across the top of a plate or pill — the "lit" edge. */
     gloss: ["rgba(255,255,255,0.55)", "rgba(255,255,255,0.06)"] as string[],
+
+    // --- Premium pass -------------------------------------------------------
+    // Deep red falling into charcoal rather than red→black. Charcoal keeps the hero from
+    // reading as a flat crimson block and gives glass cards something to sit against.
+    heroDeep: ["#8C1616", "#5A1015", "#241F22"] as string[],
+    /** Same wash rotated for wide surfaces (detail headers, profile header). */
+    heroWide: ["#7F1D1D", "#4A1218", "#2A2427"] as string[],
+    /** Metallic gold for tier emblems and achievement accents. Lit top-left like everything. */
+    gold: ["#F5D98B", "#D9A441", "#9C6B1E"] as string[],
+    /** Brushed silver, for the lower trust tiers. */
+    silver: ["#F2F3F5", "#C9CDD4", "#8B9099"] as string[],
+    /** Fill behind a glass card so blurred content underneath doesn't wash out the text. */
+    glass: ["rgba(255,255,255,0.22)", "rgba(255,255,255,0.08)"] as string[],
   },
 
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 40 },

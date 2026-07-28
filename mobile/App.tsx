@@ -14,7 +14,6 @@ import { ToastProvider } from "./src/components/ui";
 import { registerForPushNotificationsAsync } from "./src/lib/pushNotifications";
 import * as Notifications from "expo-notifications";
 
-import { LanguageProvider } from "./src/lib/i18n";
 
 export const navigationRef = createNavigationContainerRef<any>();
 
@@ -86,10 +85,8 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <ToastProvider>
-          <LanguageProvider>
-            <Root />
-            <StatusBar style="auto" />
-          </LanguageProvider>
+          <Root />
+          <StatusBar style="auto" />
         </ToastProvider>
       </AuthProvider>
     </SafeAreaProvider>

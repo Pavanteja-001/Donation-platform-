@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
@@ -7,24 +7,17 @@ import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { Avatar, Badge, Button, PressableScale, type TrustTier } from "../components/ui";
+import { Gradient } from "../components/Gradient";
+import { TierEmblem } from "../components/illustrations";
+import { TactileSwitch } from "../components/TactileSwitch";
 import { ProgressBar } from "../components/ProgressBar";
 import { AnimatedCounter } from "../components/AnimatedCounter";
-import { useTranslation, type Language } from "../lib/i18n";
 import { updateMe, uploadProfilePhoto } from "../lib/api";
 import type { AppNavigationProp } from "../navigation/types";
 
 type IconName = keyof typeof Feather.glyphMap;
 
 const TIER_LABEL: Record<string, string> = { BRONZE: "Bronze", SILVER: "Silver", GOLD: "Gold" };
-
-// Each label is looked up through `t` so the list itself is localised — the labels stay in their
-// own script on purpose ("తెలుగు (Telugu)"), since a language picker a user can't read is
-// useless to the exact person who needs it.
-const LANGUAGE_OPTIONS: { code: Language; labelKey: "english" | "telugu" | "hindi" }[] = [
-  { code: "en", labelKey: "english" },
-  { code: "te", labelKey: "telugu" },
-  { code: "hi", labelKey: "hindi" },
-];
 
 /** Titled card wrapper — every block on this screen shares the same shape. */
 function Section({ icon, title, children, tone = theme.color.primary, tint = theme.color.primarySoft }: {
@@ -64,7 +57,6 @@ function InfoRow({ icon, label, value, muted }: { icon: IconName; label: string;
 
 export function ProfileScreen() {
   const { token, user, trustTierInfo, refreshUser, signOut } = useAuth();
-  const { language, setLanguage, t } = useTranslation();
   const navigation = useNavigation<AppNavigationProp>();
   const [isToggling, setIsToggling] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -140,21 +132,43 @@ export function ProfileScreen() {
           <Text style={styles.phone}>{user?.phone}</Text>
           {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
 
-          <View style={styles.badgeRow}>
-            {tier && <Badge label={`${TIER_LABEL[tier]} donor`} icon="award" tone="accent" />}
-            {user?.role ? <Badge label={user.role} tone="neutral" /> : null}
-          </View>
+          {/* The tier is the one genuine achievement on this screen, so it gets the emblem and
+              the text sits beside it — a flat "BRONZE DONOR" pill reads as metadata, not as
+              something earned. */}
+          {tier ? (
+            <View style={styles.tierRow}>
+              <TierEmblem tier={tier} size={52} />
+              <View style={styles.tierText}>
+                <Text style={styles.tierName}>{TIER_LABEL[tier]} donor</Text>
+                {trustTierInfo?.nextTier && trustTierInfo.contributionsToNextTier != null && (
+                  <Text style={styles.tierNext}>
+                    {trustTierInfo.contributionsToNextTier === 0
+                      ? `${TIER_LABEL[trustTierInfo.nextTier]} unlocked`
+                      : `${trustTierInfo.contributionsToNextTier} more to ${TIER_LABEL[trustTierInfo.nextTier]}`}
+                  </Text>
+                )}
+              </View>
+              {user?.role ? <Badge label={user.role} tone="neutral" /> : null}
+            </View>
+          ) : (
+            <View style={styles.badgeRow}>{user?.role ? <Badge label={user.role} tone="neutral" /> : null}</View>
+          )}
 
           {trustTierInfo && (
             <>
+              {/* Two raised blocks instead of a divided strip: a hairline divider reads as one
+                  flat panel split in half, whereas separate lit tiles read as objects. */}
               <View style={styles.statsStrip}>
-                <View style={styles.stat}>
+                <View style={[styles.statBlock, theme.elevation.level1]}>
+                  <Gradient colors={theme.gradient.surfaceSheen} direction="diagonal" style={StyleSheet.absoluteFill as never} />
                   <AnimatedCounter value={trustTierInfo.confirmedContributionsCount} style={styles.statValue} />
                   <Text style={styles.statLabel}>Confirmed contributions</Text>
                 </View>
-                <View style={styles.statDivider} />
-                <View style={styles.stat}>
-                  <Text style={styles.statValue}>{formatBloodGroup(user?.bloodGroup ?? null)}</Text>
+                <View style={[styles.statBlock, theme.elevation.level1]}>
+                  <Gradient colors={theme.gradient.surfaceSheen} direction="diagonal" style={StyleSheet.absoluteFill as never} />
+                  <Text style={[styles.statValue, styles.statValueBlood]}>
+                    {formatBloodGroup(user?.bloodGroup ?? null)}
+                  </Text>
                   <Text style={styles.statLabel}>Blood group</Text>
                 </View>
               </View>
@@ -203,12 +217,11 @@ export function ProfileScreen() {
                   : "You won't receive blood request alerts"}
               </Text>
             </View>
-            <Switch
+            <TactileSwitch
               value={isAvailable}
               onValueChange={handleToggleAvailability}
               disabled={isToggling}
-              trackColor={{ false: theme.color.border, true: theme.color.blood }}
-              thumbColor={Platform.OS === "android" ? theme.color.surface : undefined}
+              accessibilityLabel="Available to donate blood"
             />
           </View>
         </View>
@@ -231,41 +244,6 @@ export function ProfileScreen() {
             value={formatBloodGroup(user?.bloodGroup ?? null)}
             muted={!user?.bloodGroup}
           />
-        </Section>
-      </Animated.View>
-
-      {/* Language (D-009 — tri-language is committed for v1) */}
-      <Animated.View entering={FadeInDown.delay(180).duration(360)}>
-        <Section icon="globe" title={t.selectLanguage} tone={theme.color.info} tint={theme.color.infoSoft}>
-          {/* A full-width row per language, not wrapped chips.
-              The three labels are wildly different widths ("English" vs "తెలుగు (Telugu)" vs
-              "हिन्दी (Hindi)"), so a wrapping chip row broke into a ragged 2-then-1 layout, and
-              Telugu/Devanagari glyphs have taller line boxes than Latin, leaving chips of
-              unequal heights side by side. Rows sidestep both, and a radio list is the right
-              affordance for a persistent settings choice anyway. */}
-          <View style={styles.languageList}>
-            {LANGUAGE_OPTIONS.map((option) => {
-              const isActive = language === option.code;
-              return (
-                <PressableScale
-                  key={option.code}
-                  onPress={() => setLanguage(option.code)}
-                  scaleTo={0.98}
-                  accessibilityLabel={t[option.labelKey]}
-                  style={[styles.languageRow, isActive && styles.languageRowActive]}
-                >
-                  <Feather
-                    name={isActive ? "check-circle" : "circle"}
-                    size={18}
-                    color={isActive ? theme.color.info : theme.color.textTertiary}
-                  />
-                  <Text style={[styles.languageLabel, isActive && styles.languageLabelActive]} numberOfLines={1}>
-                    {t[option.labelKey]}
-                  </Text>
-                </PressableScale>
-              );
-            })}
-          </View>
         </Section>
       </Animated.View>
 
@@ -322,8 +300,9 @@ const styles = StyleSheet.create({
 
   statsStrip: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
     alignSelf: "stretch",
+    gap: theme.spacing.sm,
     marginTop: theme.spacing.xl,
     paddingTop: theme.spacing.lg,
     borderTopWidth: 1,
@@ -364,29 +343,30 @@ const styles = StyleSheet.create({
 
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
 
-  languageList: { gap: theme.spacing.sm },
-  languageRow: {
+  tierRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.md,
-    // A fixed row height keeps all three aligned: Telugu and Devanagari glyphs have taller line
-    // boxes than Latin, so height-by-content alone would leave the rows visibly uneven.
-    minHeight: 52,
-    paddingHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xs,
+    alignSelf: "stretch",
+  },
+  tierText: { flex: 1 },
+  tierName: { ...theme.typography.h3, color: theme.color.textPrimary },
+  tierNext: { ...theme.typography.caption, color: theme.color.textSecondary, marginTop: 1 },
+  statBlock: {
+    flex: 1,
+    alignItems: "center",
+    gap: 2,
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.sm,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: theme.color.borderSubtle,
     backgroundColor: theme.color.surface,
+    overflow: "hidden",
   },
-  languageRowActive: { borderColor: theme.color.info, backgroundColor: theme.color.infoSoft },
-  languageLabel: {
-    ...theme.typography.bodyMedium,
-    color: theme.color.textPrimary,
-    // Explicit lineHeight — without it, Devanagari matras get clipped at the top on Android.
-    lineHeight: 24,
-    flex: 1,
-  },
-  languageLabelActive: { fontWeight: "800", color: theme.color.info },
+  statValueBlood: { color: theme.color.blood },
+
 
   actions: { gap: theme.spacing.sm, marginTop: theme.spacing.xs },
 });

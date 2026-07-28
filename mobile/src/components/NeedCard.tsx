@@ -18,6 +18,7 @@ import {
   type IconName,
 } from "../lib/needMeta";
 import { IconPlate, litRamp } from "./Depth";
+import { BloodBagIllustration, KitBoxIllustration, RupeeStackIllustration } from "./illustrations";
 import { ProgressBar, type ProgressTone } from "./ProgressBar";
 import { EmergencyPulse } from "./EmergencyPulse";
 import { Gradient } from "./Gradient";
@@ -108,12 +109,25 @@ function NeedCardComponent({
       <View style={styles.body}>
         <View style={styles.headerRow}>
           <View style={styles.typeGroup}>
-            <IconPlate
-              icon={meta.icon}
-              size="sm"
-              tone={need.type === "BLOOD" ? "blood" : "custom"}
-              colors={need.type === "BLOOD" ? undefined : litRamp(meta.color)}
-            />
+            {/* The three types a donor scans for get a full illustration; everything else keeps
+                the icon plate. Reserving the artwork for BLOOD/KIT/GOODS/MONEY is what stops the
+                feed turning into a wall of competing pictures — the illustration IS the signal
+                that this row is one of the flagship need types.
+
+                The blood bag's fill level mirrors real fulfilment, so the artwork carries data
+                rather than being decoration. */}
+            {blood ? (
+              <BloodBagIllustration
+                size={38}
+                fillLevel={blood.units_needed > 0 ? blood.units_fulfilled / blood.units_needed : 0}
+              />
+            ) : need.type === "KIT" || need.type === "GOODS" ? (
+              <KitBoxIllustration size={38} />
+            ) : need.type === "MONEY" ? (
+              <RupeeStackIllustration size={38} />
+            ) : (
+              <IconPlate icon={meta.icon} size="sm" tone="custom" colors={litRamp(meta.color)} />
+            )}
             <Text style={[styles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
           </View>
 

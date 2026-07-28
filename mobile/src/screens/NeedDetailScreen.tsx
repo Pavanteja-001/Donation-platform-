@@ -61,6 +61,7 @@ import {
   type IconName,
 } from "../lib/needMeta";
 import { ProgressBar, type ProgressTone } from "../components/ProgressBar";
+import { LiquidProgress } from "../components/LiquidProgress";
 import { AnimatedCounter } from "../components/AnimatedCounter";
 import { EmergencyPulse } from "../components/EmergencyPulse";
 import { Gradient } from "../components/Gradient";
@@ -81,6 +82,17 @@ function formatContributionAmount(c: Contribution): string {
   // and this used to render the string "₹undefined" for them.
   return formatAmount(c.amount);
 }
+
+/**
+ * A UPI UTR (bank RRN) is exactly 12 digits. Donors paste straight from their bank SMS, so the
+ * common "UTR: 1234 5678 9012" shape is normalised rather than rejected — the server applies the
+ * identical rule, this just fails fast so the donor isn't told after a round-trip.
+ */
+function normaliseUtr(raw: string): string {
+  return raw.replace(/\s+/g, "").replace(/^(utr|rrn|ref|txn)[:\-]?/i, "");
+}
+
+const UTR_PATTERN = /^\d{12}$/;
 
 const FUNDABLE: Need["status"][] = ["LIVE", "PARTIALLY_FULFILLED"];
 
@@ -258,8 +270,8 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
       setError("Enter a valid amount");
       return;
     }
-    if (!utr.trim()) {
-      setError("Enter the UTR from your payment");
+    if (!UTR_PATTERN.test(normaliseUtr(utr))) {
+      setError("Enter the 12-digit UTR / reference number shown in your payment app");
       return;
     }
     setError(null);
@@ -271,7 +283,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
         await uploadToSignedUrl(signed.uploadUrl, proofImage.uri, proofImage.mimeType);
         proofUrl = signed.publicUrl;
       }
-      await donate(token, needId, { amount: parsedAmount, utr: utr.trim(), proofUrl });
+      await donate(token, needId, { amount: parsedAmount, utr: normaliseUtr(utr), proofUrl });
       setAmount("");
       setUtr("");
       setProofImage(null);
@@ -342,7 +354,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
       }
       await donateKit(token, needId, {
         kits: parsedKits,
-        utr: kit.mode === "MONEY" ? kitUtr.trim() : undefined,
+        utr: kit.mode === "MONEY" ? normaliseUtr(kitUtr) : undefined,
         proofUrl,
       });
       setKitsInput("");
@@ -420,7 +432,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
     setIsBookingSlot(true);
     try {
       await bookMealSlot(token, needId, selectedSlotId, {
-        utr: mealSlot.mode === "MONEY" ? mealSlotUtr.trim() : undefined,
+        utr: mealSlot.mode === "MONEY" ? normaliseUtr(mealSlotUtr) : undefined,
       });
       setSelectedSlotId(null);
       setMealSlotUtr("");
@@ -574,7 +586,9 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
               <Badge label={STATUS_LABEL[need.status]} tone={STATUS_BADGE_TONE[need.status]} />
               {isEmergency && !hasPhotos && <Badge label="Emergency" icon="alert-triangle" tone="blood" solid />}
               {need.urgency === "URGENT" && <Badge label="Urgent" icon="clock" tone="accent" />}
-              {need.adminVerified && <Badge label="Verified" icon="check-circle" tone="success" />}
+              {/* Solid, so it picks up the embossed relief — "Verified" is a state the donor is
+                  trusting, and it should look stamped rather than tinted. */}
+              {need.adminVerified && <Badge label="Verified" icon="check-circle" tone="success" solid />}
               {need.institutionVerified && <Badge label="Institution verified" icon="home" tone="info" />}
             </View>
 
@@ -640,16 +654,17 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
                       <Text style={styles.bloodGroupText}>{formatBloodGroup(blood.blood_group)}</Text>
                     </View>
                   </EmergencyPulse>
-                  <Text style={styles.amountTarget}>
-                    {blood.units_fulfilled} of {blood.units_needed} units
-                  </Text>
                 </View>
-                <ProgressBar
-                  raised={blood.units_fulfilled}
-                  target={blood.units_needed}
-                  tone={progressTone}
-                  showLabel={false}
-                  height={10}
+                {/* Liquid in a glass tube rather than a flat bar — blood units are a physical
+                    quantity, and the count reads before the label does. The "N of M units" text
+                    moved into the component so it sits flush with the tube's ends instead of
+                    floating above it. */}
+                <LiquidProgress
+                  filled={blood.units_fulfilled}
+                  total={blood.units_needed}
+                  tone="blood"
+                  height={18}
+                  label={`${blood.units_fulfilled} of ${blood.units_needed} units`}
                 />
               </View>
             )}
@@ -684,8 +699,23 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
               </View>
             )}
 
+            {/* The official brand ramp (#25D366 → #128C7E) with a gloss on the lit half, rather
+                than a flat green rectangle. The glyph is Ionicons' `logo-whatsapp`, which is the
+                real mark — worth keeping rather than redrawing it as a path. */}
             <PressableScale onPress={() => shareNeedViaWhatsApp(need)} style={styles.whatsappButton}>
-              <Ionicons name="logo-whatsapp" size={19} color="#FFFFFF" />
+              <Gradient
+                colors={["#3BE07A", "#25D366", "#128C7E"]}
+                direction="diagonal"
+                style={StyleSheet.absoluteFill as never}
+                pointerEvents="none"
+              />
+              <Gradient
+                colors={["rgba(255,255,255,0.30)", "rgba(255,255,255,0)"]}
+                angle={{ start: { x: 0.2, y: 0 }, end: { x: 0.5, y: 0.9 } }}
+                style={StyleSheet.absoluteFill as never}
+                pointerEvents="none"
+              />
+              <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
               <Text style={styles.whatsappButtonText}>Share on WhatsApp</Text>
             </PressableScale>
           </Card>
@@ -1021,11 +1051,31 @@ function InlineError({ message }: { message: string }) {
   );
 }
 
+/**
+ * The "thank you" state after a donor pledges or contributes.
+ *
+ * This is the emotional high point of the whole flow, so it gets a soft green wash and a glowing
+ * ring around the tick rather than the same white card as everything else — the moment should
+ * feel like a reward, not a receipt.
+ */
 function ConfirmationPanel({ icon, text }: { icon: IconName; text: string }): ReactNode {
   return (
     <Card style={styles.confirmationCard}>
+      <Gradient
+        colors={["#EAFBF3", "#D6F5E7", "#BEEBD8"]}
+        direction="diagonal"
+        style={StyleSheet.absoluteFill as never}
+        pointerEvents="none"
+      />
+      <View style={styles.confirmationGlow} pointerEvents="none" />
       <View style={styles.confirmationIcon}>
-        <Feather name={icon} size={22} color={theme.color.success} />
+        <Gradient
+          colors={["#34D399", "#0E9F6E", "#07684A"]}
+          direction="diagonal"
+          style={StyleSheet.absoluteFill as never}
+          pointerEvents="none"
+        />
+        <Feather name={icon} size={22} color="#FFFFFF" />
       </View>
       <Text style={styles.confirmationText}>{text}</Text>
     </Card>
@@ -1128,6 +1178,14 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     borderRadius: theme.radii.lg,
     marginTop: theme.spacing.lg,
+    // Clips the gradient layers to the rounded corners, and lifts the button off the card with
+    // its own green-tinted shadow rather than the app's warm crimson one.
+    overflow: "hidden",
+    shadowColor: "#0B6B4F",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
   },
   whatsappButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
 
@@ -1184,14 +1242,35 @@ const styles = StyleSheet.create({
   },
   errorText: { ...theme.typography.bodySmall, color: theme.color.dangerDeep, flex: 1, fontWeight: "600" },
 
-  confirmationCard: { flexDirection: "row", alignItems: "center", gap: theme.spacing.md },
+  confirmationCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    overflow: "hidden",
+    borderColor: "rgba(14,159,110,0.22)",
+  },
+  // Soft bloom behind the tick, so the icon reads as lit rather than pasted on the wash.
+  confirmationGlow: {
+    position: "absolute",
+    left: -20,
+    top: -20,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(52,211,153,0.28)",
+  },
   confirmationIcon: {
     width: 44,
     height: 44,
     borderRadius: theme.radii.pill,
-    backgroundColor: theme.color.successSoft,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    shadowColor: "#07684A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.34,
+    shadowRadius: 8,
+    elevation: 6,
   },
   confirmationText: { ...theme.typography.bodySmall, color: theme.color.textPrimary, flex: 1, fontWeight: "600" },
 

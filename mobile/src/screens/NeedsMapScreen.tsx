@@ -24,6 +24,29 @@ const STATIC_LEAFLET_HTML = `
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #E2E8F0; }
+    /* Pin = illustration + label, stacked and anchored at the tip. Marker HTML lives in the
+       WebView, so these are inline SVGs rather than the react-native-svg components used on
+       native screens — same shading rules, different renderer. */
+    .pin {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      filter: drop-shadow(0 4px 6px rgba(40,10,12,0.45));
+    }
+    .pin-tag {
+      color: #FFFFFF;
+      padding: 3px 9px;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+      /* Lit top-left, like every raised surface in the app */
+      background-image: linear-gradient(135deg, rgba(255,255,255,0.28), rgba(0,0,0,0.18));
+      border: 1px solid rgba(255,255,255,0.45);
+      margin-top: -6px;
+    }
     .custom-badge-pin {
       background: #E11D48;
       color: #FFFFFF;
@@ -62,6 +85,41 @@ const STATIC_LEAFLET_HTML = `
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
+    // Inline SVG artwork per need type. Same light model as the native illustrations: light face
+    // top-left, body colour in the middle, shaded face bottom-right, plus a specular highlight.
+    function pinArtwork(m) {
+      if (m.kind === 'BLOOD') {
+        return '<svg width="42" height="46" viewBox="0 0 64 64">' +
+          '<defs><linearGradient id="pb' + m.id + '" x1="0" y1="0" x2="1" y2="1">' +
+          '<stop offset="0" stop-color="#E23B3B"/><stop offset="0.55" stop-color="#B91C1C"/><stop offset="1" stop-color="#6E0F0F"/>' +
+          '</linearGradient></defs>' +
+          '<rect x="14" y="10" width="36" height="42" rx="9" fill="#F6E6E7"/>' +
+          '<rect x="17" y="20" width="30" height="29" rx="7" fill="url(#pb' + m.id + ')"/>' +
+          '<rect x="17" y="20" width="30" height="2" fill="rgba(255,255,255,0.4)"/>' +
+          '<path d="M21 25 q3 -3 6 -2 v20 q-3 1 -6 -1 z" fill="rgba(255,255,255,0.45)"/>' +
+          '<path d="M32 52 v6" stroke="#C8A6AA" stroke-width="3" stroke-linecap="round"/>' +
+          '</svg>';
+      }
+      if (m.kind === 'KIT' || m.kind === 'GOODS') {
+        return '<svg width="42" height="46" viewBox="0 0 64 64">' +
+          '<rect x="24" y="16" width="9" height="12" rx="2" fill="#E8A317"/>' +
+          '<rect x="33" y="13" width="8" height="15" rx="2" fill="#0E9F6E"/>' +
+          '<path d="M14 28 h30 v20 l-30 4 z" fill="#C08F52"/>' +
+          '<path d="M44 28 h8 v16 l-8 6 z" fill="#7B5230"/>' +
+          '<path d="M14 28 l7 -6 h30 l-7 6 z" fill="#EBBE85"/>' +
+          '<path d="M14 28 h30 v2 h-30 z" fill="rgba(255,255,255,0.28)"/>' +
+          '</svg>';
+      }
+      // Everything else: a lit teardrop marker rather than a flat circle.
+      return '<svg width="38" height="44" viewBox="0 0 64 64">' +
+        '<defs><linearGradient id="pd' + m.id + '" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0" stop-color="rgba(255,255,255,0.55)"/><stop offset="0.5" stop-color="' + m.color + '"/><stop offset="1" stop-color="rgba(0,0,0,0.35)"/>' +
+        '</linearGradient></defs>' +
+        '<path d="M32 6 q18 0 18 19 q0 15 -18 33 q-18 -18 -18 -33 q0 -19 18 -19 z" fill="url(#pd' + m.id + ')"/>' +
+        '<circle cx="32" cy="24" r="7" fill="rgba(255,255,255,0.85)"/>' +
+        '</svg>';
+    }
+
     var activeMarkers = [];
     // The map is only auto-framed once. After that the viewer owns the viewport — re-framing on
     // every data injection (which is what setView(bounds[0]) used to do) yanked the map back
@@ -89,9 +147,12 @@ const STATIC_LEAFLET_HTML = `
       var bounds = [];
       markers.forEach(function(m) {
         var icon = L.divIcon({
-          html: '<div class="custom-badge-pin" style="background:' + m.color + ';">' + m.badgeText + '</div>',
-          iconSize: [56, 28],
-          iconAnchor: [28, 14],
+          html: '<div class="pin">' + pinArtwork(m) + '<div class="pin-tag" style="background-color:' + m.color + ';">' + m.badgeText + '</div></div>',
+          // Taller than the old pill, and anchored at the BOTTOM (y = full height) so the tip
+          // sits on the actual coordinate. The old centre anchor drew every pin half a pin
+          // north of where the need really was.
+          iconSize: [64, 74],
+          iconAnchor: [32, 74],
           className: ''
         });
         var marker = L.marker([m.lat, m.lng], { icon: icon }).addTo(map);
@@ -167,6 +228,8 @@ export function NeedsMapScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =>
             title: need.title,
             badgeText,
             color,
+            // Drives which SVG the pin draws (see `pinArtwork` in the map HTML).
+            kind: need.type,
           };
         }),
     [filteredNeeds]

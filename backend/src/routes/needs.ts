@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { KycStatus, NeedStatus, NeedType, Prisma, Role, Urgency, ContributionStatus } from "@prisma/client";
+import { ContributionKind, KycStatus, NeedStatus, NeedType, Prisma, Role, Urgency, ContributionStatus } from "@prisma/client";
+import type { Need } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
@@ -11,6 +12,7 @@ import { parseMealSlotPayload, dedupeDates } from "../lib/mealSlotNeed";
 import { goodsPayloadInputSchema, parseGoodsPayload } from "../lib/goodsNeed";
 import { expireIfPastDeadline, expireManyIfPastDeadline } from "../lib/needExpiry";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
+import { notifyPosterOfContribution } from "../lib/contributionAlerts";
 import { cached, CacheKey, CacheTtl, invalidateNeedCaches } from "../lib/cache";
 
 const router = Router();
@@ -640,9 +642,25 @@ router.get("/:id", async (req, res) => {
   res.json({ need, myContribution });
 });
 
+// A UPI UTR (bank RRN) is exactly 12 digits. `min(1)` accepted "1", "abc" or a pasted sentence,
+// which made the money audit trail (CLAUDE.md §7) unverifiable — you cannot trace a payment from
+// a reference that was never a reference. Uniqueness is separately enforced by a DB constraint
+// (D-019), so this only fixes *shape*: the two guards are complementary, not alternatives.
+//
+// Whitespace and the common "UTR: xxxx" prefix are stripped before validation, because donors
+// paste straight from their bank's SMS.
+const utrSchema = z
+  .string()
+  .transform((raw) => raw.replace(/\s+/g, "").replace(/^(utr|rrn|ref|txn)[:\-]?/i, ""))
+  .pipe(
+    z
+      .string()
+      .regex(/^\d{12}$/, "Enter the 12-digit UTR / reference number from your payment app")
+  );
+
 const moneyDonateSchema = z.object({
   amount: z.number().int().positive(),
-  utr: z.string().min(1),
+  utr: utrSchema,
   proofUrl: z.string().url().optional(),
 });
 
@@ -651,7 +669,7 @@ const moneyDonateSchema = z.object({
 // — checked against the need's actual mode in the handler below, not here.
 const kitDonateSchema = z.object({
   kits: z.number().int().positive(),
-  utr: z.string().min(1).optional(),
+  utr: utrSchema.optional(),
   proofUrl: z.string().url().optional(),
 });
 
@@ -666,12 +684,28 @@ const goodsClaimSchema = z.object({
   proofUrl: z.string().url().optional(),
 });
 
-async function createContribution(res: import("express").Response, data: Prisma.ContributionUncheckedCreateInput) {
+async function createContribution(
+  res: import("express").Response,
+  data: Prisma.ContributionUncheckedCreateInput,
+  // Passed so the poster can be alerted the moment someone steps forward. Optional only so the
+  // helper stays usable from any future path that doesn't have the need loaded.
+  need?: Pick<Need, "id" | "title" | "type" | "postedById" | "payload">
+) {
   try {
     const contribution = await prisma.contribution.create({ data });
     // A pledge doesn't move the progress bar until it's confirmed, but it does change what the
     // donor sees on the need — and the analytics totals count contributions. Cheap to drop.
     invalidateNeedCaches();
+
+    // Fire-and-forget: the donor's response is already saved, and a push failure must never turn
+    // a successful donation into an error.
+    if (need) {
+      notifyPosterOfContribution(need, data.kind ?? ContributionKind.MONEY).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[contrib] Failed to notify the poster:", err);
+      });
+    }
+
     res.status(201).json({ contribution });
   } catch (err) {
     // D-019: UTR uniqueness is a hard DB constraint (Prisma P2002 on the unique `utr` column).
@@ -729,7 +763,7 @@ router.post("/:id/contributions", async (req, res) => {
       proofUrl: parsed.data.proofUrl,
       needId: need.id,
       donorId: req.user!.sub,
-    });
+    }, need);
   }
 
   if (need.type === NeedType.KIT) {
@@ -755,7 +789,7 @@ router.post("/:id/contributions", async (req, res) => {
       proofUrl: parsed.data.proofUrl,
       needId: need.id,
       donorId: req.user!.sub,
-    });
+    }, need);
   }
 
   if (need.type === NeedType.BLOOD) {
@@ -770,7 +804,7 @@ router.post("/:id/contributions", async (req, res) => {
       units: parsed.data.units,
       needId: need.id,
       donorId: req.user!.sub,
-    });
+    }, need);
   }
 
   if (need.type === NeedType.GOODS) {
@@ -786,7 +820,7 @@ router.post("/:id/contributions", async (req, res) => {
       proofUrl: parsed.data.proofUrl,
       needId: need.id,
       donorId: req.user!.sub,
-    });
+    }, need);
   }
 
   if (need.type === NeedType.SKILL_REQUEST) {
@@ -796,7 +830,7 @@ router.post("/:id/contributions", async (req, res) => {
       kind: "SKILL_REQUEST",
       needId: need.id,
       donorId: req.user!.sub,
-    });
+    }, need);
   }
 
   return res.status(400).json({ error: "Only MONEY, KIT, BLOOD, GOODS, and SKILL_REQUEST needs accept contributions" });
@@ -805,7 +839,7 @@ router.post("/:id/contributions", async (req, res) => {
 // MEAL_SLOT donations (§10.4): `utr` required for mode=MONEY, forbidden for mode=DELIVER — same
 // shape as KIT's rule (§9.2), checked against the need's actual mode below.
 const mealSlotBookSchema = z.object({
-  utr: z.string().min(1).optional(),
+  utr: utrSchema.optional(),
   proofUrl: z.string().url().optional(),
 });
 
@@ -875,6 +909,12 @@ router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
       return created;
     });
     invalidateNeedCaches();
+    // Booking builds its Contribution inside a transaction (D-022 slot locking) rather than via
+    // `createContribution`, so the poster alert has to be fired explicitly here too.
+    notifyPosterOfContribution(need, ContributionKind.MEAL_SLOT).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("[contrib] Failed to notify the poster:", err);
+    });
     res.status(201).json({ contribution });
   } catch (err) {
     if (err instanceof SlotAlreadyBookedError) {

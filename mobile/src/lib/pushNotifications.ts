@@ -47,19 +47,28 @@ export async function registerForPushNotificationsAsync(token: string): Promise<
       // the app is already installed. Either bump the channel id or uninstall/reinstall.
       // `name` is what the user sees in Android's notification settings, so it must read like a
       // category, not a slug.
+      // Bundled sounds rather than "default". The device default resolves to the user's chosen
+      // system tone — and if they never set one (Android ships some devices with it as "None"),
+      // every alert arrives silently. A blood emergency that vibrates but makes no sound is a
+      // failure of the one notification that matters most, so the app carries its own.
+      //
+      // The filename is the resource name; the plugin copies these into res/raw at build time
+      // (see app.json → expo-notifications → sounds).
       await Notifications.setNotificationChannelAsync("default", {
         name: "General updates",
         importance: Notifications.AndroidImportance.HIGH,
-        sound: "default",
+        sound: "notification.wav",
         enableVibrate: true,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: "#B91C1C",
       });
       // High-priority channel for Emergency blood requests (D-016) — heads-up + sound.
+      // Its sound is a double-pulse heartbeat, so an emergency is recognisable from the tone
+      // alone without reading the screen.
       await Notifications.setNotificationChannelAsync("emergency", {
         name: "Emergency blood requests",
         importance: Notifications.AndroidImportance.MAX,
-        sound: "default",
+        sound: "emergency.wav",
         enableVibrate: true,
         vibrationPattern: [0, 400, 200, 400],
         lightColor: "#DC2626",
