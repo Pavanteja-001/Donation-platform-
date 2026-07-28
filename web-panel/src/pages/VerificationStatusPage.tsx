@@ -102,7 +102,7 @@ export function VerificationStatusPage() {
                   padding: "6px 12px",
                   borderRadius: "999px",
                   backgroundColor: statusColors[currentStatus],
-                  color: "#fff",
+                  color: "var(--color-on-primary)",
                   fontSize: "13px",
                   fontWeight: 600,
                 }}
@@ -124,9 +124,9 @@ export function VerificationStatusPage() {
             )}
 
             {currentStatus === "REJECTED" && (
-              <div style={{ backgroundColor: "#fff5f5", border: "1px solid #feb2b2", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
-                <strong style={{ color: "var(--color-danger)", display: "block", marginBottom: "4px" }}>Rejection Reason:</strong>
-                <p style={{ margin: 0, fontSize: "14px", color: "#c53030" }}>{user?.kycRejectionReason ?? "No reason specified."}</p>
+              <div className="callout callout-danger">
+                <strong>Rejection Reason:</strong>
+                <p style={{ margin: 0, fontSize: "14px" }}>{user?.kycRejectionReason ?? "No reason specified."}</p>
               </div>
             )}
 

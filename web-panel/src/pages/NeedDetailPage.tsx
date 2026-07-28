@@ -136,8 +136,9 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
           type="button"
           onClick={() => shareNeedViaWhatsApp(need)}
           style={{
-            backgroundColor: "#25D366",
+            backgroundImage: "linear-gradient(135deg, #3BE07A, #25D366 55%, #128C7E)",
             color: "#FFFFFF",
+            boxShadow: "0 6px 14px rgba(11, 107, 79, 0.28)",
             border: "none",
             borderRadius: "6px",
             padding: "6px 12px",
@@ -241,7 +242,7 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
       )}
 
       {need.status === "REJECTED" && need.rejectionReason && (
-        <div style={{ backgroundColor: "#fff5f5", border: "1px solid #feb2b2", padding: "16px", borderRadius: "8px", color: "#c53030", marginBottom: "20px" }}>
+        <div className="callout callout-danger">
           <strong>Rejected Reason:</strong> {need.rejectionReason}
         </div>
       )}

@@ -125,9 +125,9 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <style>
-        body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #F1F5F9; }
+        body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #F7EEEE; }
         .pin-label {
-          background: #E11D48;
+          background: #B91C1C;
           color: white;
           padding: 4px 8px;
           border-radius: 12px;
@@ -293,7 +293,7 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
             style={{
               width: "100%",
               height: "220px",
-              border: "1px solid #CBD5E1",
+              border: "1px solid var(--color-border)",
               borderRadius: "8px",
             }}
           />
