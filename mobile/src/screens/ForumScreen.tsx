@@ -11,6 +11,7 @@ import { fetchForumQuestions, askForumQuestion, type ForumQuestion } from "../li
 import { theme } from "../lib/theme";
 import { timeAgo } from "../lib/needMeta";
 import { Avatar, Button, EmptyState, ErrorState, Input, Skeleton, PressableScale } from "../components/ui";
+import { Gradient } from "../components/Gradient";
 
 type Props = { onSelectQuestion: (question: ForumQuestion) => void };
 
@@ -37,6 +38,14 @@ function QuestionCard({ item, onPress }: { item: ForumQuestion; onPress: () => v
 
   return (
     <PressableScale onPress={onPress} scaleTo={0.985} style={[styles.card, theme.elevation.level2]}>
+      {/* Same lit surface as the needs feed, so the community layer doesn't read as a different
+          app bolted on beside it. */}
+      <Gradient
+        colors={theme.gradient.surfaceSheen}
+        direction="diagonal"
+        style={StyleSheet.absoluteFill as never}
+        pointerEvents="none"
+      />
       <Text style={styles.questionTitle} numberOfLines={2}>
         {item.title}
       </Text>
@@ -182,6 +191,18 @@ export function ForumScreen({ onSelectQuestion }: Props) {
       {questions.length > 0 && (
         <Animated.View entering={FadeInDown.duration(360)} style={styles.fabWrap}>
           <PressableScale onPress={() => setShowAsk(true)} accessibilityLabel="Ask a question" style={styles.fab}>
+            <Gradient
+              colors={["#D33B3B", "#B91C1C", "#8E1414"]}
+              direction="diagonal"
+              style={StyleSheet.absoluteFill as never}
+              pointerEvents="none"
+            />
+            <Gradient
+              colors={["rgba(255,255,255,0.28)", "rgba(255,255,255,0)"]}
+              angle={{ start: { x: 0.2, y: 0 }, end: { x: 0.55, y: 0.9 } }}
+              style={StyleSheet.absoluteFill as never}
+              pointerEvents="none"
+            />
             <Feather name="edit-3" size={18} color={theme.color.onPrimary} />
             <Text style={styles.fabText}>Ask</Text>
           </PressableScale>
@@ -253,6 +274,8 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: theme.color.surface,
+    // Clips the lit sheen overlay to the card radius.
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: theme.color.borderSubtle,
     borderRadius: theme.radii.xl,
@@ -284,6 +307,7 @@ const styles = StyleSheet.create({
 
   fabWrap: { position: "absolute", right: theme.spacing.lg, bottom: theme.spacing.xl },
   fab: {
+    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.sm,

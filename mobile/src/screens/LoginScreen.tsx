@@ -154,7 +154,7 @@ export function LoginScreen() {
         {/* Deep crimson hero panel, mirroring the reference splash. Sits above the white form
             card so the screen reads as branded rather than blank. */}
         <Animated.View entering={FadeInUp.delay(80).duration(500)}>
-          <Gradient colors={theme.gradient.brand} style={[styles.hero, theme.elevation.level3]}>
+          <Gradient colors={theme.gradient.heroDeep} direction="diagonal" style={[styles.hero, theme.elevation.level3]}>
             <View style={styles.brandMark}>
               <Feather name="droplet" size={32} color="#FFFFFF" />
             </View>

@@ -17,6 +17,7 @@ import {
 import { theme } from "../lib/theme";
 import { timeAgo } from "../lib/needMeta";
 import { Avatar, Badge, Button, EmptyState, ErrorState, Input, Skeleton, PressableScale } from "../components/ui";
+import { Gradient } from "../components/Gradient";
 
 function DetailSkeleton() {
   return (
@@ -160,6 +161,12 @@ export function ForumQuestionDetailScreen({
         ListHeaderComponent={
           <View style={styles.header}>
             <Animated.View entering={FadeInDown.duration(360)} style={[styles.card, theme.elevation.level2]}>
+              <Gradient
+                colors={theme.gradient.surfaceSheen}
+                direction="diagonal"
+                style={StyleSheet.absoluteFill as never}
+                pointerEvents="none"
+              />
               <Text style={styles.questionTitle}>{question.title}</Text>
               <Text style={styles.questionBody}>{question.body}</Text>
 
@@ -204,6 +211,12 @@ export function ForumQuestionDetailScreen({
           const answered = timeAgo(item.createdAt);
           return (
             <View style={[styles.card, styles.answerCard, theme.elevation.level1]}>
+              <Gradient
+                colors={theme.gradient.surfaceSheen}
+                direction="diagonal"
+                style={StyleSheet.absoluteFill as never}
+                pointerEvents="none"
+              />
               <View style={styles.authorRow}>
                 <Avatar name={item.author.name} size={26} />
                 <View style={styles.authorText}>
@@ -260,6 +273,8 @@ const styles = StyleSheet.create({
   header: { gap: theme.spacing.lg, marginBottom: theme.spacing.md },
   card: {
     backgroundColor: theme.color.surface,
+    // Clips the lit sheen overlay to the card radius.
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: theme.color.borderSubtle,
     borderRadius: theme.radii.xl,

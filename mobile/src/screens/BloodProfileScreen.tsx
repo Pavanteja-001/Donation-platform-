@@ -5,6 +5,8 @@ import { Feather } from "@expo/vector-icons";
 import { updateMe, type BloodGroup, type Gender } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { Gradient } from "../components/Gradient";
+import { BloodBagIllustration } from "../components/illustrations";
 import { formatBloodGroup } from "../lib/needMeta";
 import { Button, Input, Chip } from "../components/ui";
 
@@ -59,9 +61,7 @@ export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(360)} style={styles.header}>
-          <View style={styles.headerIcon}>
-            <Feather name="droplet" size={20} color={theme.color.blood} />
-          </View>
+          <BloodBagIllustration size={64} fillLevel={0.85} />
           <Text style={styles.title}>Blood donor profile</Text>
           <Text style={styles.subtitle}>
             This is what makes you a matchable donor. It's used only to find eligible donors for a
@@ -70,6 +70,12 @@ export function BloodProfileScreen({ onBack }: { onBack: () => void }) {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(60).duration(360)} style={[styles.card, theme.elevation.level2]}>
+          <Gradient
+            colors={theme.gradient.surfaceSheen}
+            direction="diagonal"
+            style={StyleSheet.absoluteFill as never}
+            pointerEvents="none"
+          />
           <View>
             <Text style={styles.label}>Blood group</Text>
             <View style={styles.chipGrid}>
@@ -186,6 +192,7 @@ const styles = StyleSheet.create({
   subtitle: { ...theme.typography.bodySmall, color: theme.color.textSecondary },
 
   card: {
+    overflow: "hidden",
     backgroundColor: theme.color.surface,
     borderWidth: 1,
     borderColor: theme.color.borderSubtle,

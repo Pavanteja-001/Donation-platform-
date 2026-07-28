@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { TYPE_META } from "../lib/needMeta";
 import { Button, ErrorState, Skeleton } from "../components/ui";
+import { Gradient } from "../components/Gradient";
 
 function CertificateSkeleton() {
   return (
@@ -70,7 +71,21 @@ export function CertificateScreen({ contributionId }: { contributionId: string }
                   rather than an image so it stays crisp at any density. */}
               <View style={styles.innerFrame}>
                 <View style={styles.seal}>
-                  <Feather name="award" size={34} color={theme.color.primary} />
+                  <Gradient
+                    colors={theme.gradient.gold}
+                    direction="diagonal"
+                    style={StyleSheet.absoluteFill as never}
+                    pointerEvents="none"
+                  />
+                  {/* Specular arc across the lit half — a flat gold circle still reads as a
+                      sticker; the highlight is what makes it read as pressed metal. */}
+                  <Gradient
+                    colors={["rgba(255,255,255,0.6)", "rgba(255,255,255,0)"]}
+                    angle={{ start: { x: 0.15, y: 0 }, end: { x: 0.6, y: 0.8 } }}
+                    style={StyleSheet.absoluteFill as never}
+                    pointerEvents="none"
+                  />
+                  <Feather name="award" size={34} color="#5C3714" />
                 </View>
 
                 <Text style={styles.eyebrow}>DonationPlatform</Text>
@@ -163,9 +178,14 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: theme.color.primarySoft,
+    overflow: "hidden",
     borderWidth: 2,
-    borderColor: theme.color.primary,
+    borderColor: "#B8860B",
+    shadowColor: "#7A4E12",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 7,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: theme.spacing.lg,

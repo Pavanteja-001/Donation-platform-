@@ -6,6 +6,9 @@ import type { NeedType } from "../lib/api";
 import { TYPE_META } from "../lib/needMeta";
 import { theme } from "../lib/theme";
 import { Button } from "./ui";
+import { Gradient } from "./Gradient";
+import { IconPlate, litRamp } from "./Depth";
+import { BloodBagIllustration, KitBoxIllustration, RupeeStackIllustration } from "./illustrations";
 
 /**
  * The shared shell for all seven "post a need" forms.
@@ -46,15 +49,30 @@ export function CreateNeedScaffold({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* One edit here restyles all seven post-a-need forms — the reason this scaffold exists.
+            The header shows the same illustration the need will carry in the feed, so a poster
+            recognises what they're creating before reading a word of it. */}
         <Animated.View entering={FadeInDown.duration(360)} style={styles.header}>
-          <View style={[styles.typeIcon, { backgroundColor: meta.tint }]}>
-            <Feather name={meta.icon} size={20} color={meta.color} />
-          </View>
+          {type === "BLOOD" ? (
+            <BloodBagIllustration size={56} fillLevel={0} />
+          ) : type === "KIT" || type === "GOODS" ? (
+            <KitBoxIllustration size={56} />
+          ) : type === "MONEY" ? (
+            <RupeeStackIllustration size={56} />
+          ) : (
+            <IconPlate icon={meta.icon} size="lg" tone="custom" colors={litRamp(meta.color)} />
+          )}
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(60).duration(360)} style={[styles.card, theme.elevation.level2]}>
+          <Gradient
+            colors={theme.gradient.surfaceSheen}
+            direction="diagonal"
+            style={StyleSheet.absoluteFill as never}
+            pointerEvents="none"
+          />
           {children}
         </Animated.View>
 
@@ -136,6 +154,8 @@ const styles = StyleSheet.create({
     borderRadius: theme.radii.xl,
     padding: theme.spacing.xl,
     gap: theme.spacing.lg,
+    // Clips the sheen overlay to the card's radius.
+    overflow: "hidden",
   },
 
   noticeBox: {

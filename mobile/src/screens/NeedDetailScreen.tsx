@@ -45,6 +45,8 @@ import { isProfileComplete } from "../lib/profile";
 import { shareNeedViaWhatsApp } from "../lib/whatsapp";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { theme } from "../lib/theme";
+import { IconPlate, litRamp } from "../components/Depth";
+import { BloodBagIllustration } from "../components/illustrations";
 import {
   STATUS_BADGE_TONE,
   STATUS_LABEL,
@@ -105,9 +107,7 @@ function SectionHeader({ icon, title, tone = theme.color.primary, tint = theme.c
 }) {
   return (
     <View style={styles.sectionHeader}>
-      <View style={[styles.sectionIcon, { backgroundColor: tint }]}>
-        <Feather name={icon} size={15} color={tone} />
-      </View>
+      <IconPlate icon={icon} size="sm" tone="custom" colors={litRamp(tone)} />
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
@@ -544,7 +544,6 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
           <Gradient
             colors={theme.gradient.scrim}
             style={styles.heroScrim}
-            bands={16}
             pointerEvents="none"
           />
 
@@ -573,9 +572,11 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
           <Card variant="hero">
             {!hasPhotos && (
               <View style={styles.typeGroup}>
-                <View style={[styles.typeIcon, { backgroundColor: meta.tint }]}>
-                  <Feather name={meta.icon} size={14} color={meta.color} />
-                </View>
+                {isBloodNeed ? (
+                  <BloodBagIllustration size={34} fillLevel={blood ? blood.units_fulfilled / Math.max(1, blood.units_needed) : 0} />
+                ) : (
+                  <IconPlate icon={meta.icon} size="sm" tone="custom" colors={litRamp(meta.color)} />
+                )}
                 <Text style={[styles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
               </View>
             )}

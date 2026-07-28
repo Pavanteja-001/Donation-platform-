@@ -168,7 +168,7 @@ export function LocationsPage() {
                     padding: "12px 16px",
                     borderRadius: 8,
                     cursor: "pointer",
-                    backgroundColor: selectedDistrictId === d.id ? "var(--color-primary-light, #EEF2FF)" : "var(--color-surface)",
+                    backgroundColor: selectedDistrictId === d.id ? "var(--color-primary-light)" : "var(--color-surface)",
                     border: `1px solid ${selectedDistrictId === d.id ? "var(--color-primary)" : "var(--color-border)"}`,
                     display: "flex",
                     justifyContent: "space-between",
@@ -189,7 +189,7 @@ export function LocationsPage() {
                         e.stopPropagation();
                         handleDeleteDistrict(d.id, d.name);
                       }}
-                      style={{ color: "#DC2626", fontSize: 12 }}
+                      style={{ color: "var(--color-danger)", fontSize: 12 }}
                     >
                       Delete
                     </button>
@@ -249,7 +249,7 @@ export function LocationsPage() {
                             {a.latitude.toFixed(3)}, {a.longitude.toFixed(3)}
                           </span>
                         ) : (
-                          <span style={{ fontSize: 11, color: "#B45309" }}>no coordinates</span>
+                          <span style={{ fontSize: 11, color: "var(--color-warning)" }}>no coordinates</span>
                         )}
                         {isAdmin && (
                           <button

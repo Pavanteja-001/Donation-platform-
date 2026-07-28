@@ -8,21 +8,37 @@
    missing success/warning/info + the spacing scale (real drift from mobile/web-panel, fixed in
    Chunk 1 of Milestone 9). */
 :root {
-  --color-primary: #e11d48;
+  /* Aligned with the mobile design system (D-014: one theme across all three surfaces).
+     The console was still on a cold slate palette while mobile moved to warm crimson, so the
+     two products looked like different companies. Same crimson ramp, same warm neutrals. */
+  --color-primary: #b91c1c;
   --color-on-primary: #ffffff;
-  --color-primary-dark: #be123c;
-  --color-primary-light: #fff1f2;
-  --color-accent: #f43f5e;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #dc2626;
+  --color-primary-dark: #7f1d1d;
+  --color-primary-bright: #d33b3b;
+  --color-primary-light: #fdecec;
+  --color-accent: #e8a317;
+  --color-success: #0e9f6e;
+  --color-warning: #d97706;
+  --color-danger: #e02424;
   --color-info: #2563eb;
-  --color-background: #f8fafc;
+  /* Warm blush canvas rather than blue-grey — this is what stops the console reading as
+     "very white" in the same way the app did. */
+  --color-background: #fbf7f7;
   --color-surface: #ffffff;
-  --color-border: #e2e8f0;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #64748b;
-  --radius: 12px;
+  --color-border: #ecdfe0;
+  --color-border-subtle: rgba(124, 45, 45, 0.09);
+  --color-text-primary: #1c1416;
+  --color-text-secondary: #6f5c5e;
+  --color-text-tertiary: #9a8688;
+  --radius: 14px;
+
+  /* One light source, top-left — the same rule the app follows. A raised surface is bright at
+     its top-left edge and casts a warm shadow down-right; a recessed one inverts it. */
+  --sheen: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 45%, rgba(124, 45, 45, 0.035));
+  --gloss: linear-gradient(160deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 60%);
+  --grad-primary: linear-gradient(135deg, #d33b3b, #b91c1c 55%, #8e1414);
+  --grad-danger: linear-gradient(135deg, #f05252, #e02424 55%, #a51b1b);
+  --grad-success: linear-gradient(135deg, #34d399, #0e9f6e 55%, #07684a);
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -31,8 +47,12 @@
   --space-xl: 24px;
   --space-xxl: 32px;
 
-  --elevation-1: 0 2px 6px rgba(15, 23, 42, 0.04);
-  --elevation-2: 0 4px 14px rgba(15, 23, 42, 0.08);
+  --elevation-1: 0 2px 6px rgba(59, 10, 10, 0.08);
+  --elevation-2: 0 6px 16px rgba(59, 10, 10, 0.12);
+  --elevation-3: 0 12px 28px rgba(59, 10, 10, 0.16);
+  /* CSS can do true inset shadows, unlike React Native — so recessed surfaces here are real
+     rather than approximated with gradients. */
+  --recess: inset 0 2px 4px rgba(59, 10, 10, 0.10);
 
   --motion-fast: 150ms;
   --motion-normal: 220ms;
@@ -205,16 +225,24 @@ form button[type="submit"]:disabled {
 .btn-action-primary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   background: var(--color-primary-light);
   color: var(--color-primary);
-  border: 1px solid rgba(225, 29, 72, 0.2);
-  border-radius: 6px;
-  padding: 5px 10px;
+  border: 1px solid rgba(185, 28, 28, 0.22);
+  border-radius: 8px;
+  /* Fixed height across every action variant — mixed heights were the main reason a row of
+     buttons looked ragged. */
+  height: 32px;
+  padding: 0 12px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
   text-decoration: none;
+  box-shadow: var(--elevation-1);
+  transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease,
+    background var(--motion-fast) ease;
   transition: all 0.15s ease;
 }
 
@@ -226,11 +254,16 @@ form button[type="submit"]:disabled {
 .btn-action-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  background: #f1f5f9;
+  background: linear-gradient(180deg, #ffffff, #f6ecec);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
+  height: 32px;
+  white-space: nowrap;
+  box-shadow: var(--elevation-1);
+  transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
   padding: 5px 10px;
   font-size: 13px;
   font-weight: 600;
@@ -343,26 +376,55 @@ form button[type="submit"]:disabled {
 }
 
 /* Tables */
+/* Tables sit in their own scroll container: the needs table now carries up to six actions per
+   row, and on a laptop that overflowed the page instead of the table. */
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   margin-top: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--elevation-2);
 }
 
 th,
 td {
   text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
   font-size: 14px;
+  /* Rows contain wrapping action buttons and two-line title cells; without this the short
+     cells floated to the bottom and nothing lined up across a row. */
+  vertical-align: middle;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr {
+  transition: background var(--motion-fast) ease;
+}
+
+tbody tr:hover {
+  background: rgba(185, 28, 28, 0.025);
 }
 
 th {
   color: var(--color-text-secondary);
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: 700;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  background: linear-gradient(180deg, #fdf8f8, #f7eeee);
+  border-bottom: 1px solid var(--color-border);
+  /* Header stays put while a long queue scrolls. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .badge {
@@ -471,9 +533,15 @@ th {
   cursor: not-allowed;
 }
 
+/* Six actions can appear here (View, Map, Verify, Reject, Cancel, Delete). A plain nowrap flex
+   row pushed the last ones outside the cell — they now wrap onto a second line and stay aligned
+   to the left edge, with a min-width so the column doesn't collapse to one button per line. */
 .row-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  min-width: 220px;
 }
 
 .link-cell {
@@ -810,3 +878,106 @@ th {
   background-color: var(--color-background);
 }
 
+
+
+/* --- Console depth pass (matches the mobile design system) ------------------------------- */
+
+/* Every action button lifts on hover and presses in on click. A console is used all day; the
+   feedback is what makes it feel like a tool rather than a web page. */
+.btn-action-primary:active,
+.btn-action-secondary:active,
+.btn-action-success:active,
+.btn-action-danger:active {
+  transform: translateY(1px);
+  box-shadow: var(--recess);
+}
+
+.btn-action-primary:hover,
+.btn-action-secondary:hover,
+.btn-action-success:hover,
+.btn-action-danger:hover {
+  box-shadow: var(--elevation-2);
+}
+
+/* Fixed height + nowrap on the remaining action variants, so a wrapped row stays on a grid. */
+.btn-action-success,
+.btn-action-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: var(--elevation-1);
+  transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+
+/* Cards get the same top-left lit wash as the app's surfaces. */
+.card,
+.card-elevated {
+  background-color: var(--color-surface);
+  background-image: var(--sheen);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius);
+  box-shadow: var(--elevation-2);
+}
+
+/* Primary submit buttons become lit surfaces rather than flat fills. */
+form button[type="submit"] {
+  background-image: var(--grad-primary), var(--gloss);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: var(--elevation-2);
+}
+
+form button[type="submit"]:hover {
+  box-shadow: var(--elevation-3);
+}
+
+form button[type="submit"]:active {
+  transform: translateY(1px);
+  box-shadow: var(--recess);
+}
+
+/* Inputs are recessed — the inverse of a raised surface, which is how a field reads as
+   something you type into. */
+form input,
+form select,
+form textarea {
+  box-shadow: var(--recess);
+}
+
+form input:focus,
+form select:focus,
+form textarea:focus {
+  box-shadow: var(--recess), 0 0 0 3px rgba(185, 28, 28, 0.14);
+}
+
+/* Filter chips: raised when idle, lit when active, pressed on click. */
+.chip {
+  background-image: linear-gradient(180deg, #ffffff, #f7eeee);
+  box-shadow: var(--elevation-1);
+  transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+
+.chip:hover {
+  box-shadow: var(--elevation-2);
+}
+
+.chip:active {
+  transform: translateY(1px);
+  box-shadow: var(--recess);
+}
+
+.chip.active {
+  background-image: var(--grad-primary), var(--gloss);
+  border-color: transparent;
+  box-shadow: var(--elevation-2);
+}
+
+/* Badges read as stamped tags, matching the embossed badges on mobile. */
+.badge {
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: var(--elevation-1);
+  letter-spacing: 0.02em;
+}

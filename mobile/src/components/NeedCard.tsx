@@ -20,6 +20,7 @@ import {
 import { IconPlate, litRamp } from "./Depth";
 import { BloodBagIllustration, KitBoxIllustration, RupeeStackIllustration } from "./illustrations";
 import { ProgressBar, type ProgressTone } from "./ProgressBar";
+import { LiquidProgress } from "./LiquidProgress";
 import { EmergencyPulse } from "./EmergencyPulse";
 import { Gradient } from "./Gradient";
 import { Badge, PressableScale } from "./ui";
@@ -78,7 +79,7 @@ function NeedCardComponent({
       {/* Emergency gets a full-bleed crimson strip rather than just another badge — at a glance
           down a scrolling feed, a coloured band is findable in a way a small pill is not. */}
       {isEmergency && (
-        <Gradient colors={theme.gradient.brand} direction="horizontal" bands={20} style={styles.emergencyStrip}>
+        <Gradient colors={["#EF4444", "#B91C1C", "#7A1010"]} direction="horizontal" style={styles.emergencyStrip}>
           <Feather name="alert-triangle" size={12} color={theme.color.onBlood} />
           <Text style={styles.emergencyStripText}>Emergency · needs donors now</Text>
         </Gradient>
@@ -176,12 +177,9 @@ function NeedCardComponent({
                 {blood.units_fulfilled} of {blood.units_needed} units
               </Text>
             </View>
-            <ProgressBar
-              raised={blood.units_fulfilled}
-              target={blood.units_needed}
-              tone={progressTone}
-              showLabel={false}
-            />
+            {/* Same liquid tube as the detail screen — a donor shouldn't see blood progress
+                rendered two different ways depending on which screen they're on. */}
+            <LiquidProgress filled={blood.units_fulfilled} total={blood.units_needed} tone="blood" height={12} />
           </View>
         )}
 

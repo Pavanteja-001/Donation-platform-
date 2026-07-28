@@ -7,6 +7,8 @@ import { useAuth } from "../context/AuthContext";
 import { fetchLocations, updateMe, type AreaLocation, type BloodGroup, type DistrictLocation, type Gender } from "../lib/api";
 import { getCurrentGpsLocation } from "../lib/locationUtils";
 import { theme } from "../lib/theme";
+import { Gradient } from "../components/Gradient";
+import { IconPlate, litRamp } from "../components/Depth";
 import { ProgressBar } from "../components/ProgressBar";
 import { Button, Input, Chip, PressableScale } from "../components/ui";
 
@@ -49,10 +51,16 @@ function Section({
 }) {
   return (
     <View style={[styles.card, theme.elevation.level2]}>
+      <Gradient
+        colors={theme.gradient.surfaceSheen}
+        direction="diagonal"
+        style={StyleSheet.absoluteFill as never}
+        pointerEvents="none"
+      />
       <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIcon, { backgroundColor: tint }]}>
-          <Feather name={icon} size={15} color={tone} />
-        </View>
+        {/* Lit plate instead of a flat tinted square — registration is the first real screen a
+            donor fills in, so it should feel like the rest of the app rather than a web form. */}
+        <IconPlate icon={icon} size="sm" tone="custom" colors={litRamp(tone)} />
         <View style={styles.sectionTitles}>
           <Text style={styles.sectionTitle}>{title}</Text>
           {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
@@ -503,6 +511,7 @@ const styles = StyleSheet.create({
   readyChipText: { ...theme.typography.overline, color: theme.color.success },
 
   card: {
+    overflow: "hidden",
     backgroundColor: theme.color.surface,
     borderWidth: 1,
     borderColor: theme.color.borderSubtle,

@@ -6,6 +6,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
+import { IconPlate, litRamp } from "../components/Depth";
 import { Avatar, Badge, Button, PressableScale, type TrustTier } from "../components/ui";
 import { Gradient } from "../components/Gradient";
 import { TierEmblem } from "../components/illustrations";
@@ -30,9 +31,7 @@ function Section({ icon, title, children, tone = theme.color.primary, tint = the
   return (
     <View style={[styles.card, theme.elevation.level2]}>
       <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIcon, { backgroundColor: tint }]}>
-          <Feather name={icon} size={15} color={tone} />
-        </View>
+        <IconPlate icon={icon} size="sm" tone="custom" colors={litRamp(tone)} />
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {children}

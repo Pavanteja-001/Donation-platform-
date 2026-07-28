@@ -11,6 +11,8 @@ import { theme } from "../lib/theme";
 import { formatAmount, formatDate, timeAgo, type IconName } from "../lib/needMeta";
 import { AnimatedCounter } from "../components/AnimatedCounter";
 import { EmptyState, ErrorState, Skeleton, Badge, Button, Chip, type BadgeTone } from "../components/ui";
+import { Gradient } from "../components/Gradient";
+import { IconPlate, litRamp } from "../components/Depth";
 
 const STATUS_BADGE_TONE: Record<Contribution["status"], BadgeTone> = {
   PENDING_CONFIRMATION: "accent",
@@ -86,11 +88,20 @@ function ContributionItem({
 
   return (
     <View style={[styles.card, theme.elevation.level2]}>
+      <Gradient
+        colors={theme.gradient.surfaceSheen}
+        direction="diagonal"
+        style={StyleSheet.absoluteFill as never}
+        pointerEvents="none"
+      />
       <View style={styles.rowBetween}>
         <View style={styles.kindGroup}>
-          <View style={[styles.kindIcon, { backgroundColor: meta.tint }]}>
-            <Feather name={meta.icon} size={14} color={meta.color} />
-          </View>
+          <IconPlate
+            icon={meta.icon}
+            size="sm"
+            tone={item.kind === "BLOOD" ? "blood" : "custom"}
+            colors={item.kind === "BLOOD" ? undefined : litRamp(meta.color)}
+          />
           <Text style={styles.summary} numberOfLines={1}>
             {summarize(item)}
           </Text>
@@ -338,6 +349,7 @@ const styles = StyleSheet.create({
 
   skeletonWrap: { padding: theme.spacing.lg, gap: theme.spacing.md },
   card: {
+    overflow: "hidden",
     backgroundColor: theme.color.surface,
     borderWidth: 1,
     borderColor: theme.color.borderSubtle,

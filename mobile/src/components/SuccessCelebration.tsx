@@ -12,6 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { theme } from "../lib/theme";
+import { Gradient } from "./Gradient";
 import { Button } from "./ui";
 
 // Crimson + gold leads, with green and blue as supporting colour. Now that crimson is the brand
@@ -97,6 +98,20 @@ function SuccessCard({
   return (
     <Animated.View style={[styles.card, theme.elevation.level3, cardStyle]}>
       <Animated.View style={[styles.checkCircle, checkStyle]}>
+        {/* This is the payoff moment of every donation flow — a lit green dome with its own glow
+            rather than a flat circle, matching the thank-you panel on the need detail screen. */}
+        <Gradient
+          colors={["#34D399", "#0E9F6E", "#07684A"]}
+          direction="diagonal"
+          style={StyleSheet.absoluteFill as never}
+          pointerEvents="none"
+        />
+        <Gradient
+          colors={["rgba(255,255,255,0.45)", "rgba(255,255,255,0)"]}
+          angle={{ start: { x: 0.2, y: 0 }, end: { x: 0.6, y: 0.85 } }}
+          style={StyleSheet.absoluteFill as never}
+          pointerEvents="none"
+        />
         <Feather name="check" size={34} color={theme.color.onPrimary} />
       </Animated.View>
 
@@ -214,7 +229,13 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
+    overflow: "hidden",
     backgroundColor: theme.color.success,
+    shadowColor: "#07684A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 8,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: theme.spacing.xl,

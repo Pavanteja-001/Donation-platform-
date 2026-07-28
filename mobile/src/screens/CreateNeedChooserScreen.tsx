@@ -4,6 +4,8 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import type { NeedType } from "../lib/api";
 import { TYPE_META } from "../lib/needMeta";
+import { IconPlate, litRamp } from "../components/Depth";
+import { BloodBagIllustration, KitBoxIllustration, RupeeStackIllustration } from "../components/illustrations";
 import { theme } from "../lib/theme";
 import { PressableScale } from "../components/ui";
 import type { AppNavigationProp, RootStackParamList } from "../navigation/types";
@@ -32,9 +34,15 @@ function ChooserCard({ item, index }: { item: (typeof TYPES)[number]; index: num
         accessibilityLabel={`${item.label}: ${item.hint}`}
         style={[styles.card, theme.elevation.level2]}
       >
-        <View style={[styles.iconTile, { backgroundColor: meta.tint }]}>
-          <Feather name={meta.icon} size={20} color={meta.color} />
-        </View>
+        {item.type === "BLOOD" ? (
+          <BloodBagIllustration size={44} fillLevel={0} />
+        ) : item.type === "KIT" || item.type === "GOODS" ? (
+          <KitBoxIllustration size={44} />
+        ) : item.type === "MONEY" ? (
+          <RupeeStackIllustration size={44} />
+        ) : (
+          <IconPlate icon={meta.icon} size="md" tone="custom" colors={litRamp(meta.color)} />
+        )}
         <View style={styles.textContainer}>
           <Text style={styles.label}>{item.label}</Text>
           <Text style={styles.hint}>{item.hint}</Text>
