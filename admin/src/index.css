@@ -234,7 +234,7 @@ form button[type="submit"]:disabled {
   /* Fixed height across every action variant — mixed heights were the main reason a row of
      buttons looked ragged. */
   height: 32px;
-  padding: 0 12px;
+  padding: 0 11px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -980,6 +980,49 @@ form textarea:focus {
   border: 1px solid rgba(255, 255, 255, 0.4);
   box-shadow: var(--elevation-1);
   letter-spacing: 0.02em;
+  /* "PARTIALLY FULFILLED" was wrapping inside its pill, so the rounded background stretched
+     into a two-line blob. A status chip must never wrap. */
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  line-height: 1.2;
+}
+
+/* --- Table column sizing ---------------------------------------------------------------- */
+
+/* Actions need a real allocation: with up to six buttons they were being squeezed while Type
+   and Status sat on empty space, which is what made every row wrap differently. */
+.col-actions {
+  width: 360px;
+}
+
+.col-progress {
+  width: 160px;
+}
+
+.col-type,
+.col-status {
+  width: 130px;
+}
+
+/* Money figures like "₹10,00,000 / ₹10,00,000" were breaking mid-amount across two lines. */
+.cell-progress {
+  white-space: nowrap;
+}
+
+/* Buttons in a wrapped action row line up on a consistent grid. */
+.row-actions {
+  min-width: 340px;
+  row-gap: 6px;
+}
+
+/* Secondary/destructive actions are quieter than the primary one, so a row of six doesn't read
+   as six equally-weighted choices. */
+.btn-action-danger {
+  background: var(--color-primary-light);
+  color: var(--color-danger);
+  border: 1px solid rgba(224, 36, 36, 0.22);
 }
 
 /* Inline status callouts (KYC rejection, need rejection reason). These were inline hex styles

@@ -178,12 +178,12 @@ export function NeedsPage() {
         <table>
           <thead>
             <tr>
-              <th>Title & Location</th>
-              <th>Type</th>
-              <th>Status</th>
+              <th>Title &amp; Location</th>
+              <th className="col-type">Type</th>
+              <th className="col-status">Status</th>
               <th>Posted by</th>
-              <th>Progress</th>
-              <th>Actions</th>
+              <th className="col-progress">Progress</th>
+              <th className="col-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -194,7 +194,7 @@ export function NeedsPage() {
                     {n.title}
                   </button>
                   <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-                    📍 {n.area ? `${n.area}, ${n.city}` : n.city ?? "Location specified"}
+                    📍 {n.area ? `${n.area}, ${n.city}` : (n.city ?? "No location set")}
                   </div>
                 </td>
                 <td style={{ fontWeight: 500 }}>{n.type}</td>
@@ -202,7 +202,7 @@ export function NeedsPage() {
                   <span className={`badge status-${n.status.toLowerCase()}`}>{n.status.replace("_", " ")}</span>
                 </td>
                 <td>{n.postedBy.name ?? n.postedBy.phone ?? "—"}</td>
-                <td style={{ fontWeight: 500 }}>{progressLabel(n) ?? "—"}</td>
+                <td className="cell-progress" style={{ fontWeight: 500 }}>{progressLabel(n) ?? "—"}</td>
                 <td>
                   <div className="row-actions" style={{ gap: 6 }}>
                     <button type="button" className="btn-action-primary" onClick={() => navigate(`/needs/${n.id}`)}>
