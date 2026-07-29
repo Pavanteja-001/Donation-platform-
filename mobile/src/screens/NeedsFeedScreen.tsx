@@ -14,13 +14,16 @@ import { EmergencySpotlight } from "../components/EmergencySpotlight";
 import { theme } from "../lib/theme";
 import { EmptyState, ErrorState, Skeleton, Chip } from "../components/ui";
 
-type FilterId = "ALL" | "EMERGENCY" | "BLOOD" | "MONEY" | "KIT" | "MEAL_SLOT";
+type FilterId = "ALL" | "URGENT" | "BLOOD" | "MONEY" | "KIT" | "MEAL_SLOT";
 
 // Declarative filter table — each entry owns its own predicate, so adding a filter never means
 // touching the render body or a growing switch.
 const FILTERS: { id: FilterId; label: string; icon?: keyof typeof Feather.glyphMap; match: (n: Need) => boolean }[] = [
   { id: "ALL", label: "All", match: () => true },
-  { id: "EMERGENCY", label: "Emergency", icon: "alert-triangle", match: (n) => n.urgency === "EMERGENCY" },
+  // Urgent, not Emergency. Emergencies are pinned in the rail above and excluded from this list
+  // entirely (see `feedNeeds`), so a chip filtering for them would always come back empty —
+  // Urgent is the next tier down and the one this row can actually reveal.
+  { id: "URGENT", label: "Urgent", icon: "alert-triangle", match: (n) => n.urgency === "URGENT" },
   { id: "BLOOD", label: "Blood", icon: "droplet", match: (n) => n.type === "BLOOD" },
   { id: "MONEY", label: "Money", icon: "heart", match: (n) => n.type === "MONEY" },
   { id: "KIT", label: "Kits", icon: "package", match: (n) => n.type === "KIT" },
@@ -91,25 +94,35 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
     }, [load])
   );
 
-  // Counts come from the unfiltered list so a chip always shows how much it *would* reveal —
-  // a zeroed chip is useful information, and hiding it would make the row jump around.
-  const counts = useMemo(() => {
-    const source = needs ?? [];
-    return FILTERS.reduce<Record<FilterId, number>>(
-      (acc, f) => {
-        acc[f.id] = source.filter(f.match).length;
-        return acc;
-      },
-      {} as Record<FilterId, number>
-    );
-  }, [needs]);
+  /**
+   * What the list below the chips is allowed to show.
+   *
+   * Emergencies are deliberately absent: they're pinned in the rail directly above, and having
+   * them in both places meant the same card appeared twice on one screen — once as a tile, then
+   * again as a full-width card a few hundred pixels lower. The rail is unfiltered, so nothing is
+   * hidden by this; an emergency is always visible, just in one place instead of two.
+   */
+  const feedNeeds = useMemo(() => (needs ?? []).filter((n) => n.urgency !== "EMERGENCY"), [needs]);
+
+  // Counts come from that same source, so a chip never promises more than tapping it delivers.
+  const counts = useMemo(
+    () =>
+      FILTERS.reduce<Record<FilterId, number>>(
+        (acc, f) => {
+          acc[f.id] = feedNeeds.filter(f.match).length;
+          return acc;
+        },
+        {} as Record<FilterId, number>
+      ),
+    [feedNeeds]
+  );
 
   const visibleNeeds = useMemo(() => {
     if (!needs) return [];
     const active = FILTERS.find((f) => f.id === filter);
-    if (!active || active.id === "ALL") return needs;
-    return needs.filter(active.match);
-  }, [needs, filter]);
+    if (!active || active.id === "ALL") return feedNeeds;
+    return feedNeeds.filter(active.match);
+  }, [needs, feedNeeds, filter]);
 
   async function handleRefresh() {
     setIsRefreshing(true);
@@ -203,12 +216,16 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
           ListEmptyComponent={
             isLoading ? (
               <FeedSkeleton />
-            ) : needs!.length === 0 ? (
+            ) : feedNeeds.length === 0 ? (
               <View style={styles.filterEmpty}>
                 <EmptyState
                   icon="inbox"
-                  title="No live needs right now"
-                  subtitle="Verified needs will show up here as they go live."
+                  title={needs!.length === 0 ? "No live needs right now" : "Nothing else right now"}
+                  subtitle={
+                    needs!.length === 0
+                      ? "Verified needs will show up here as they go live."
+                      : "The emergencies above are the only live needs at the moment."
+                  }
                 />
               </View>
             ) : (
@@ -277,9 +294,9 @@ function FeedListHeader({
             label={f.label}
             icon={f.icon}
             active={filter === f.id}
-            tone={f.id === "EMERGENCY" || f.id === "BLOOD" ? "blood" : "primary"}
-            // No count while the feed is still fetching. "Emergency 0" is a claim, not a
-            // placeholder — and it's a wrong one that flips to 2 a moment later.
+            tone={f.id === "URGENT" || f.id === "BLOOD" ? "blood" : "primary"}
+            // No count while the feed is still fetching. A count of 0 is a claim, not a
+            // placeholder — and a wrong one that flips to a real number a moment later.
             count={f.id === "ALL" || isLoading ? undefined : counts[f.id]}
             onPress={() => onFilterChange(f.id)}
           />
