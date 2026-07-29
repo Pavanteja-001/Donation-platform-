@@ -252,8 +252,12 @@ function FeedListHeader({
   return (
     <View style={styles.headerBlock}>
       <FeedHero needs={needs} />
-      <EmergencySpotlight needs={needs} onSelectNeed={onSelectNeed} />
+      {/* Explore sits above the emergency rail on purpose: it's fixed furniture, so it belongs
+          directly under the hero where it's always in the same place. The emergency rail comes
+          and goes with the data, and a section that appears above a fixed row shoves that row
+          down the page every time an emergency opens. */}
       <ExploreOrganisations />
+      <EmergencySpotlight needs={needs} onSelectNeed={onSelectNeed} />
 
       <ScrollView
         horizontal
@@ -288,7 +292,7 @@ const styles = StyleSheet.create({
   filterEmpty: { paddingTop: theme.spacing.xxl },
   filterRow: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
     gap: theme.spacing.sm,
   },
   footerNote: {

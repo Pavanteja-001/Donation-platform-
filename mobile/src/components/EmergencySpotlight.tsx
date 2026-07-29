@@ -38,9 +38,10 @@ export function EmergencySpotlight({
 
   if (emergencies.length === 0) return null;
 
-  // Cards stop short of full width so the next one peeks in — the clearest possible signal that
-  // the rail scrolls, without adding a hint or an arrow.
-  const cardWidth = Math.min(width * 0.78, 320);
+  // Portrait tiles, story-rail proportions. A 320dp-wide card showed one emergency at a time and
+  // ate half the feed to do it; at this size three fit across with the fourth peeking, so the rail
+  // reads as "several cases" at a glance — which is the actual message when more than one is open.
+  const cardWidth = Math.min(Math.max((width - theme.spacing.lg * 2 - theme.spacing.sm * 2) / 2.6, 132), 158);
 
   return (
     <Animated.View entering={FadeIn.duration(theme.motion.normal)} style={styles.wrap}>
@@ -59,7 +60,7 @@ export function EmergencySpotlight({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.railContent}
         decelerationRate="fast"
-        snapToInterval={cardWidth + theme.spacing.md}
+        snapToInterval={cardWidth + theme.spacing.sm}
         snapToAlignment="start"
       >
         {emergencies.map((need) => (
@@ -76,10 +77,18 @@ function SpotlightCard({ need, width, onPress }: { need: Need; width: number; on
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
   const location = [need.area, need.city].filter(Boolean).join(", ");
 
+  // The tile itself is the button — tapping anywhere opens the need, where the actual
+  // respond/donate step sits behind its own confirmation. It must never be one tap from a feed.
   return (
-    <PressableScale onPress={onPress} scaleTo={0.97} accessibilityLabel={`Emergency: ${need.title}`}>
+    <PressableScale
+      onPress={onPress}
+      scaleTo={0.97}
+      accessibilityRole="button"
+      accessibilityLabel={`Emergency: ${need.title}. ${need.type === "BLOOD" ? "Tap to donate" : "Tap to help"}`}
+    >
       <Gradient colors={theme.gradient.brandDeep} style={[styles.card, { width }, theme.elevation.level3]}>
-        <View style={styles.cardTop}>
+        <View>
+          <View style={styles.cardTop}>
           <View style={styles.typeTag}>
             <Feather name={meta.icon} size={11} color="#FFFFFF" />
             <Text style={styles.typeTagText}>{meta.label}</Text>
@@ -94,30 +103,32 @@ function SpotlightCard({ need, width, onPress }: { need: Need; width: number; on
           )}
         </View>
 
-        <Text style={styles.title} numberOfLines={2}>
-          {need.title}
-        </Text>
+          <Text style={styles.title} numberOfLines={3}>
+            {need.title}
+          </Text>
 
-        {location ? (
-          <View style={styles.locationRow}>
-            <Feather name="map-pin" size={11} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.locationText} numberOfLines={1}>
-              {location}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.progressBlock}>
-          {blood && (
-            <>
-              <Text style={styles.progressLabel}>
-                {num(blood.units_fulfilled)} of {num(blood.units_needed)} units matched
+          {location ? (
+            <View style={styles.locationRow}>
+              <Feather name="map-pin" size={10} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {location}
               </Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View>
+          <View style={styles.progressBlock}>
+            {blood && (
+              <>
+                <Text style={styles.progressLabel}>
+                  {num(blood.units_fulfilled)} of {num(blood.units_needed)} units matched
+                </Text>
               <ProgressBar
                 raised={blood.units_fulfilled}
                 target={blood.units_needed}
                 showLabel={false}
-                height={6}
+                height={5}
                 onDark
               />
             </>
@@ -131,18 +142,13 @@ function SpotlightCard({ need, width, onPress }: { need: Need; width: number; on
                 raised={money.raised_amount}
                 target={money.target_amount}
                 showLabel={false}
-                height={6}
+                height={5}
                 onDark
               />
             </>
           )}
         </View>
 
-        {/* Styled as a call to action but it opens the need — the actual respond/donate step lives
-            on the detail screen behind its own confirmation, and must not be one tap from a feed. */}
-        <View style={styles.cta}>
-          <Text style={styles.ctaText}>{need.type === "BLOOD" ? "I can donate" : "Help now"}</Text>
-          <Feather name="arrow-right" size={15} color={theme.color.primaryDeep} />
         </View>
       </Gradient>
     </PressableScale>
@@ -150,13 +156,13 @@ function SpotlightCard({ need, width, onPress }: { need: Need; width: number; on
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingTop: theme.spacing.xl },
+  wrap: { paddingTop: theme.spacing.lg },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.color.emergency },
   headerText: {
@@ -168,48 +174,40 @@ const styles = StyleSheet.create({
   },
   headerCount: { ...theme.typography.caption, color: theme.color.textTertiary, fontWeight: "700" },
 
-  railContent: { paddingHorizontal: theme.spacing.lg, gap: theme.spacing.md },
+  railContent: { paddingHorizontal: theme.spacing.lg, gap: theme.spacing.sm },
   card: {
-    borderRadius: theme.radii.xxl,
-    padding: theme.spacing.lg,
+    // Taller than wide, like a story tile. The fixed ratio is what keeps the rail even when one
+    // case has a short title and another wraps to three lines.
+    aspectRatio: 0.86,
+    borderRadius: theme.radii.xl,
+    padding: theme.spacing.md,
     overflow: "hidden",
-    gap: theme.spacing.md,
+    justifyContent: "space-between",
   },
   cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   typeTag: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
     backgroundColor: "rgba(255,255,255,0.16)",
     borderRadius: theme.radii.pill,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 4,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 3,
   },
-  typeTagText: { ...theme.typography.overline, color: "#FFFFFF", textTransform: "uppercase" },
+  typeTagText: { ...theme.typography.overline, color: "#FFFFFF", textTransform: "uppercase", fontSize: 9 },
   bloodPill: {
     backgroundColor: "#FFFFFF",
     borderRadius: theme.radii.pill,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 4,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
   },
-  bloodPillText: { fontSize: 14, fontWeight: "800", color: theme.color.primaryDeep, letterSpacing: -0.2 },
+  bloodPillText: { fontSize: 12, fontWeight: "800", color: theme.color.primaryDeep, letterSpacing: -0.2 },
 
-  title: { ...theme.typography.h3, color: "#FFFFFF" },
-  locationRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: -theme.spacing.xs },
-  locationText: { ...theme.typography.caption, color: "rgba(255,255,255,0.7)", flexShrink: 1 },
+  title: { fontSize: 14, lineHeight: 18, fontWeight: "800", letterSpacing: -0.2, color: "#FFFFFF", marginTop: theme.spacing.sm },
+  locationRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  locationText: { ...theme.typography.caption, color: "rgba(255,255,255,0.7)", fontSize: 10, flexShrink: 1 },
 
-  progressBlock: { gap: theme.spacing.sm },
-  progressLabel: { ...theme.typography.caption, color: "rgba(255,255,255,0.82)", fontWeight: "700" },
+  progressBlock: { gap: 5 },
+  progressLabel: { ...theme.typography.caption, color: "rgba(255,255,255,0.82)", fontWeight: "700", fontSize: 10 },
 
-  cta: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing.sm,
-    backgroundColor: "#FFFFFF",
-    borderRadius: theme.radii.lg,
-    paddingVertical: theme.spacing.md,
-    marginTop: theme.spacing.xs,
-  },
-  ctaText: { fontSize: 14, fontWeight: "800", color: theme.color.primaryDeep },
 });

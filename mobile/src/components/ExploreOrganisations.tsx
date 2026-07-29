@@ -93,7 +93,7 @@ export function ExploreOrganisations() {
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
   },
@@ -101,15 +101,19 @@ const styles = StyleSheet.create({
   // own padding inside a wrapper that has no resolved height of its own.
   cardWrap: { flex: 1 },
   card: {
+    // Icon and label on one line. Stacked, the plate and the text each claimed a row for a single
+    // short word — side by side the card is only as tall as the plate itself.
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     backgroundColor: theme.color.surface,
-    borderRadius: theme.radii.xl,
+    borderRadius: theme.radii.lg,
     borderWidth: 1,
     borderColor: theme.color.borderSubtle,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: 7,
     paddingHorizontal: theme.spacing.xs,
     overflow: "hidden",
   },
-  title: { ...theme.typography.caption, fontWeight: "800", color: theme.color.textPrimary },
+  title: { fontSize: 12, lineHeight: 15, fontWeight: "800", color: theme.color.textPrimary },
 });

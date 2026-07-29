@@ -80,9 +80,13 @@ function GlassStat({
       <BlurView intensity={26} tint="dark" style={StyleSheet.absoluteFill} />
       <Gradient colors={theme.gradient.glass} direction="diagonal" style={StyleSheet.absoluteFill as never} />
       {pulse && <Animated.View style={[styles.urgentGlow, glowStyle]} pointerEvents="none" />}
+      {/* Artwork beside the number, not above it. Stacked, the illustration alone set the card's
+          height; on the same line it costs nothing — the number is already taller. */}
       <View style={styles.glassInner}>
-        {illustration}
-        {value}
+        <View style={styles.statTop}>
+          {illustration}
+          {value}
+        </View>
         <Text style={styles.statLabel} numberOfLines={1}>
           {label}
         </Text>
@@ -199,17 +203,17 @@ export function FeedHero({ needs }: { needs: Need[] }) {
           card moves — a flat translucent rectangle can't do that. */}
       <Animated.View entering={FadeInDown.delay(120).duration(420)} style={styles.statsStrip}>
         <GlassStat
-          illustration={<RupeeStackIllustration size={26} />}
+          illustration={<RupeeStackIllustration size={20} />}
           value={<AnimatedCounter value={stats.raised} prefix="₹" style={styles.statValue} />}
           label="raised"
         />
         <GlassStat
-          illustration={<DonorsIllustration size={26} />}
+          illustration={<DonorsIllustration size={20} />}
           value={<AnimatedCounter value={stats.live} style={styles.statValue} />}
           label="live needs"
         />
         <GlassStat
-          illustration={<UrgentPulseIllustration size={26} />}
+          illustration={<UrgentPulseIllustration size={20} />}
           value={<AnimatedCounter value={stats.urgent} style={styles.statValue} />}
           label="need help now"
           pulse={stats.urgent > 0}
@@ -276,7 +280,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "stretch",
     gap: theme.spacing.sm,
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.md,
   },
   glassCard: {
     flex: 1,
@@ -295,6 +299,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.xs,
   },
+  statTop: { flexDirection: "row", alignItems: "center", gap: 5 },
   urgentGlow: {
     position: "absolute",
     top: 0,
@@ -304,7 +309,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.28)",
   },
   stat: { flex: 1, alignItems: "center", gap: 2 },
-  statValue: { fontSize: 18, lineHeight: 22, fontWeight: "800", color: "#FFFFFF", letterSpacing: -0.4, textAlign: "center" },
-  statLabel: { ...theme.typography.caption, color: "rgba(255,255,255,0.72)", fontSize: 11 },
+  statValue: { fontSize: 17, lineHeight: 22, fontWeight: "800", color: "#FFFFFF", letterSpacing: -0.4, textAlign: "center" },
+  statLabel: { ...theme.typography.caption, color: "rgba(255,255,255,0.72)", fontSize: 10 },
   statDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.18)" },
 });
