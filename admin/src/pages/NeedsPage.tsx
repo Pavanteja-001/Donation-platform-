@@ -50,9 +50,13 @@ function progressLabel(need: Need): string | null {
     return `${p.units_fulfilled} / ${p.units_needed} units`;
   }
   if (need.type === "GOODS") {
-    const p = need.payload as { claimed?: boolean };
+    const p = need.payload as { claimed?: boolean; direction?: string; quantity?: number };
     if (typeof p.claimed !== "boolean") return null;
-    return p.claimed ? "Claimed" : "Not yet claimed";
+    // Which way the item is moving matters more to a verifier than the claim state: an offer is a
+    // stranger listing goods to give away, which is the case that needs the closer look.
+    const kind = p.direction === "OFFER" ? "Offered" : "Requested";
+    const qty = typeof p.quantity === "number" && p.quantity > 1 ? ` ×${p.quantity}` : "";
+    return `${kind}${qty} · ${p.claimed ? "Claimed" : "Not yet claimed"}`;
   }
   if (need.type === "SKILL_REQUEST") {
     const p = need.payload as { volunteers_joined?: number; volunteers_needed?: number };

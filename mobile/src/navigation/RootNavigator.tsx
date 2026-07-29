@@ -18,6 +18,7 @@ import { OrphanageDetailScreen } from "../screens/OrphanageDetailScreen";
 import { BookSlotScreen } from "../screens/BookSlotScreen";
 import { NgosScreen } from "../screens/NgosScreen";
 import { NgoDetailScreen } from "../screens/NgoDetailScreen";
+import { GoodsScreen } from "../screens/GoodsScreen";
 import { CreateSkillRequestNeedScreen } from "../screens/CreateSkillRequestNeedScreen";
 import { theme } from "../lib/theme";
 import { useAuth } from "../context/AuthContext";
@@ -81,8 +82,17 @@ function CreateBloodRoute({ navigation }: Props<"CreateBlood">) {
 function CreateMealSlotRoute({ navigation }: Props<"CreateMealSlot">) {
   return <CreateMealSlotNeedScreen onDone={() => navigation.goBack()} />;
 }
-function CreateGoodsRoute({ navigation }: Props<"CreateGoods">) {
-  return <CreateGoodsNeedScreen onDone={() => navigation.goBack()} />;
+function CreateGoodsRoute({ navigation, route }: Props<"CreateGoods">) {
+  return <CreateGoodsNeedScreen direction={route.params?.direction ?? "REQUEST"} onDone={() => navigation.goBack()} />;
+}
+function GoodsRoute({ navigation }: Props<"Goods">) {
+  return (
+    <GoodsScreen
+      onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id, initialNeed: need })}
+      onDonateItem={() => navigation.navigate("CreateGoods", { direction: "OFFER" })}
+      onRequestItem={() => navigation.navigate("CreateGoods", { direction: "REQUEST" })}
+    />
+  );
 }
 function CertificateRoute({ route }: Props<"Certificate">) {
   return <CertificateScreen contributionId={route.params.contributionId} />;
@@ -124,12 +134,21 @@ export function RootNavigator() {
       <Stack.Screen name="BookSlot" component={BookSlotRoute} options={{ title: "Book a slot" }} />
       <Stack.Screen name="Ngos" component={NgosRoute} options={{ title: "NGOs" }} />
       <Stack.Screen name="NgoDetail" component={NgoDetailRoute} options={{ title: "Organisation" }} />
+      <Stack.Screen name="Goods" component={GoodsRoute} options={{ title: "Goods" }} />
       <Stack.Screen name="CreateNeedChooser" component={CreateNeedChooserScreen} options={{ title: "Post a need" }} />
       <Stack.Screen name="CreateMoney" component={CreateMoneyRoute} options={{ title: "Money need" }} />
       <Stack.Screen name="CreateKit" component={CreateKitRoute} options={{ title: "Kit need" }} />
       <Stack.Screen name="CreateBlood" component={CreateBloodRoute} options={{ title: "Blood need" }} />
       <Stack.Screen name="CreateMealSlot" component={CreateMealSlotRoute} options={{ title: "Meal-slot need" }} />
-      <Stack.Screen name="CreateGoods" component={CreateGoodsRoute} options={{ title: "Goods need" }} />
+      <Stack.Screen
+        name="CreateGoods"
+        component={CreateGoodsRoute}
+        // One route serves both directions, so the header has to read off the params — "Goods need"
+        // is wrong for someone who tapped "Donate an item".
+        options={({ route }) => ({
+          title: route.params?.direction === "OFFER" ? "Donate an item" : "Request an item",
+        })}
+      />
       <Stack.Screen name="Certificate" component={CertificateRoute} options={{ title: "Certificate" }} />
       <Stack.Screen name="BloodProfile" component={BloodProfileRoute} options={{ title: "Blood donor profile" }} />
       <Stack.Screen name="Forum" component={ForumRoute} options={{ title: "Community Forum" }} />

@@ -11,14 +11,15 @@ import type { AppNavigationProp } from "../navigation/types";
 function ExploreCard({
   icon,
   title,
-  subtitle,
+  hint,
   tone,
   delay,
   onPress,
 }: {
   icon: keyof typeof Feather.glyphMap;
   title: string;
-  subtitle: string;
+  /** Not drawn — spoken. Taking the caption off the card shouldn't cost a screen-reader user it. */
+  hint: string;
   tone: "brand" | "blood";
   delay: number;
   onPress: () => void;
@@ -27,8 +28,8 @@ function ExploreCard({
     <Animated.View entering={FadeInDown.delay(delay).duration(360)} style={styles.cardWrap}>
       <PressableScale
         onPress={onPress}
-        scaleTo={0.97}
-        accessibilityLabel={`${title}. ${subtitle}`}
+        scaleTo={0.96}
+        accessibilityLabel={`${title}. ${hint}`}
         style={[styles.card, theme.elevation.level2]}
       >
         <Gradient
@@ -38,77 +39,77 @@ function ExploreCard({
           pointerEvents="none"
         />
         <IconPlate icon={icon} size="md" tone={tone} />
-        <View style={styles.cardText}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={2}>
-            {subtitle}
-          </Text>
-        </View>
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
       </PressableScale>
     </Animated.View>
   );
 }
 
 /**
- * The two organisation directories, as named destinations.
+ * The three browse destinations, fixed to the screen width.
  *
- * These were icon-only buttons in the hero's action row, which put them beside Post a need and the
- * notification bell — company they don't belong in. Those are things you *do*; these are places
- * you *browse*, and a bare glyph can't say "orphanages and old age homes". Given a label and a
- * line of copy they also answer the question a donor actually has, which is what they'd go there
- * to do.
+ * Icon and name only. Each destination introduces itself in its own header once you're there,
+ * which is where the explanation is actually useful — repeating it on a ~100dp card is what forced
+ * this row to scroll, and a row that scrolls hides whatever sits past the right edge.
  *
- * They sit inside the feed's scrolling header rather than pinned: discoverable on the screen
- * everyone opens, gone once you're reading needs.
+ * Sits inside the feed's scrolling header rather than pinned: present on the screen everyone
+ * opens, out of the way once you're reading needs.
  */
 export function ExploreOrganisations() {
   const navigation = useNavigation<AppNavigationProp>();
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.sectionTitle}>Explore organisations</Text>
-      <View style={styles.row}>
-        <ExploreCard
-          icon="home"
-          title="Homes"
-          subtitle="Sponsor a meal at an orphanage or old age home"
-          tone="brand"
-          delay={40}
-          onPress={() => navigation.navigate("Orphanages")}
-        />
-        <ExploreCard
-          icon="users"
-          title="NGOs"
-          subtitle="See their work and offer to volunteer"
-          tone="blood"
-          delay={100}
-          onPress={() => navigation.navigate("Ngos")}
-        />
-      </View>
+    <View style={styles.row}>
+      <ExploreCard
+        icon="home"
+        title="Homes"
+        hint="Sponsor a meal at an orphanage or old age home"
+        tone="brand"
+        delay={40}
+        onPress={() => navigation.navigate("Orphanages")}
+      />
+      <ExploreCard
+        icon="users"
+        title="NGOs"
+        hint="See their work and offer to volunteer"
+        tone="blood"
+        delay={100}
+        onPress={() => navigation.navigate("Ngos")}
+      />
+      <ExploreCard
+        icon="package"
+        title="Goods"
+        hint="Give away what you don't use, or ask for what you need"
+        tone="brand"
+        delay={160}
+        onPress={() => navigation.navigate("Goods")}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.lg, gap: theme.spacing.sm },
-  sectionTitle: { ...theme.typography.overline, color: theme.color.textTertiary, textTransform: "uppercase" },
-  row: { flexDirection: "row", gap: theme.spacing.md },
+  row: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+  },
+  // The wrapper takes its third of the width; the card must NOT also flex, or it collapses to its
+  // own padding inside a wrapper that has no resolved height of its own.
   cardWrap: { flex: 1 },
   card: {
-    // No `flex: 1` here. The wrapper has no resolved height of its own, so a flexed child collapses
-    // to its padding and clips the plate — the card has to size to its own content.
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: theme.spacing.sm,
     backgroundColor: theme.color.surface,
     borderRadius: theme.radii.xl,
     borderWidth: 1,
     borderColor: theme.color.borderSubtle,
-    padding: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xs,
     overflow: "hidden",
   },
-  cardText: { gap: 2 },
-  title: { ...theme.typography.h3, color: theme.color.textPrimary },
-  subtitle: { ...theme.typography.caption, color: theme.color.textSecondary, lineHeight: 16, minHeight: 32 },
+  title: { ...theme.typography.caption, fontWeight: "800", color: theme.color.textPrimary },
 });

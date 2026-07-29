@@ -14,7 +14,7 @@ import { EmergencySpotlight } from "../components/EmergencySpotlight";
 import { theme } from "../lib/theme";
 import { EmptyState, ErrorState, Skeleton, Chip } from "../components/ui";
 
-type FilterId = "ALL" | "EMERGENCY" | "BLOOD" | "MONEY" | "KIT" | "MEAL_SLOT" | "GOODS";
+type FilterId = "ALL" | "EMERGENCY" | "BLOOD" | "MONEY" | "KIT" | "MEAL_SLOT";
 
 // Declarative filter table — each entry owns its own predicate, so adding a filter never means
 // touching the render body or a growing switch.
@@ -25,7 +25,8 @@ const FILTERS: { id: FilterId; label: string; icon?: keyof typeof Feather.glyphM
   { id: "MONEY", label: "Money", icon: "heart", match: (n) => n.type === "MONEY" },
   { id: "KIT", label: "Kits", icon: "package", match: (n) => n.type === "KIT" },
   { id: "MEAL_SLOT", label: "Meals", icon: "coffee", match: (n) => n.type === "MEAL_SLOT" },
-  { id: "GOODS", label: "Goods", icon: "box", match: (n) => n.type === "GOODS" },
+  // No GOODS chip: item listings live on the Goods screen and the server keeps them out of this
+  // feed entirely, so a chip here would only ever show an empty result.
 ];
 
 /** Skeleton that mirrors the real card's geometry, so content arriving doesn't shift the layout. */

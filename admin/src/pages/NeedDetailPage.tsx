@@ -341,7 +341,10 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
       )}
       {goods && (
         <p className="hint">
-          Item: {goods.item} · Acceptable condition: {goods.condition} · {goods.claimed ? "Claimed" : "Not yet claimed"}
+          <strong>{goods.direction === "OFFER" ? "Being given away" : "Requested"}</strong> · Item: {goods.item}
+          {(goods.quantity ?? 1) > 1 ? ` ×${goods.quantity}` : ""} ·{" "}
+          {goods.direction === "OFFER" ? "Condition" : "Acceptable condition"}: {goods.condition} ·{" "}
+          {goods.claimed ? "Claimed" : "Not yet claimed"}
         </p>
       )}
       {skillRequest && (

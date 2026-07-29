@@ -498,6 +498,9 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
   // refetches while a date is selected (e.g. someone else books it first, §10.3).
   const selectedSlot = mealSlotDates.find((s) => s.id === selectedSlotId);
   const goods = need.type === "GOODS" && isGoodsPayload(need.payload) ? need.payload : null;
+  // An offer inverts every side of the exchange: the poster is the giver, the claimant is the
+  // person who wants it, and "I have this item" would be exactly backwards.
+  const isGoodsOffer = goods?.direction === "OFFER";
   const canClaimGoods = goods && need.status === "LIVE" && !isOwner && !hasClaimed;
   const pendingContributions = contributions?.filter((c) => c.status === "PENDING_CONFIRMATION") ?? [];
 
@@ -692,11 +695,17 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
               <View style={styles.statBlock}>
                 <Text style={styles.goodsItem}>{goods.item}</Text>
                 <View style={styles.badgeRow}>
+                  <Badge
+                    label={isGoodsOffer ? "Being given away" : "Wanted"}
+                    tone={isGoodsOffer ? "success" : "neutral"}
+                    icon={isGoodsOffer ? "gift" : "search"}
+                  />
                   <Badge label={goods.condition} tone="neutral" />
+                  {(goods.quantity ?? 1) > 1 && <Badge label={`Qty ${goods.quantity}`} tone="neutral" />}
                   <Badge
                     label={goods.claimed ? "Claimed" : "Available"}
                     tone={goods.claimed ? "neutral" : "success"}
-                    icon={goods.claimed ? "check" : "gift"}
+                    icon={goods.claimed ? "check" : "check-circle"}
                   />
                 </View>
               </View>
@@ -964,11 +973,24 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
         {canClaimGoods && (
           <Animated.View entering={FadeInDown.delay(140).duration(360)}>
             <Card style={styles.actionCard}>
-              <SectionHeader icon="box" title="Claim this item" tone={theme.color.info} tint={theme.color.infoSoft} />
+              <SectionHeader
+                icon="box"
+                title={isGoodsOffer ? "Ask for this item" : "Claim this item"}
+                tone={theme.color.info}
+                tint={theme.color.infoSoft}
+              />
               <Text style={styles.actionHint}>
-                Only claim if you can personally provide this item and coordinate the handover.
+                {isGoodsOffer
+                  ? "The person giving this away decides who receives it. Only ask if you genuinely need it and can collect it."
+                  : "Only claim if you can personally provide this item and coordinate the handover."}
               </Text>
-              <Button label="I have this item" icon="gift" glow onPress={handleClaim} loading={isClaiming} />
+              <Button
+                label={isGoodsOffer ? "I need this item" : "I have this item"}
+                icon={isGoodsOffer ? "shopping-bag" : "gift"}
+                glow
+                onPress={handleClaim}
+                loading={isClaiming}
+              />
             </Card>
           </Animated.View>
         )}

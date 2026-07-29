@@ -119,6 +119,8 @@ export function OrphanagesScreen({ onSelect }: { onSelect: (home: Orphanage) => 
 
   return (
     <View style={styles.screen}>
+      <Text style={styles.intro}>{"Sponsor a meal at an orphanage or old age home. Pick a date and a meal; the home confirms it."}</Text>
+
       <View style={styles.searchWrap}>
         <Input
           label=""
@@ -185,6 +187,13 @@ export function OrphanagesScreen({ onSelect }: { onSelect: (home: Orphanage) => 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.background },
   searchWrap: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md },
+  intro: {
+    ...theme.typography.caption,
+    color: theme.color.textSecondary,
+    lineHeight: 18,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+  },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
   listContent: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, paddingBottom: theme.spacing.xxl },
 

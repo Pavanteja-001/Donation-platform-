@@ -111,6 +111,8 @@ export function NgosScreen({ onSelect }: { onSelect: (ngo: Ngo) => void }) {
 
   return (
     <View style={styles.screen}>
+      <Text style={styles.intro}>{"See the work these organisations do, meet their team, and offer to volunteer."}</Text>
+
       <View style={styles.searchWrap}>
         <Input label="" placeholder="Search NGOs by name or city…" icon="search" value={search} onChangeText={setSearch} />
       </View>
@@ -171,6 +173,13 @@ export function NgosScreen({ onSelect }: { onSelect: (ngo: Ngo) => void }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.background },
   searchWrap: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md },
+  intro: {
+    ...theme.typography.caption,
+    color: theme.color.textSecondary,
+    lineHeight: 18,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+  },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
   listContent: { paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.sm, paddingBottom: theme.spacing.xxl },
 

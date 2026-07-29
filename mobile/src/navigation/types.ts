@@ -4,7 +4,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 // bottom tabs live in their own navigator; every "pushed" screen (detail, create, certificate,
 // blood profile) lives in the root stack that wraps the tabs, so it gets a real header + native
 // back button regardless of which tab it was opened from.
-import type { Need, ForumQuestion, Orphanage, Ngo } from "../lib/api";
+import type { Need, ForumQuestion, Orphanage, Ngo, GoodsDirection } from "../lib/api";
 
 export type TabParamList = {
   Home: undefined;
@@ -23,12 +23,13 @@ export type RootStackParamList = {
   BookSlot: { home: Orphanage };
   Ngos: undefined;
   NgoDetail: { ngoId: string; initial?: Ngo };
+  Goods: undefined;
   CreateNeedChooser: undefined;
   CreateMoney: undefined;
   CreateKit: undefined;
   CreateBlood: undefined;
   CreateMealSlot: undefined;
-  CreateGoods: undefined;
+  CreateGoods: { direction?: GoodsDirection } | undefined;
   Certificate: { contributionId: string };
   BloodProfile: undefined;
   Register: { isSkippable?: boolean } | undefined;

@@ -112,9 +112,15 @@ export interface MealSlot {
 
 // PRD §11.2 — only meaningful when type === "GOODS". No progress bar — `claimed` is a boolean,
 // there's no partial state (§11.3).
+export type GoodsDirection = "REQUEST" | "OFFER";
+
 export interface GoodsPayload {
   item: string;
   condition: string;
+  // Optional on read: needs written before offers existed carry neither key, and the server reads
+  // them as single-quantity requests rather than rewriting old rows.
+  direction?: GoodsDirection;
+  quantity?: number;
   claimed: boolean;
 }
 

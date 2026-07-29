@@ -117,9 +117,20 @@ export interface MealSlot {
 
 // PRD §11.2 — only meaningful when type === "GOODS". No progress bar — `claimed` is a boolean,
 // there's no partial state (§11.3).
+/**
+ * REQUEST — someone needs this item; a donor who has one claims it.
+ * OFFER   — someone is giving this item away; whoever wants it claims it.
+ *
+ * Optional on read: needs written before offers existed carry neither key, and the server
+ * defaults them to a single-quantity REQUEST rather than rewriting old rows.
+ */
+export type GoodsDirection = "REQUEST" | "OFFER";
+
 export interface GoodsPayload {
   item: string;
   condition: string;
+  direction?: GoodsDirection;
+  quantity?: number;
   claimed: boolean;
 }
 
@@ -308,6 +319,13 @@ export function fetchLocations() {
 // then recency.
 export function fetchNeeds(token: string) {
   return request<{ needs: Need[] }>("/api/needs", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+/** Live GOODS needs in one direction — the two halves of the Goods screen. */
+export function fetchGoods(token: string, direction: GoodsDirection) {
+  return request<{ needs: Need[] }>(`/api/needs?type=GOODS&direction=${direction}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
@@ -588,7 +606,15 @@ export function respondToBloodNeed(token: string, needId: string, units: number 
 // PRD §11.1 — creates a DRAFT GOODS need, then immediately submits it (mirrors postBloodNeed).
 export async function postGoodsNeed(
   token: string,
-  data: { title: string; description: string; item: string; condition: string; photos?: string[] }
+  data: {
+    title: string;
+    description: string;
+    item: string;
+    condition: string;
+    direction: GoodsDirection;
+    quantity: number;
+    photos?: string[];
+  }
 ) {
   const { need } = await request<{ need: Need }>("/api/needs", {
     method: "POST",
@@ -598,7 +624,12 @@ export async function postGoodsNeed(
       title: data.title,
       description: data.description,
       photos: data.photos,
-      payload: { item: data.item, condition: data.condition },
+      payload: {
+        item: data.item,
+        condition: data.condition,
+        direction: data.direction,
+        quantity: data.quantity,
+      },
     }),
   });
   return request<{ need: Need }>(`/api/needs/${need.id}/submit`, {

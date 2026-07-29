@@ -9,7 +9,7 @@ import { moneyPayloadInputSchema } from "../lib/moneyNeed";
 import { kitPayloadInputSchema, parseKitPayload } from "../lib/kitNeed";
 import { bloodPayloadInputSchema } from "../lib/bloodNeed";
 import { parseMealSlotPayload, dedupeDates } from "../lib/mealSlotNeed";
-import { goodsPayloadInputSchema, parseGoodsPayload } from "../lib/goodsNeed";
+import { goodsPayloadInputSchema, parseGoodsPayload, goodsDirectionOf, GoodsDirection } from "../lib/goodsNeed";
 import { expireIfPastDeadline, expireManyIfPastDeadline } from "../lib/needExpiry";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 import { notifyPosterOfContribution } from "../lib/contributionAlerts";
@@ -564,6 +564,9 @@ router.post("/:id/urgency", async (req, res) => {
 
 const listQuerySchema = z.object({
   type: z.nativeEnum(NeedType).optional(),
+  // GOODS only — splits the "things people need" feed from the "things people are giving away"
+  // feed. Ignored for every other type, which has no direction.
+  direction: z.nativeEnum(GoodsDirection).optional(),
 });
 
 // The public "browse live needs" feed (PRD §6.8): urgency (Emergency pinned) then recency.
@@ -585,18 +588,29 @@ router.get("/", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid query" });
   }
-  const payload = await cached(CacheKey.needsFeed(parsed.data.type), CacheTtl.needsFeed, async () => {
+  const { type, direction } = parsed.data;
+  const payload = await cached(CacheKey.needsFeed(type, direction), CacheTtl.needsFeed, async () => {
     const candidates = await prisma.need.findMany({
       where: {
         status: { in: [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED] },
-        ...(parsed.data.type ? { type: parsed.data.type } : {}),
+        // GOODS is excluded from the unfiltered feed on purpose: item listings have their own
+        // destination (the Goods screen, which asks for them by type), and mixing "someone needs
+        // blood" with "someone is giving away a TV" in one stream flattens the urgency the feed
+        // exists to convey. Asking for `?type=GOODS` still returns them.
+        ...(type ? { type } : { type: { not: NeedType.GOODS } }),
       },
       orderBy: { createdAt: "desc" },
       include: { postedBy: { select: { id: true, name: true, role: true } } },
     });
     // Lazily expire past-deadline needs (§7.4) before deciding what's actually still live.
     const checked = await expireManyIfPastDeadline(candidates);
-    const needs = checked.filter((n) => n.status === NeedStatus.LIVE || n.status === NeedStatus.PARTIALLY_FULFILLED);
+    let needs = checked.filter((n) => n.status === NeedStatus.LIVE || n.status === NeedStatus.PARTIALLY_FULFILLED);
+    // Filtered here rather than in the query: `direction` lives inside the JSON payload and rows
+    // written before offers existed have no such key at all, so a `path`-based WHERE would drop
+    // every legacy request instead of matching it. The candidate set is already in memory.
+    if (direction) {
+      needs = needs.filter((n) => n.type === NeedType.GOODS && goodsDirectionOf(n.payload) === direction);
+    }
     needs.sort((a, b) => URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency]);
     return { needs };
   });
