@@ -24,6 +24,23 @@ async function requireNgo(userId: string) {
   return !!me && me.role === Role.INSTITUTION && me.institutionType === InstitutionType.NGO;
 }
 
+/**
+ * Who may publish a team.
+ *
+ * `TeamMember` is keyed on a plain institution id, not on NGOs specifically, so an orphanage
+ * listing its staff is the same table and the same routes. Volunteer *applications* stay
+ * NGO-only — those are a different flow with a different guard.
+ */
+const TEAM_OWNER_TYPES: InstitutionType[] = [InstitutionType.NGO, InstitutionType.ORPHANAGE];
+
+async function requireTeamOwner(userId: string) {
+  const me = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, institutionType: true },
+  });
+  return !!me && me.role === Role.INSTITUTION && !!me.institutionType && TEAM_OWNER_TYPES.includes(me.institutionType);
+}
+
 // --- Team ----------------------------------------------------------------------------------
 
 const teamMemberSchema = z.object({
@@ -42,8 +59,8 @@ router.get("/team", async (req, res) => {
 });
 
 router.post("/team", async (req, res) => {
-  if (!(await requireNgo(req.user!.sub))) {
-    return res.status(403).json({ error: "Only an NGO account can manage a team" });
+  if (!(await requireTeamOwner(req.user!.sub))) {
+    return res.status(403).json({ error: "Only an NGO or orphanage account can manage a team" });
   }
   const parsed = teamMemberSchema.safeParse(req.body);
   if (!parsed.success) {

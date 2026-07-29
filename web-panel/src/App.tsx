@@ -8,6 +8,7 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { OrphanageProfilePage } from "./pages/OrphanageProfilePage";
 import { BookingsPage } from "./pages/BookingsPage";
 import { VolunteersPage } from "./pages/VolunteersPage";
+import { StaffPage } from "./pages/StaffPage";
 import { NeedDetailRouteWrapper } from "./pages/NeedDetailRouteWrapper";
 import { PostNeedPage } from "./pages/PostNeedPage";
 import { CreateMoneyNeedPage } from "./pages/CreateMoneyNeedPage";
@@ -69,6 +70,7 @@ function Root() {
         <Route path="/home-profile" element={<OrphanageProfilePage />} />
         <Route path="/bookings" element={<BookingsPage />} />
         <Route path="/volunteers" element={<VolunteersPage />} />
+        <Route path="/staff" element={<StaffPage />} />
         <Route path="/post" element={<PostNeedPage />} />
         <Route path="/post/money" element={<CreateMoneyWrapper />} />
         <Route path="/post/kit" element={<CreateKitWrapper />} />

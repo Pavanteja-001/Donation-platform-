@@ -58,8 +58,12 @@ function CreateNeedButton() {
 }
 
 /**
- * One tab. The active state animates a tinted pill in behind the icon and reveals the label,
- * so the current tab is legible at a glance without every tab shouting its name.
+ * One tab: icon above its name.
+ *
+ * The label used to slide in *beside* the icon on the active tab only, which meant the row's
+ * widths shifted every time you switched tabs and four of the five destinations were unlabelled
+ * glyphs. Stacking the name under the icon and showing it on every tab keeps the geometry fixed —
+ * focus is now carried by colour and the tinted pill, not by layout.
  */
 function TabItem({
   isFocused,
@@ -79,13 +83,6 @@ function TabItem({
 
   const pillStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(progress.value, [0, 1], ["rgba(15,118,110,0)", theme.color.primarySoft]),
-    paddingHorizontal: 12 + progress.value * 6,
-  }));
-
-  const labelStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    width: progress.value === 0 ? 0 : undefined,
-    marginLeft: progress.value * 6,
   }));
 
   const iconStyle = useAnimatedStyle(() => ({
@@ -102,13 +99,11 @@ function TabItem({
     >
       <Animated.View style={[styles.tabPill, pillStyle]}>
         <Animated.View style={iconStyle}>
-          <Feather name={icon} size={20} color={isFocused ? theme.color.primary : theme.color.textTertiary} />
+          <Feather name={icon} size={19} color={isFocused ? theme.color.primary : theme.color.textTertiary} />
         </Animated.View>
-        <Animated.View style={labelStyle}>
-          <Text style={styles.tabLabel} numberOfLines={1}>
-            {label}
-          </Text>
-        </Animated.View>
+        <Text style={[styles.tabLabel, !isFocused && styles.tabLabelIdle]} numberOfLines={1}>
+          {label}
+        </Text>
       </Animated.View>
     </PressableScale>
   );
@@ -134,7 +129,8 @@ function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
-          const label = options.title ?? route.name;
+          const label =
+            typeof options.tabBarLabel === "string" ? options.tabBarLabel : options.title ?? route.name;
 
           const onPress = () => {
             const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
@@ -229,12 +225,12 @@ export function TabNavigator() {
       <Tab.Screen
         name="Map"
         component={MapTabScreen}
-        options={{ title: "Map View", headerShown: false }}
+        options={{ title: "Map View", tabBarLabel: "Map", headerShown: false }}
       />
       <Tab.Screen
         name="MyNeeds"
         component={MyNeedsTabScreen}
-        options={{ title: "My needs", headerRight: () => <CreateNeedButton /> }}
+        options={{ title: "My needs", tabBarLabel: "My needs", headerRight: () => <CreateNeedButton /> }}
       />
       <Tab.Screen name="Activity" component={ActivityTabScreen} options={{ title: "Activity", headerTitle: "My contributions" }} />
       <Tab.Screen
@@ -309,11 +305,15 @@ const styles = StyleSheet.create({
   tabBarEdge: { position: "absolute", top: 0, left: 0, right: 0 },
   tabItemWrap: { flex: 1, alignItems: "center" },
   tabPill: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    height: 42,
-    borderRadius: theme.radii.pill,
+    gap: 2,
+    alignSelf: "stretch",
+    paddingVertical: 6,
+    borderRadius: theme.radii.lg,
   },
-  tabLabel: { ...theme.typography.caption, fontWeight: "800", color: theme.color.primary },
+  // 10pt is small, but these are five short, familiar words under an icon that already carries the
+  // meaning — the label is confirmation, not the primary signal.
+  tabLabel: { fontSize: 10, lineHeight: 13, fontWeight: "800", color: theme.color.primary },
+  tabLabelIdle: { color: theme.color.textTertiary, fontWeight: "700" },
 });

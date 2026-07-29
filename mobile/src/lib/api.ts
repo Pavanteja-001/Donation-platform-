@@ -901,6 +901,10 @@ export interface Orphanage {
   lunchCost: number | null;
   dinnerCost: number | null;
   acceptingBookings: boolean;
+  /** Listing only — how many staff are published, so the detail screen knows whether to shimmer. */
+  teamCount?: number;
+  /** Detail only. Absent on the listing response, which is exactly the "still loading" signal. */
+  teamMembers?: TeamMember[];
 }
 
 /** Only ever `{date, mealType}` — the API deliberately exposes nothing about who booked it. */

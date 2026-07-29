@@ -199,17 +199,17 @@ export function FeedHero({ needs }: { needs: Need[] }) {
           card moves — a flat translucent rectangle can't do that. */}
       <Animated.View entering={FadeInDown.delay(120).duration(420)} style={styles.statsStrip}>
         <GlassStat
-          illustration={<RupeeStackIllustration size={34} />}
+          illustration={<RupeeStackIllustration size={26} />}
           value={<AnimatedCounter value={stats.raised} prefix="₹" style={styles.statValue} />}
           label="raised"
         />
         <GlassStat
-          illustration={<DonorsIllustration size={34} />}
+          illustration={<DonorsIllustration size={26} />}
           value={<AnimatedCounter value={stats.live} style={styles.statValue} />}
           label="live needs"
         />
         <GlassStat
-          illustration={<UrgentPulseIllustration size={34} />}
+          illustration={<UrgentPulseIllustration size={26} />}
           value={<AnimatedCounter value={stats.urgent} style={styles.statValue} />}
           label="need help now"
           pulse={stats.urgent > 0}
@@ -222,7 +222,7 @@ export function FeedHero({ needs }: { needs: Need[] }) {
 const styles = StyleSheet.create({
   hero: {
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: theme.spacing.lg,
     borderBottomLeftRadius: theme.radii.xxxl,
     borderBottomRightRadius: theme.radii.xxxl,
     overflow: "hidden",
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "stretch",
     gap: theme.spacing.sm,
-    marginTop: theme.spacing.xl,
+    marginTop: theme.spacing.lg,
   },
   glassCard: {
     flex: 1,
@@ -291,8 +291,8 @@ const styles = StyleSheet.create({
   },
   glassInner: {
     alignItems: "center",
-    gap: 2,
-    paddingVertical: theme.spacing.md,
+    gap: 1,
+    paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.xs,
   },
   urgentGlow: {
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.28)",
   },
   stat: { flex: 1, alignItems: "center", gap: 2 },
-  statValue: { fontSize: 19, lineHeight: 24, fontWeight: "800", color: "#FFFFFF", letterSpacing: -0.4, textAlign: "center" },
+  statValue: { fontSize: 18, lineHeight: 22, fontWeight: "800", color: "#FFFFFF", letterSpacing: -0.4, textAlign: "center" },
   statLabel: { ...theme.typography.caption, color: "rgba(255,255,255,0.72)", fontSize: 11 },
   statDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.18)" },
 });

@@ -72,18 +72,33 @@ router.get("/", async (req, res) => {
           }
         : {}),
     },
-    select: PUBLIC_FIELDS,
+    select: {
+      ...PUBLIC_FIELDS,
+      // Count only on the listing — the members themselves are a detail-screen concern, and
+      // fetching every home's staff to render a directory row would be wasteful.
+      _count: { select: { teamMembers: true } },
+    },
     orderBy: { name: "asc" },
     take: 100,
   });
 
-  res.json({ orphanages });
+  res.json({
+    orphanages: orphanages.map(({ _count, ...home }) => ({ ...home, teamCount: _count.teamMembers })),
+  });
 });
 
 router.get("/:id", async (req, res) => {
   const orphanage = await prisma.user.findFirst({
     where: { id: req.params.id, ...LISTED_WHERE },
-    select: PUBLIC_FIELDS,
+    select: {
+      ...PUBLIC_FIELDS,
+      // The people who run the home. Same shape and same ordering as an NGO's team — a donor
+      // sponsoring a meal wants to see who they're dealing with just as much as a volunteer does.
+      teamMembers: {
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        select: { id: true, name: true, role: true, photoUrl: true },
+      },
+    },
   });
   if (!orphanage) return res.status(404).json({ error: "Home not found" });
   res.json({ orphanage });

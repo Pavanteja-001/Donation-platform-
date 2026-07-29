@@ -75,6 +75,12 @@ export function DashboardLayout() {
               >
                 Meal Sponsorships
               </NavLink>
+              <NavLink
+                to="/staff"
+                className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+              >
+                Staff
+              </NavLink>
             </>
           )}
 

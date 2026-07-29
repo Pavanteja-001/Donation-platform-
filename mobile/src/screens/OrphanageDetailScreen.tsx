@@ -10,7 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
 import { Gradient } from "../components/Gradient";
 import { IconPlate } from "../components/Depth";
-import { Button, ErrorState, PressableScale, Skeleton } from "../components/ui";
+import { Avatar, Button, ErrorState, PressableScale, Skeleton } from "../components/ui";
 
 const MEAL_LABEL: Record<MealType, string> = { BREAKFAST: "Breakfast", LUNCH: "Lunch", DINNER: "Dinner" };
 
@@ -96,6 +96,13 @@ export function OrphanageDetailScreen({
   const offered = meals.filter((m) => m.cost != null);
   const canBook = home.acceptingBookings && offered.length > 0;
 
+  // Same contract as the NGO screen: the listing payload carries a count but not the members, so
+  // an undefined `teamMembers` alongside a non-zero count is precisely "the detail fetch hasn't
+  // landed yet". A home with no published staff never shimmers.
+  const staff = home.teamMembers;
+  const staffCount = home.teamCount ?? 0;
+  const isStaffLoading = staff === undefined && staffCount > 0;
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -146,18 +153,52 @@ export function OrphanageDetailScreen({
             </View>
           )}
 
-          {/* The home's own photos of its work. Horizontal so a long gallery doesn't push the
-              booking CTA off the screen, and tappable for a full-screen look. */}
+          {/* Who runs the home. Someone about to sponsor a meal is trusting these people with it,
+              so they belong on the page above the photo gallery rather than below it. */}
+          {isStaffLoading ? (
+            <View style={styles.staffSection}>
+              <Text style={styles.sectionTitle}>Staff</Text>
+              <View style={styles.staffRow}>
+                {Array.from({ length: Math.min(staffCount, 4) }, (_, i) => (
+                  <View key={i} style={styles.staffCard}>
+                    <Skeleton width={56} height={56} radius={28} />
+                    <Skeleton width={58} height={11} />
+                    <Skeleton width={42} height={9} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : staff && staff.length > 0 ? (
+            <View style={styles.staffSection}>
+              <Text style={styles.sectionTitle}>Staff</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.staffRow}>
+                {staff.map((member) => (
+                  <View key={member.id} style={styles.staffCard}>
+                    <Avatar name={member.name} photoUrl={member.photoUrl} size={56} />
+                    <Text style={styles.staffName} numberOfLines={1}>
+                      {member.name}
+                    </Text>
+                    {member.role ? (
+                      <Text style={styles.staffRole} numberOfLines={1}>
+                        {member.role}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* Two per row rather than one. A full-width 4:3 frame owned most of the viewport, so the
+          section read as the whole page — halving the width quarters the area each photo takes and puts
+          four on screen instead of one. Still a plain vertical flow; `flexWrap` makes the columns, so
+          there is no nested scroll view. */}
           {home.galleryPhotos.length > 0 && (
             <View style={styles.gallerySection}>
               <Text style={styles.sectionTitle}>Their work</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.galleryRow}
-              >
+              <View style={styles.galleryGrid}>
                 {home.galleryPhotos.map((url, i) => (
-                  <PressableScale key={url} onPress={() => setViewerIndex(i)} scaleTo={0.97} accessibilityLabel={`Photo ${i + 1}`}>
+                  <PressableScale key={url} onPress={() => setViewerIndex(i)} scaleTo={0.98} accessibilityLabel={`Photo ${i + 1}`} style={styles.galleryTile}>
                     <Image
                       source={{ uri: url }}
                       style={styles.galleryImage}
@@ -167,7 +208,7 @@ export function OrphanageDetailScreen({
                     />
                   </PressableScale>
                 ))}
-              </ScrollView>
+              </View>
             </View>
           )}
 
@@ -277,11 +318,18 @@ const styles = StyleSheet.create({
   sectionTitle: { ...theme.typography.h3, color: theme.color.textPrimary, marginBottom: 2 },
   mealRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 
+  staffSection: { marginTop: theme.spacing.xl, gap: theme.spacing.sm },
+  staffRow: { flexDirection: "row", gap: theme.spacing.md, paddingRight: theme.spacing.lg },
+  staffCard: { alignItems: "center", width: 84, gap: 5 },
+  staffName: { ...theme.typography.caption, fontWeight: "700", color: theme.color.textPrimary, textAlign: "center" },
+  staffRole: { ...theme.typography.caption, color: theme.color.textTertiary, fontSize: 11, textAlign: "center" },
+
   gallerySection: { marginTop: theme.spacing.xl, gap: theme.spacing.sm },
-  galleryRow: { gap: theme.spacing.sm, paddingRight: theme.spacing.lg },
+  galleryGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  galleryTile: { width: "48.5%" },
   galleryImage: {
-    width: 150,
-    height: 110,
+    width: "100%",
+    aspectRatio: 1,
     borderRadius: theme.radii.lg,
     backgroundColor: theme.color.surfaceMuted,
   },

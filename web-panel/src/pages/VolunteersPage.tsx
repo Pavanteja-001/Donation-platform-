@@ -1,17 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
-  addTeamMember,
   approveVolunteer,
-  deleteTeamMember,
-  fetchTeam,
   fetchVolunteerApplications,
   rejectVolunteer,
-  uploadPhotos,
-  type TeamMember,
   type VolunteerApplication,
   type VolunteerStatus,
 } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { TeamManager } from "../components/TeamManager";
 import { EmptyState, ErrorState } from "../components/ui";
 import { PageSkeleton } from "../components/SkeletonLoader";
 
@@ -21,24 +17,16 @@ const STATUS_ORDER: VolunteerStatus[] = ["PENDING", "APPROVED", "REJECTED"];
 export function VolunteersPage() {
   const { token } = useAuth();
   const [applications, setApplications] = useState<VolunteerApplication[] | null>(null);
-  const [team, setTeam] = useState<TeamMember[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const [memberName, setMemberName] = useState("");
-  const [memberRole, setMemberRole] = useState("");
-  const [memberPhoto, setMemberPhoto] = useState<File[]>([]);
-  const [isAdding, setIsAdding] = useState(false);
-
+  // The team list owns its own fetching inside TeamManager.
   function load() {
     if (!token) return;
     setError(null);
     fetchVolunteerApplications(token)
       .then(({ applications }) => setApplications(applications))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load applications"));
-    fetchTeam(token)
-      .then(({ team }) => setTeam(team))
-      .catch(() => setTeam([]));
   }
 
   useEffect(load, [token]);
@@ -62,35 +50,6 @@ export function VolunteersPage() {
     run(a.id, () => rejectVolunteer(token!, a.id, reason));
   }
 
-  async function handleAddMember(e: FormEvent) {
-    e.preventDefault();
-    if (!token || !memberName.trim()) return;
-    setIsAdding(true);
-    setError(null);
-    try {
-      let photoUrl: string | undefined;
-      if (memberPhoto.length > 0) {
-        const [uploaded] = await uploadPhotos(token, memberPhoto.slice(0, 1), "profile-photos");
-        photoUrl = uploaded;
-      }
-      await addTeamMember(token, {
-        name: memberName.trim(),
-        role: memberRole.trim() || undefined,
-        photoUrl,
-        // Appended to the end; ordering is by position then creation date.
-        position: team?.length ?? 0,
-      });
-      setMemberName("");
-      setMemberRole("");
-      setMemberPhoto([]);
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't add that team member");
-    } finally {
-      setIsAdding(false);
-    }
-  }
-
   const sorted = applications
     ? [...applications].sort(
         (a, b) =>
@@ -112,93 +71,10 @@ export function VolunteersPage() {
 
       {error && <ErrorState message={error} onRetry={load} />}
 
-      {/* --- Team ---------------------------------------------------------------------- */}
-      <h3 style={{ marginTop: 24, fontSize: 15 }}>Your team ({team?.length ?? 0})</h3>
-      <p className="hint" style={{ marginTop: 0 }}>
-        People donors will see on your page. These are listing entries, not platform accounts —
-        team members don't need to sign up.
-      </p>
-
-      {team && team.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          {team.map((m) => (
-            <div key={m.id} className="card" style={{ padding: 12, width: 180, position: "relative" }}>
-              {m.photoUrl ? (
-                <img
-                  src={m.photoUrl}
-                  alt=""
-                  style={{ width: 48, height: 48, borderRadius: 24, objectFit: "cover", marginBottom: 8 }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    marginBottom: 8,
-                    background: "var(--color-primary-light)",
-                    color: "var(--color-primary)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 800,
-                  }}
-                >
-                  {m.name.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <strong style={{ display: "block", fontSize: 14 }}>{m.name}</strong>
-              <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{m.role ?? "Team member"}</span>
-              <button
-                type="button"
-                aria-label={`Remove ${m.name}`}
-                onClick={() => run(m.id, () => deleteTeamMember(token!, m.id))}
-                disabled={busyId === m.id}
-                style={{
-                  position: "absolute",
-                  top: -8,
-                  right: -8,
-                  width: 24,
-                  height: 24,
-                  borderRadius: 12,
-                  border: "none",
-                  cursor: "pointer",
-                  background: "var(--color-danger)",
-                  color: "#fff",
-                  fontWeight: 800,
-                  lineHeight: 1,
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <form onSubmit={handleAddMember} className="card" style={{ padding: 16, marginBottom: 32 }}>
-        <div className="detail-grid">
-          <label>
-            Name
-            <input type="text" value={memberName} onChange={(e) => setMemberName(e.target.value)} required />
-          </label>
-          <label>
-            Role
-            <input type="text" placeholder="Founder, Programme Lead…" value={memberRole} onChange={(e) => setMemberRole(e.target.value)} />
-          </label>
-          <label>
-            Photo
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setMemberPhoto(Array.from(e.target.files ?? []))}
-            />
-          </label>
-        </div>
-        <button type="submit" disabled={isAdding || !memberName.trim()} style={{ marginTop: 16 }}>
-          {isAdding ? "Adding…" : "+ Add team member"}
-        </button>
-      </form>
+      <TeamManager
+        heading="Your team"
+        hint="People donors will see on your page. These are listing entries, not platform accounts — team members don't need to sign up."
+      />
 
       {/* --- Applications -------------------------------------------------------------- */}
       <h3 style={{ fontSize: 15 }}>

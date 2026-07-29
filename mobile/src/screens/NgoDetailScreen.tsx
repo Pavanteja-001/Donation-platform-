@@ -214,13 +214,17 @@ export function NgoDetailScreen({ ngoId, initial }: { ngoId: string; initial?: N
           {ngo.galleryPhotos.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Their work</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryRow}>
+              {/* Two per row rather than one. A full-width 4:3 frame owned most of the viewport, so the
+              section read as the whole page — halving the width quarters the area each photo takes and puts
+              four on screen instead of one. Still a plain vertical flow; `flexWrap` makes the columns, so
+              there is no nested scroll view. */}
+              <View style={styles.galleryGrid}>
                 {ngo.galleryPhotos.map((url, i) => (
-                  <PressableScale key={url} onPress={() => setViewerIndex(i)} scaleTo={0.97} accessibilityLabel={`Photo ${i + 1}`}>
+                  <PressableScale key={url} onPress={() => setViewerIndex(i)} scaleTo={0.98} accessibilityLabel={`Photo ${i + 1}`} style={styles.galleryTile}>
                     <Image source={{ uri: url }} style={styles.galleryImage} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                   </PressableScale>
                 ))}
-              </ScrollView>
+              </View>
             </View>
           )}
         </Animated.View>
@@ -317,8 +321,9 @@ const styles = StyleSheet.create({
   teamName: { ...theme.typography.caption, color: theme.color.textPrimary, fontWeight: "700", textAlign: "center" },
   teamRole: { ...theme.typography.caption, color: theme.color.textTertiary, fontSize: 11, textAlign: "center" },
 
-  galleryRow: { gap: theme.spacing.sm, paddingRight: theme.spacing.lg },
-  galleryImage: { width: 150, height: 110, borderRadius: theme.radii.lg, backgroundColor: theme.color.surfaceMuted },
+  galleryGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  galleryTile: { width: "48.5%" },
+  galleryImage: { width: "100%", aspectRatio: 1, borderRadius: theme.radii.lg, backgroundColor: theme.color.surfaceMuted },
 
   viewer: { flex: 1, backgroundColor: "rgba(10,6,7,0.96)" },
   viewerClose: {

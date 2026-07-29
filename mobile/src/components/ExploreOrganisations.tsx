@@ -38,7 +38,7 @@ function ExploreCard({
           style={StyleSheet.absoluteFill as never}
           pointerEvents="none"
         />
-        <IconPlate icon={icon} size="md" tone={tone} />
+        <IconPlate icon={icon} size="sm" tone={tone} />
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
@@ -95,19 +95,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
   },
   // The wrapper takes its third of the width; the card must NOT also flex, or it collapses to its
   // own padding inside a wrapper that has no resolved height of its own.
   cardWrap: { flex: 1 },
   card: {
     alignItems: "center",
-    gap: theme.spacing.sm,
+    gap: 6,
     backgroundColor: theme.color.surface,
     borderRadius: theme.radii.xl,
     borderWidth: 1,
     borderColor: theme.color.borderSubtle,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.xs,
     overflow: "hidden",
   },
