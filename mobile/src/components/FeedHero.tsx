@@ -201,7 +201,11 @@ export function FeedHero({ needs }: { needs: Need[] }) {
       {/* Three separate glass cards rather than one dark strip with dividers. Each one is a real
           BlurView over the hero gradient, so the wash actually shows through and shifts as the
           card moves — a flat translucent rectangle can't do that. */}
-      <Animated.View entering={FadeInDown.delay(120).duration(420)} style={styles.statsStrip}>
+      {/* No entering animation. `FeedHero` lives inside the feed's list header, which re-creates
+          on every render — a FadeInDown replays each time, and mid-flight the strip is translated
+          down and out of the hero, which reads as a gap above it and a card hanging off the
+          bottom edge. */}
+      <View style={styles.statsStrip}>
         <GlassStat
           illustration={<RupeeStackIllustration size={20} />}
           value={<AnimatedCounter value={stats.raised} prefix="₹" style={styles.statValue} />}
@@ -218,7 +222,7 @@ export function FeedHero({ needs }: { needs: Need[] }) {
           label="need help now"
           pulse={stats.urgent > 0}
         />
-      </Animated.View>
+      </View>
     </Gradient>
   );
 }

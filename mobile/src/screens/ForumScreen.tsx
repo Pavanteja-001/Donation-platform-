@@ -9,6 +9,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { fetchForumQuestions, askForumQuestion, type ForumQuestion } from "../lib/api";
 import { theme } from "../lib/theme";
+import { useBottomInset } from "../lib/safeArea";
 import { timeAgo } from "../lib/needMeta";
 import { Avatar, Button, EmptyState, ErrorState, Input, Skeleton, PressableScale } from "../components/ui";
 import { Gradient } from "../components/Gradient";
@@ -85,6 +86,8 @@ export function ForumScreen({ onSelectQuestion }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Absolutely positioned, so nothing else pushes it clear of Android's gesture bar.
+  const fabBottom = useBottomInset(theme.spacing.lg);
   const [showAsk, setShowAsk] = useState(false);
   const [askTitle, setAskTitle] = useState("");
   const [askBody, setAskBody] = useState("");
@@ -189,7 +192,7 @@ export function ForumScreen({ onSelectQuestion }: Props) {
       {/* Floating compose button — the primary action stays reachable no matter how far down the
           list you've scrolled, which a list-header button doesn't. */}
       {questions.length > 0 && (
-        <Animated.View entering={FadeInDown.duration(360)} style={styles.fabWrap}>
+        <Animated.View entering={FadeInDown.duration(360)} style={[styles.fabWrap, { bottom: fabBottom }]}>
           <PressableScale onPress={() => setShowAsk(true)} accessibilityLabel="Ask a question" style={styles.fab}>
             <Gradient
               colors={["#D33B3B", "#B91C1C", "#8E1414"]}
@@ -305,7 +308,7 @@ const styles = StyleSheet.create({
   answerChipText: { ...theme.typography.caption, fontWeight: "800", color: theme.color.textTertiary },
   answerChipTextActive: { color: theme.color.primary },
 
-  fabWrap: { position: "absolute", right: theme.spacing.lg, bottom: theme.spacing.xl },
+  fabWrap: { position: "absolute", right: theme.spacing.lg },
   fab: {
     overflow: "hidden",
     flexDirection: "row",

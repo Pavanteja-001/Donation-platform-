@@ -8,14 +8,56 @@ import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
 import { NotificationType } from "@prisma/client";
 import { notify } from "../lib/notifications";
+import { computeTrustTier } from "../lib/trustTier";
 
 const router = Router();
 router.use(requireAuth);
 
+/**
+ * What the app needs to show about whoever wrote a post.
+ *
+ * The confirmed-contribution count comes along so the tier can be derived. A forum answer is
+ * advice from a stranger, and "Gold donor, 18 contributions" is the only signal a reader has for
+ * whether to weigh it — the same trust tier the profile screen shows, computed the same way
+ * (PRD §14.1: derived, never stored).
+ */
+const authorSelect = {
+  select: {
+    id: true,
+    name: true,
+    profilePhotoUrl: true,
+    _count: { select: { contributionsMade: { where: { status: "CONFIRMED" as const } } } },
+  },
+};
+
+/** Swaps the raw count for the tier, so the threshold rule never leaves the server. */
+type RawAuthor = { _count: { contributionsMade: number } };
+
+function withTier<T extends RawAuthor>({ _count, ...rest }: T) {
+  return {
+    ...rest,
+    trustTier: computeTrustTier(_count.contributionsMade),
+    confirmedContributionsCount: _count.contributionsMade,
+  };
+}
+
+/** Shapes one question — and its answers, when they were included — for the client. */
+function presentQuestion<T extends { author: RawAuthor; answers?: { author: RawAuthor }[] }>({
+  author,
+  answers,
+  ...rest
+}: T) {
+  return {
+    ...rest,
+    author: withTier(author),
+    ...(answers ? { answers: answers.map((a) => ({ ...a, author: withTier(a.author) })) } : {}),
+  };
+}
+
 const questionInclude = {
-  author: { select: { id: true, name: true, profilePhotoUrl: true } },
+  author: authorSelect,
   answers: {
-    include: { author: { select: { id: true, name: true, profilePhotoUrl: true } } },
+    include: { author: authorSelect },
     orderBy: { createdAt: "asc" as const },
   },
   _count: { select: { answers: true } },
@@ -30,7 +72,7 @@ router.get("/", async (req, res) => {
     take: limit + 1,
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
     include: {
-      author: { select: { id: true, name: true, profilePhotoUrl: true } },
+      author: authorSelect,
       _count: { select: { answers: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -40,7 +82,7 @@ router.get("/", async (req, res) => {
   const page = hasMore ? questions.slice(0, limit) : questions;
 
   res.json({
-    questions: page,
+    questions: page.map(presentQuestion),
     nextCursor: hasMore ? page[page.length - 1].id : null,
   });
 });
@@ -52,7 +94,7 @@ router.get("/:id", async (req, res) => {
     include: questionInclude,
   });
   if (!question) return res.status(404).json({ error: "Question not found" });
-  res.json({ question });
+  res.json({ question: presentQuestion(question) });
 });
 
 const askSchema = z.object({
@@ -69,7 +111,7 @@ router.post("/", async (req, res) => {
     data: { title: parsed.data.title, body: parsed.data.body, authorId: req.user!.sub },
     include: questionInclude,
   });
-  res.status(201).json({ question });
+  res.status(201).json({ question: presentQuestion(question) });
 });
 
 const answerSchema = z.object({
@@ -86,7 +128,7 @@ router.post("/:id/answers", async (req, res) => {
 
   const answer = await prisma.forumAnswer.create({
     data: { body: parsed.data.body, questionId: req.params.id, authorId: req.user!.sub },
-    include: { author: { select: { id: true, name: true, profilePhotoUrl: true } } },
+    include: { author: authorSelect },
   });
 
   // PRD §17 — send push notification to question author if someone else answered
@@ -103,7 +145,7 @@ router.post("/:id/answers", async (req, res) => {
     });
   }
 
-  res.status(201).json({ answer });
+  res.status(201).json({ answer: { ...answer, author: withTier(answer.author) } });
 });
 
 // DELETE /api/forum/:id — delete a question (admin/staff only, or original author)

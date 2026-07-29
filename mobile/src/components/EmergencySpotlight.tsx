@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import type { Need } from "../lib/api";
+import { emergencyCountMemo } from "../lib/listCache";
 import { theme } from "../lib/theme";
 import {
   TYPE_META,
@@ -12,9 +12,10 @@ import {
   num,
 } from "../lib/needMeta";
 import { Gradient } from "./Gradient";
+import { VitalsTrace } from "./VitalsTrace";
 import { EmergencyPulse } from "./EmergencyPulse";
 import { ProgressBar } from "./ProgressBar";
-import { PressableScale } from "./ui";
+import { PressableScale, Skeleton } from "./ui";
 
 /**
  * The pinned Emergency rail at the top of the feed.
@@ -29,14 +30,21 @@ import { PressableScale } from "./ui";
 export function EmergencySpotlight({
   needs,
   onSelectNeed,
+  isLoading = false,
 }: {
   needs: Need[];
   onSelectNeed: (need: Need) => void;
+  /** Feed is fetching. Shimmers the rail instead of leaving a gap where it will appear. */
+  isLoading?: boolean;
 }) {
   const { width } = useWindowDimensions();
   const emergencies = needs.filter((n) => n.urgency === "EMERGENCY");
 
-  if (emergencies.length === 0) return null;
+  // Remembered for the next load, so a refresh shimmers the right number of tiles.
+  if (!isLoading) emergencyCountMemo.count = emergencies.length;
+
+  const placeholders = isLoading ? Math.min(emergencyCountMemo.count, 3) : 0;
+  if (emergencies.length === 0 && placeholders === 0) return null;
 
   // Portrait tiles, story-rail proportions. A 320dp-wide card showed one emergency at a time and
   // ate half the feed to do it; at this size three fit across with the fourth peeking, so the rail
@@ -44,15 +52,19 @@ export function EmergencySpotlight({
   const cardWidth = Math.min(Math.max((width - theme.spacing.lg * 2 - theme.spacing.sm * 2) / 2.6, 132), 158);
 
   return (
-    <Animated.View entering={FadeIn.duration(theme.motion.normal)} style={styles.wrap}>
+    <View style={styles.wrap}>
       <View style={styles.headerRow}>
         <EmergencyPulse radius={theme.radii.pill}>
           <View style={styles.liveDot} />
         </EmergencyPulse>
         <Text style={styles.headerText}>Emergency now</Text>
-        <Text style={styles.headerCount}>
-          {emergencies.length} {emergencies.length === 1 ? "case" : "cases"}
-        </Text>
+        {placeholders > 0 ? (
+          <Skeleton width={48} height={12} />
+        ) : (
+          <Text style={styles.headerCount}>
+            {emergencies.length} {emergencies.length === 1 ? "case" : "cases"}
+          </Text>
+        )}
       </View>
 
       <ScrollView
@@ -63,11 +75,15 @@ export function EmergencySpotlight({
         snapToInterval={cardWidth + theme.spacing.sm}
         snapToAlignment="start"
       >
-        {emergencies.map((need) => (
-          <SpotlightCard key={need.id} need={need} width={cardWidth} onPress={() => onSelectNeed(need)} />
-        ))}
+        {placeholders > 0
+          ? Array.from({ length: placeholders }, (_, i) => (
+              <Skeleton key={i} width={cardWidth} height={cardWidth / 0.86} radius={theme.radii.xl} />
+            ))
+          : emergencies.map((need) => (
+              <SpotlightCard key={need.id} need={need} width={cardWidth} onPress={() => onSelectNeed(need)} />
+            ))}
       </ScrollView>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -76,6 +92,7 @@ function SpotlightCard({ need, width, onPress }: { need: Need; width: number; on
   const blood = need.type === "BLOOD" && isBloodPayload(need.payload) ? need.payload : null;
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
   const location = [need.area, need.city].filter(Boolean).join(", ");
+
 
   // The tile itself is the button — tapping anywhere opens the need, where the actual
   // respond/donate step sits behind its own confirmation. It must never be one tap from a feed.
@@ -87,6 +104,10 @@ function SpotlightCard({ need, width, onPress }: { need: Need; width: number; on
       accessibilityLabel={`Emergency: ${need.title}. ${need.type === "BLOOD" ? "Tap to donate" : "Tap to help"}`}
     >
       <Gradient colors={theme.gradient.brandDeep} style={[styles.card, { width }, theme.elevation.level3]}>
+        {/* Behind the content, inside the card. A hairline rather than a fill, so nothing it does
+            can come between a reader and "O- needed at KGH". */}
+        <VitalsTrace />
+
         <View>
           <View style={styles.cardTop}>
           <View style={styles.typeTag}>

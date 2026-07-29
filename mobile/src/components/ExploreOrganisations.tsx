@@ -1,6 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Feather } from "@expo/vector-icons";
 import { theme } from "../lib/theme";
 import { Gradient } from "./Gradient";
@@ -13,7 +12,6 @@ function ExploreCard({
   title,
   hint,
   tone,
-  delay,
   onPress,
 }: {
   icon: keyof typeof Feather.glyphMap;
@@ -21,11 +19,10 @@ function ExploreCard({
   /** Not drawn — spoken. Taking the caption off the card shouldn't cost a screen-reader user it. */
   hint: string;
   tone: "brand" | "blood";
-  delay: number;
   onPress: () => void;
 }) {
   return (
-    <Animated.View entering={FadeInDown.delay(delay).duration(360)} style={styles.cardWrap}>
+    <View style={styles.cardWrap}>
       <PressableScale
         onPress={onPress}
         scaleTo={0.96}
@@ -43,7 +40,7 @@ function ExploreCard({
           {title}
         </Text>
       </PressableScale>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -67,7 +64,6 @@ export function ExploreOrganisations() {
         title="Homes"
         hint="Sponsor a meal at an orphanage or old age home"
         tone="brand"
-        delay={40}
         onPress={() => navigation.navigate("Orphanages")}
       />
       <ExploreCard
@@ -75,7 +71,6 @@ export function ExploreOrganisations() {
         title="NGOs"
         hint="See their work and offer to volunteer"
         tone="blood"
-        delay={100}
         onPress={() => navigation.navigate("Ngos")}
       />
       <ExploreCard
@@ -83,7 +78,6 @@ export function ExploreOrganisations() {
         title="Goods"
         hint="Give away what you don't use, or ask for what you need"
         tone="brand"
-        delay={160}
         onPress={() => navigation.navigate("Goods")}
       />
     </View>

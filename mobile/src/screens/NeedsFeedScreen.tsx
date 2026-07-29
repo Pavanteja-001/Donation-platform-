@@ -32,6 +32,8 @@ const FILTERS: { id: FilterId; label: string; icon?: keyof typeof Feather.glyphM
 /** Skeleton that mirrors the real card's geometry, so content arriving doesn't shift the layout. */
 function FeedSkeleton() {
   return (
+    // No top padding: this renders directly under the filter chip row, which already ends with
+    // its own vertical padding. Both were being applied, leaving a gap twice the intended size.
     <View style={styles.skeletonWrap}>
       {[0, 1, 2, 3].map((i) => (
         <View key={i} style={[styles.skeletonCard, theme.elevation.level1]}>
@@ -141,6 +143,22 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
     [onSelectNeed]
   );
 
+  // Memoised: handing FlashList a freshly-created element every render is what let the header's
+  // children re-run their mount work (and, before they were removed, replay their entrances).
+  const listHeader = useMemo(
+    () => (
+      <FeedListHeader
+        needs={needs ?? []}
+        counts={counts}
+        filter={filter}
+        onFilterChange={setFilter}
+        onSelectNeed={onSelectNeed}
+        isLoading={needs === null}
+      />
+    ),
+    [needs, counts, filter, onSelectNeed]
+  );
+
   if (error) {
     return (
       <View style={[styles.screen, styles.centered]}>
@@ -149,65 +167,51 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
     );
   }
 
-  // The hero renders during loading too, with zeroed counters — so the header doesn't pop into
-  // existence and shove the first card down once the fetch lands.
-  if (!needs) {
-    return (
-      <View style={styles.screen}>
-        <FeedHero needs={[]} />
-        <FeedSkeleton />
-      </View>
-    );
-  }
+  const isLoading = needs === null;
 
   return (
     <View style={styles.screen}>
-      {needs.length === 0 ? (
-        <>
-          <FeedHero needs={[]} />
-          {/* Deliberately kept in the empty branch too. This is the one screen state where a donor
-              has nothing to act on, so the organisation directories are the most useful thing on
-              it — hiding them here would strand anyone who opens the app on a quiet day. */}
-          <ExploreOrganisations />
-          <View style={styles.centered}>
-            <EmptyState
-              icon="inbox"
-              title="No live needs right now"
-              subtitle="Verified needs will show up here as they go live."
+      <View style={styles.listWrap}>
+        {/* One tree for every state — loading, empty and populated.
+         *
+         * These used to be three separate returns. Even with identical furniture in each, React
+         * unmounted one tree and mounted another when the fetch landed, so the whole header was
+         * destroyed and rebuilt: the shimmer visibly broke and the hero and rail snapped back into
+         * place. Keeping the same FlashList mounted throughout means only the list body changes —
+         * skeletons give way to cards, and nothing above them moves. */}
+        <FlashList
+          data={visibleNeeds}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          // Hero + explore row + emergency rail + filters travel with the list. They used to be
+          // pinned above it, but a hero that never scrolls away would permanently eat a third of
+          // the screen — and the chips read as belonging to the header they sit under.
+          ListHeaderComponent={listHeader}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.color.primary}
+              colors={[theme.color.primary]}
             />
-          </View>
-        </>
-      ) : (
-        <View style={styles.listWrap}>
-          <FlashList
-            data={visibleNeeds}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            // Hero + emergency rail + filters travel with the list. They used to be pinned above
-            // it, but a hero that never scrolls away would permanently eat a third of the screen —
-            // and the chips read as belonging to the header they sit under.
-            ListHeaderComponent={
-              <FeedListHeader
-                needs={needs}
-                counts={counts}
-                filter={filter}
-                onFilterChange={setFilter}
-                onSelectNeed={onSelectNeed}
-              />
-            }
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={handleRefresh}
-                tintColor={theme.color.primary}
-                colors={[theme.color.primary]}
-              />
-            }
-            // An empty *filter* result stays inside the list, so the hero and the chips remain on
-            // screen — rendering it as a separate branch hid the chips and left no way back.
-            ListEmptyComponent={
+          }
+          // Every "nothing to show" case stays inside the list, so the hero and the chips remain
+          // on screen — rendering any of them as a separate branch hid the chips and left no way
+          // back.
+          ListEmptyComponent={
+            isLoading ? (
+              <FeedSkeleton />
+            ) : needs!.length === 0 ? (
+              <View style={styles.filterEmpty}>
+                <EmptyState
+                  icon="inbox"
+                  title="No live needs right now"
+                  subtitle="Verified needs will show up here as they go live."
+                />
+              </View>
+            ) : (
               <View style={styles.filterEmpty}>
                 <EmptyState
                   icon="filter"
@@ -215,17 +219,17 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
                   subtitle="Nothing live in this category yet. Try another filter or pull to refresh."
                 />
               </View>
-            }
-            ListFooterComponent={
-              visibleNeeds.length === 0 ? null : (
-                <Text style={styles.footerNote}>
-                  {visibleNeeds.length} {visibleNeeds.length === 1 ? "need" : "needs"} shown
-                </Text>
-              )
-            }
-          />
-        </View>
-      )}
+            )
+          }
+          ListFooterComponent={
+            visibleNeeds.length === 0 ? null : (
+              <Text style={styles.footerNote}>
+                {visibleNeeds.length} {visibleNeeds.length === 1 ? "need" : "needs"} shown
+              </Text>
+            )
+          }
+        />
+      </View>
     </View>
   );
 }
@@ -242,7 +246,9 @@ function FeedListHeader({
   filter,
   onFilterChange,
   onSelectNeed,
+  isLoading,
 }: {
+  isLoading: boolean;
   needs: Need[];
   counts: Record<FilterId, number>;
   filter: FilterId;
@@ -257,7 +263,7 @@ function FeedListHeader({
           and goes with the data, and a section that appears above a fixed row shoves that row
           down the page every time an emergency opens. */}
       <ExploreOrganisations />
-      <EmergencySpotlight needs={needs} onSelectNeed={onSelectNeed} />
+      <EmergencySpotlight needs={needs} onSelectNeed={onSelectNeed} isLoading={isLoading} />
 
       <ScrollView
         horizontal
@@ -272,7 +278,9 @@ function FeedListHeader({
             icon={f.icon}
             active={filter === f.id}
             tone={f.id === "EMERGENCY" || f.id === "BLOOD" ? "blood" : "primary"}
-            count={f.id === "ALL" ? undefined : counts[f.id]}
+            // No count while the feed is still fetching. "Emergency 0" is a claim, not a
+            // placeholder — and it's a wrong one that flips to 2 a moment later.
+            count={f.id === "ALL" || isLoading ? undefined : counts[f.id]}
             onPress={() => onFilterChange(f.id)}
           />
         ))}
@@ -301,7 +309,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: theme.spacing.lg,
   },
-  skeletonWrap: { padding: theme.spacing.lg, gap: theme.spacing.md },
+  skeletonWrap: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
   skeletonCard: {
     backgroundColor: theme.color.surface,
     borderWidth: 1,

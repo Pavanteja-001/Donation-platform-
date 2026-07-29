@@ -21,6 +21,16 @@ function createListCache<T>(): ListCache<T> {
 }
 
 export const needsFeedCache = createListCache<Need[]>();
+
+/**
+ * How many EMERGENCY needs the feed last showed.
+ *
+ * The emergency rail can't shimmer from a cold start — nothing knows whether there are any cases
+ * until the fetch lands, and a placeholder that resolves to an empty section is worse than no
+ * placeholder. Remembering the last count means a refresh shimmers the right number of tiles and
+ * a first-ever load shows nothing, which is the honest answer in both cases.
+ */
+export const emergencyCountMemo = { count: 0 };
 export const myNeedsCache = createListCache<Need[]>();
 export const contributionsCache = createListCache<Contribution[]>();
 
@@ -31,6 +41,7 @@ function reset<T>(cache: ListCache<T>) {
 
 export function clearNeedsFeedCache() {
   reset(needsFeedCache);
+  emergencyCountMemo.count = 0;
 }
 
 export function clearMyNeedsCache() {

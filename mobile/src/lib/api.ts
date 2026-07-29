@@ -739,6 +739,12 @@ export interface ForumAuthor {
   id: string;
   name: string | null;
   profilePhotoUrl: string | null;
+  /**
+   * Derived server-side from confirmed contributions (PRD §14.1) — never stored, never sent up.
+   * Optional because a cached response written before the forum exposed it won't carry one.
+   */
+  trustTier?: TrustTier;
+  confirmedContributionsCount?: number;
 }
 
 export interface ForumAnswer {
