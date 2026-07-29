@@ -1,3 +1,5 @@
+import * as SecureStore from "expo-secure-store";
+
 import type { Contribution, Need } from "./api";
 
 /**
@@ -22,15 +24,43 @@ function createListCache<T>(): ListCache<T> {
 
 export const needsFeedCache = createListCache<Need[]>();
 
+const EMERGENCY_COUNT_KEY = "lastEmergencyCount";
+
 /**
  * How many EMERGENCY needs the feed last showed.
  *
- * The emergency rail can't shimmer from a cold start — nothing knows whether there are any cases
- * until the fetch lands, and a placeholder that resolves to an empty section is worse than no
- * placeholder. Remembering the last count means a refresh shimmers the right number of tiles and
- * a first-ever load shows nothing, which is the honest answer in both cases.
+ * The rail can't shimmer from nothing — until the fetch lands, no code knows whether any cases
+ * are open, and flashing a placeholder that resolves to an empty section is worse than showing
+ * none. So the count is remembered instead of guessed.
+ *
+ * Persisted, not just in memory: an in-memory value is empty on every cold start, which is
+ * exactly when the gap is most visible — the rail appeared late and shoved the whole feed down.
+ * Read synchronously at module load so the very first paint already knows how many tiles to
+ * shimmer. Only a first-ever launch has nothing to go on.
+ *
+ * `SecureStore` because it's the storage this app already ships; the value is a single integer
+ * with no secrecy requirement, and a wrong or stale one costs nothing but a slightly wrong
+ * placeholder count for one frame.
  */
-export const emergencyCountMemo = { count: 0 };
+function readPersistedCount(): number {
+  try {
+    const raw = SecureStore.getItem(EMERGENCY_COUNT_KEY);
+    const parsed = raw === null ? 0 : Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  } catch {
+    // Storage being unavailable must never stop the feed from rendering.
+    return 0;
+  }
+}
+
+export const emergencyCountMemo = { count: readPersistedCount() };
+
+export function rememberEmergencyCount(count: number) {
+  if (count === emergencyCountMemo.count) return;
+  emergencyCountMemo.count = count;
+  // Fire and forget — nothing in the UI waits on this.
+  SecureStore.setItemAsync(EMERGENCY_COUNT_KEY, String(count)).catch(() => {});
+}
 export const myNeedsCache = createListCache<Need[]>();
 export const contributionsCache = createListCache<Contribution[]>();
 
@@ -41,7 +71,7 @@ function reset<T>(cache: ListCache<T>) {
 
 export function clearNeedsFeedCache() {
   reset(needsFeedCache);
-  emergencyCountMemo.count = 0;
+  rememberEmergencyCount(0);
 }
 
 export function clearMyNeedsCache() {

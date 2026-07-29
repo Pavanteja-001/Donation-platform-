@@ -1,7 +1,8 @@
+import { useEffect } from "react";
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import type { Need } from "../lib/api";
-import { emergencyCountMemo } from "../lib/listCache";
+import { emergencyCountMemo, rememberEmergencyCount } from "../lib/listCache";
 import { theme } from "../lib/theme";
 import {
   TYPE_META,
@@ -40,8 +41,12 @@ export function EmergencySpotlight({
   const { width } = useWindowDimensions();
   const emergencies = needs.filter((n) => n.urgency === "EMERGENCY");
 
-  // Remembered for the next load, so a refresh shimmers the right number of tiles.
-  if (!isLoading) emergencyCountMemo.count = emergencies.length;
+  // Remembered for the next launch, so a cold start shimmers the right number of tiles instead of
+  // leaving a gap where the rail is about to appear. In an effect, not in render — it writes to
+  // storage, and render must stay free of side effects.
+  useEffect(() => {
+    if (!isLoading) rememberEmergencyCount(emergencies.length);
+  }, [isLoading, emergencies.length]);
 
   const placeholders = isLoading ? Math.min(emergencyCountMemo.count, 3) : 0;
   if (emergencies.length === 0 && placeholders === 0) return null;
