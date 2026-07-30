@@ -35,16 +35,30 @@ interface ExpoTicket {
   details?: { error?: string; expoPushToken?: string };
 }
 
-// Best-effort — a failed push must never block the need-verification request that triggered it.
-// Logs and swallows errors rather than throwing.
-export async function sendPushNotifications(messages: PushMessage[]): Promise<void> {
-  if (messages.length === 0) return;
+/**
+ * Expo rejects a /send request carrying more than 100 messages — the whole request, not the
+ * excess. Sending the full array in one POST therefore failed *silently and completely* at
+ * exactly the moment this platform matters most: a city-wide emergency blood alert is the one
+ * push that routinely matches more than 100 donors, so the larger the emergency, the more
+ * certain it was that nobody heard about it. Anything under the limit worked fine, which is why
+ * it survived testing.
+ */
+const EXPO_PUSH_BATCH_SIZE = 100;
+
+/**
+ * Sends one ≤100-message batch and returns the tokens Expo reported as dead.
+ *
+ * Swallows its own errors on purpose: one rejected batch must not abort the batches after it.
+ * Half the donors in a city hearing about an emergency beats none of them.
+ */
+async function sendBatch(batch: PushMessage[], batchLabel: string): Promise<string[]> {
   try {
     const res = await fetch(EXPO_PUSH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(
-        messages.map((m) => ({
+
+        batch.map((m) => ({
           to: m.to,
           title: m.title,
           body: m.body,
@@ -57,8 +71,8 @@ export async function sendPushNotifications(messages: PushMessage[]): Promise<vo
     });
     if (!res.ok) {
       // eslint-disable-next-line no-console
-      console.error(`[push] Expo push API returned ${res.status}`);
-      return;
+      console.error(`[push] ${batchLabel}: Expo push API returned ${res.status}`);
+      return [];
     }
 
     // Expo answers **200 OK even when every message failed** — the per-message verdict lives in
@@ -68,13 +82,13 @@ export async function sendPushNotifications(messages: PushMessage[]): Promise<vo
     const body = (await res.json().catch(() => null)) as { data?: ExpoTicket[] } | null;
     const tickets = body?.data ?? [];
     const failed = tickets
-      .map((ticket, i) => ({ ticket, token: messages[i]?.to }))
+      .map((ticket, i) => ({ ticket, token: batch[i]?.to }))
       .filter(({ ticket }) => ticket.status === "error");
 
     if (failed.length > 0) {
       // eslint-disable-next-line no-console
       console.error(
-        `[push] ${failed.length}/${messages.length} rejected by Expo:`,
+        `[push] ${batchLabel}: ${failed.length}/${batch.length} rejected by Expo:`,
         failed.map(({ ticket, token }) => `${token} → ${ticket.details?.error ?? "?"}: ${ticket.message ?? ""}`)
       );
     }
@@ -82,21 +96,43 @@ export async function sendPushNotifications(messages: PushMessage[]): Promise<vo
     // DeviceNotRegistered means the token is dead (app uninstalled, credentials changed, or it
     // was never a real token). Expo asks senders to stop using it — and keeping it makes the
     // donor look reachable when they aren't, which is what hid this failure in the first place.
-    const dead = failed
+    return failed
       .filter(({ ticket }) => ticket.details?.error === "DeviceNotRegistered")
       .map(({ token }) => token)
       .filter((t): t is string => !!t);
-
-    if (dead.length > 0) {
-      const cleared = await prisma.user.updateMany({
-        where: { expoPushToken: { in: dead } },
-        data: { expoPushToken: null },
-      });
-      // eslint-disable-next-line no-console
-      console.warn(`[push] Cleared ${cleared.count} dead push token(s); those users must re-register.`);
-    }
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error("[push] Failed to send push notifications:", err);
+    console.error(`[push] ${batchLabel}: failed to send:`, err);
+    return [];
+  }
+}
+
+// Best-effort — a failed push must never block the need-verification request that triggered it.
+// Logs and swallows errors rather than throwing.
+export async function sendPushNotifications(messages: PushMessage[]): Promise<void> {
+  if (messages.length === 0) return;
+
+  const batchCount = Math.ceil(messages.length / EXPO_PUSH_BATCH_SIZE);
+  const dead: string[] = [];
+
+  // Sequential, not Promise.all. Expo rate-limits a project's sends, and the fan-out that needs
+  // batching at all is precisely the one large enough to trip that limit — firing 50 requests at
+  // once to save a few seconds would trade a size failure for a rate failure. Nothing awaits this
+  // function on a request path (see call sites), so the wall-clock cost is invisible to users.
+  for (let i = 0; i < messages.length; i += EXPO_PUSH_BATCH_SIZE) {
+    const batchNumber = Math.floor(i / EXPO_PUSH_BATCH_SIZE) + 1;
+    const batch = messages.slice(i, i + EXPO_PUSH_BATCH_SIZE);
+    dead.push(...(await sendBatch(batch, `batch ${batchNumber}/${batchCount}`)));
+  }
+
+  // Cleared once across every batch rather than per batch — the same dead token can only appear
+  // once anyway, and this keeps the fan-out to a single write no matter how many batches ran.
+  if (dead.length > 0) {
+    const cleared = await prisma.user.updateMany({
+      where: { expoPushToken: { in: dead } },
+      data: { expoPushToken: null },
+    });
+    // eslint-disable-next-line no-console
+    console.warn(`[push] Cleared ${cleared.count} dead push token(s); those users must re-register.`);
   }
 }
