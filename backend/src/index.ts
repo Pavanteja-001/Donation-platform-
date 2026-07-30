@@ -21,6 +21,7 @@ import orphanageRoutes from "./routes/orphanages";
 import bookingRoutes from "./routes/bookings";
 import ngoRoutes from "./routes/ngos";
 import volunteerRoutes from "./routes/volunteers";
+import { startMaintenanceJobs } from "./lib/maintenance";
 
 const app = express();
 
@@ -89,4 +90,7 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(PORT, "0.0.0.0", () => {
   // eslint-disable-next-line no-console
   console.log(`DonationPlatform backend listening on http://0.0.0.0:${PORT}`);
+  // Started only once the server is actually accepting requests — serving traffic is the job,
+  // housekeeping is not, and a failure to schedule must never prevent the former.
+  startMaintenanceJobs();
 });

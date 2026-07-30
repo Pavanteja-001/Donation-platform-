@@ -68,7 +68,6 @@ model User {
   // Profile photo — uploaded by the user via signed URL (D-021). Optional; falls back to initials avatar.
   profilePhotoUrl String?
 
-
   // Permanent ("go-to") location captured at registration — basis for notifications (D-010).
   // No real-time GPS / live tracking.
   city String?
@@ -94,8 +93,8 @@ model User {
   address            String?
   bankAccount        String?
   kycDocumentUrl     String?
-  kycPhotos          String[]          @default([])
-  kycStatus          KycStatus         @default(NOT_SUBMITTED)
+  kycPhotos          String[]         @default([])
+  kycStatus          KycStatus        @default(NOT_SUBMITTED)
   kycRejectionReason String?
 
   // --- Orphanage / old-age-home public profile (institutionType == ORPHANAGE) --------------
@@ -135,15 +134,15 @@ model User {
   contributionsMade      Contribution[] @relation("ContributionsMade")
   contributionsConfirmed Contribution[] @relation("ContributionsConfirmed")
 
-  forumQuestions         ForumQuestion[] @relation("QuestionsAuthored")
-  forumAnswers           ForumAnswer[]  @relation("AnswersAuthored")
-  notifications          Notification[] @relation("NotificationsReceived")
+  forumQuestions ForumQuestion[] @relation("QuestionsAuthored")
+  forumAnswers   ForumAnswer[]   @relation("AnswersAuthored")
+  notifications  Notification[]  @relation("NotificationsReceived")
 
   bookingsReceived SlotBooking[] @relation("BookingsForOrphanage")
   bookingsMade     SlotBooking[] @relation("BookingsByDonor")
 
-  teamMembers          TeamMember[]            @relation("InstitutionTeam")
-  volunteerApplicants  VolunteerApplication[]  @relation("ApplicationsToNgo")
+  teamMembers           TeamMember[]           @relation("InstitutionTeam")
+  volunteerApplicants   VolunteerApplication[] @relation("ApplicationsToNgo")
   volunteerApplications VolunteerApplication[] @relation("ApplicationsByUser")
 
   createdAt DateTime @default(now())
@@ -193,8 +192,8 @@ model Notification {
   body  String
 
   /// Deep-link target, so tapping the row opens the thing it's about.
-  needId   String?
-  forumId  String?
+  needId  String?
+  forumId String?
 
   readAt DateTime?
 
@@ -202,6 +201,12 @@ model Notification {
 
   /// Newest-first per recipient is the only query this table serves.
   @@index([recipientId, createdAt])
+  /// Retention sweeps (lib/notificationRetention.ts) scan by age across ALL recipients, which the
+  /// index above can't serve — its leading column is the recipient. Without this the sweep is a
+  /// sequential scan of the largest table in the database. Cheap to maintain: `createdAt` only
+  /// ever increases, so inserts always append to the right edge of the tree rather than splitting
+  /// pages in the middle.
+  @@index([createdAt])
 }
 
 enum NotificationType {
@@ -322,11 +327,11 @@ model VolunteerApplication {
   user   User   @relation("ApplicationsByUser", fields: [userId], references: [id], onDelete: Cascade)
 
   /// Why they want to help / what they can offer. Shown only to the NGO.
-  message String?
+  message      String?
   /// Free text — "weekends", "evenings after 6" — rather than a rigid schedule model.
   availability String?
   /// "Teaching", "Medical", "Logistics".
-  skills String?
+  skills       String?
 
   status VolunteerStatus @default(PENDING)
 
@@ -588,4 +593,3 @@ model Area {
   @@unique([districtId, name])
   @@index([districtId])
 }
-
