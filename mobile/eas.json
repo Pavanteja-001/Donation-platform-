@@ -23,7 +23,7 @@
     "production": {
       "ios": {},
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       }
     }
   },
