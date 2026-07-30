@@ -8,7 +8,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "org.donationplatform.app"
+      "bundleIdentifier": "org.donationplatform.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "org.donationplatform.app",
@@ -46,7 +49,10 @@
         {
           "icon": "./assets/icon.png",
           "color": "#B91C1C",
-          "sounds": ["./assets/sounds/emergency.wav", "./assets/sounds/notification.wav"]
+          "sounds": [
+            "./assets/sounds/emergency.wav",
+            "./assets/sounds/notification.wav"
+          ]
         }
       ],
       "@react-native-community/datetimepicker"
