@@ -268,17 +268,20 @@ function FeedListHeader({
   stats: PublicStats | null;
   onSelectNeed: (need: Need) => void;
 }) {
+  const liveCount = needs.filter((n) => n.urgency !== "EMERGENCY").length;
+
   return (
     <View style={styles.headerBlock}>
-      {/* The crimson FeedHero is gone — it and this block both led with "money raised", so the
-          screen opened with the same claim twice. This version says more in the same space. */}
       <ImpactAtAGlance stats={stats} />
       <PresentCases stats={stats} />
-      {/* Fixed furniture, so it sits directly under the stats where it's always in the same
-          place. The emergency rail below comes and goes with the data, and a section that
-          appears above a fixed row would shove it down the page every time an emergency opens. */}
       <ExploreCategories />
       <EmergencySpotlight needs={needs} onSelectNeed={onSelectNeed} isLoading={isLoading} />
+      
+      {/* Section header for the feed cards below */}
+      <View style={styles.liveNeedsHeader}>
+        <Text style={styles.liveNeedsTitle}>LIVE NEEDS</Text>
+
+      </View>
     </View>
   );
 }
@@ -286,21 +289,29 @@ function FeedListHeader({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.background },
   listWrap: { flex: 1 },
-  // No horizontal padding here — the hero is full-bleed. Cards get their inset from `cardWrap`.
   listContent: { paddingBottom: theme.spacing.xxl, paddingHorizontal: theme.spacing.sm },
-  /**
-   * Cell padding is half the gutter, on both sides of every cell.
-   *
-   * With only this, the screen edges get 8 while the middle gets 8+8=16 — which is what made the
-   * first pass look lopsided. The matching 8 on `listContent` above brings the edges to 16 too,
-   * so margins and gutter finally agree without the cell needing to know which column it's in.
-   */
   cardWrap: { paddingHorizontal: theme.spacing.sm, flex: 1 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
-  // Cancels `listContent`'s horizontal padding, which exists for the card grid but would
-  // otherwise push every header section 8pt further in than the rest of the app. The sections
-  // keep owning their own insets, so nothing inside here had to change.
   headerBlock: { marginBottom: theme.spacing.xs, marginHorizontal: -theme.spacing.sm },
+  liveNeedsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.xs,
+  },
+  liveNeedsTitle: {
+    ...theme.typography.caption,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    color: theme.color.textSecondary,
+  },
+  liveNeedsCount: {
+    ...theme.typography.caption,
+    color: theme.color.textTertiary,
+    fontWeight: "700",
+  },
   emptyWrap: { paddingTop: theme.spacing.xxl },
   footerNote: {
     ...theme.typography.caption,

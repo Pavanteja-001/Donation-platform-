@@ -82,11 +82,11 @@ export function EmergencySpotlight({
       >
         {placeholders > 0
           ? Array.from({ length: placeholders }, (_, i) => (
-              <Skeleton key={i} width={cardWidth} height={cardWidth / 0.86} radius={theme.radii.xl} />
-            ))
+            <Skeleton key={i} width={cardWidth} height={cardWidth / 0.86} radius={theme.radii.xl} />
+          ))
           : emergencies.map((need) => (
-              <SpotlightCard key={need.id} need={need} width={cardWidth} onPress={() => onSelectNeed(need)} />
-            ))}
+            <SpotlightCard key={need.id} need={need} width={cardWidth} onPress={() => onSelectNeed(need)} />
+          ))}
       </ScrollView>
     </View>
   );
@@ -115,19 +115,19 @@ function SpotlightCard({ need, width, onPress }: { need: Need; width: number; on
 
         <View>
           <View style={styles.cardTop}>
-          <View style={styles.typeTag}>
-            <Feather name={meta.icon} size={11} color="#FFFFFF" />
-            <Text style={styles.typeTagText}>{meta.label}</Text>
-          </View>
+            <View style={styles.typeTag}>
+              <Feather name={meta.icon} size={11} color="#FFFFFF" />
+              <Text style={styles.typeTagText}>{meta.label}</Text>
+            </View>
 
-          {blood && (
-            <EmergencyPulse color="#FFFFFF">
-              <View style={styles.bloodPill}>
-                <Text style={styles.bloodPillText}>{formatBloodGroup(blood.blood_group)}</Text>
-              </View>
-            </EmergencyPulse>
-          )}
-        </View>
+            {blood && (
+              <EmergencyPulse color="#FFFFFF">
+                <View style={styles.bloodPill}>
+                  <Text style={styles.bloodPillText}>{formatBloodGroup(blood.blood_group)}</Text>
+                </View>
+              </EmergencyPulse>
+            )}
+          </View>
 
           <Text style={styles.title} numberOfLines={3}>
             {need.title}
@@ -150,30 +150,30 @@ function SpotlightCard({ need, width, onPress }: { need: Need; width: number; on
                 <Text style={styles.progressLabel}>
                   {num(blood.units_fulfilled)} of {num(blood.units_needed)} units matched
                 </Text>
-              <ProgressBar
-                raised={blood.units_fulfilled}
-                target={blood.units_needed}
-                showLabel={false}
-                height={5}
-                onDark
-              />
-            </>
-          )}
-          {money && (
-            <>
-              <Text style={styles.progressLabel}>
-                {formatAmount(money.raised_amount)} of {formatAmount(money.target_amount)}
-              </Text>
-              <ProgressBar
-                raised={money.raised_amount}
-                target={money.target_amount}
-                showLabel={false}
-                height={5}
-                onDark
-              />
-            </>
-          )}
-        </View>
+                <ProgressBar
+                  raised={blood.units_fulfilled}
+                  target={blood.units_needed}
+                  showLabel={false}
+                  height={5}
+                  onDark
+                />
+              </>
+            )}
+            {money && (
+              <>
+                <Text style={styles.progressLabel}>
+                  {formatAmount(money.raised_amount)} of {formatAmount(money.target_amount)}
+                </Text>
+                <ProgressBar
+                  raised={money.raised_amount}
+                  target={money.target_amount}
+                  showLabel={false}
+                  height={5}
+                  onDark
+                />
+              </>
+            )}
+          </View>
 
         </View>
       </Gradient>

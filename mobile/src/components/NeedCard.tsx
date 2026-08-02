@@ -18,7 +18,8 @@ import {
   type IconName,
 } from "../lib/needMeta";
 import { IconPlate, litRamp } from "./Depth";
-import { BloodBagIllustration, KitBoxIllustration, RupeeStackIllustration } from "./illustrations";
+import { categoryById } from "../lib/needCategory";
+import { BloodBagIllustration, KitBoxIllustration } from "./illustrations";
 import { ProgressBar, type ProgressTone } from "./ProgressBar";
 import { LiquidProgress } from "./LiquidProgress";
 import { EmergencyPulse } from "./EmergencyPulse";
@@ -80,6 +81,8 @@ function NeedCardComponent({
   // Blood needs fill a deeper crimson; everything else uses the brand crimson.
   const progressTone: ProgressTone = need.type === "BLOOD" ? "blood" : "primary";
 
+  const categoryMeta = need.category ? categoryById(need.category) : null;
+
   return (
     <PressableScale
       onPress={onPress}
@@ -105,14 +108,10 @@ function NeedCardComponent({
           contentFit="cover"
           cachePolicy="memory-disk"
           transition={220}
-          // Without this, FlashList recycling shows the previous row's photo for a frame
-          // before the new one decodes.
           recyclingKey={need.id}
         />
       )}
 
-      {/* Lit from the top-left, like every raised surface in the app (see Depth.tsx). At 3%
-          it isn't perceived as an effect — it just stops the card reading as flat paper. */}
       <Gradient
         colors={theme.gradient.surfaceSheen}
         direction="diagonal"
@@ -123,13 +122,6 @@ function NeedCardComponent({
       <View style={[styles.body, compact && styles.bodyCompact]}>
         <View style={styles.headerRow}>
           <View style={styles.typeGroup}>
-            {/* The three types a donor scans for get a full illustration; everything else keeps
-                the icon plate. Reserving the artwork for BLOOD/KIT/GOODS/MONEY is what stops the
-                feed turning into a wall of competing pictures — the illustration IS the signal
-                that this row is one of the flagship need types.
-
-                The blood bag's fill level mirrors real fulfilment, so the artwork carries data
-                rather than being decoration. */}
             {blood ? (
               <BloodBagIllustration
                 size={compact ? 30 : 38}
@@ -137,8 +129,12 @@ function NeedCardComponent({
               />
             ) : need.type === "KIT" || need.type === "GOODS" ? (
               <KitBoxIllustration size={compact ? 30 : 38} />
-            ) : need.type === "MONEY" ? (
-              <RupeeStackIllustration size={compact ? 30 : 38} />
+            ) : categoryMeta?.icon ? (
+              <Image
+                source={categoryMeta.icon}
+                style={{ width: compact ? 30 : 38, height: compact ? 30 : 38 }}
+                contentFit="contain"
+              />
             ) : (
               <IconPlate icon={meta.icon} size="sm" tone="custom" colors={litRamp(meta.color)} />
             )}
@@ -148,7 +144,6 @@ function NeedCardComponent({
           </View>
 
           <View style={styles.headerRight}>
-            {need.adminVerified && <Feather name="check-circle" size={14} color={theme.color.success} />}
             {urgency && (
               <Badge
                 label={urgency.label}

@@ -1,27 +1,18 @@
 import { StyleSheet, Text, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { theme } from "../lib/theme";
 import { formatCount } from "../lib/needMeta";
 import { Skeleton } from "./ui";
 import type { PublicStats } from "../lib/api";
 
-/**
- * Where every request on the platform currently stands.
- *
- * Deliberately shows `pending` — requests still waiting on admin verification — rather than only
- * the flattering numbers. A donor who can see that 63 people are queued for review understands
- * that verification is real work being done, not a rubber stamp; hiding the queue would make the
- * platform look either instant or empty, and neither is true.
- *
- * Four fixed tiles across, no scrolling — a summary that hides part of itself isn't a summary,
- * and a row that moves under your thumb while you're reading four numbers is worse than a tight
- * fit. What makes ~78dp per tile work is dropping the qualifier line entirely and shortening the
- * labels: the count and one word are the whole message, and "Completed / This month" was two
- * lines saying what "This month" says in one.
- */
+const ICON_CASES_TOTAL = require("../../assets/icons/stats/cases-total.webp");
+const ICON_CASES_ACTIVE = require("../../assets/icons/stats/cases-active.webp");
+const ICON_CASES_PENDING = require("../../assets/icons/stats/cases-pending.webp");
+const ICON_VERIFIED_NGOS = require("../../assets/icons/stats/verified-ngos.webp");
+const ICON_CASES_COMPLETED = require("../../assets/icons/stats/cases-completed.webp");
 
 interface CaseTile {
-  icon: keyof typeof Feather.glyphMap;
+  icon: any;
   value: number;
   label: string;
   hint?: string;
@@ -33,30 +24,28 @@ export function PresentCases({ stats }: { stats: PublicStats | null }) {
   const tiles: CaseTile[] = stats
     ? [
         {
-          icon: "folder",
+          icon: ICON_CASES_TOTAL,
           value: stats.cases.total,
           label: "Total",
           tint: theme.color.primary,
           fill: theme.color.primarySoft,
         },
         {
-          icon: "refresh-cw",
+          icon: ICON_CASES_PENDING,
           value: stats.cases.active,
           label: "Active",
           tint: "#2563EB",
           fill: "#E7EFFD",
         },
         {
-          icon: "clock",
+          icon: ICON_VERIFIED_NGOS,
           value: stats.cases.pending,
           label: "Pending",
           tint: theme.color.warning,
           fill: theme.color.warningSoft,
         },
         {
-          // "This month" rather than "Completed": the number already means completions, and one
-          // word of qualifier beats two lines saying the same thing at this width.
-          icon: "check-circle",
+          icon: ICON_CASES_COMPLETED,
           value: stats.cases.completedThisMonth,
           label: "This month",
           tint: theme.color.success,
@@ -79,21 +68,26 @@ export function PresentCases({ stats }: { stats: PublicStats | null }) {
               </View>
             ))
           : tiles.map((t) => (
-              <View key={t.label} style={[styles.tile, { backgroundColor: t.fill }]}>
-                <View style={styles.tileIcon}>
-                  <Feather name={t.icon} size={15} color={t.tint} />
+              <View key={t.label} style={styles.tile}>
+                <View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: t.fill, opacity: 0.45, borderRadius: theme.radii.lg },
+                  ]}
+                />
+                <View style={styles.topRow}>
+                  <View style={styles.tileIcon}>
+                    <Image source={t.icon} style={styles.iconImage} contentFit="contain" />
+                  </View>
+                  <Text
+                    style={[styles.tileValue, { color: t.tint }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
+                    {formatCount(t.value)}
+                  </Text>
                 </View>
-                {/* Shrinks rather than wraps: "1,043" is nearly twice the width of "7", and a
-                    tile that reflows when a count crosses a digit boundary makes the whole row
-                    jump. */}
-                <Text
-                  style={[styles.tileValue, { color: t.tint }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.7}
-                >
-                  {formatCount(t.value)}
-                </Text>
                 <Text style={styles.tileLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {t.label}
                 </Text>
@@ -114,25 +108,30 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   row: { flexDirection: "row", gap: 6 },
-  // flex:1 rather than a fixed width — four equal shares of whatever the screen gives us, so the
-  // row fits a 320dp phone and a 430dp one without a breakpoint.
   tile: {
     flex: 1,
     borderRadius: theme.radii.lg,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: 6,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: 4,
     alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
   },
   tileSkeleton: { backgroundColor: theme.color.surfaceMuted, alignItems: "center" },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
   tileIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: "rgba(255,255,255,0.72)",
+    width: 22,
+    height: 22,
     alignItems: "center",
     justifyContent: "center",
   },
-  tileValue: { ...theme.typography.h3, marginTop: 6, textAlign: "center" },
+  iconImage: { width: 20, height: 20 },
+  tileValue: { ...theme.typography.h3, fontSize: 16, lineHeight: 20, textAlign: "center" },
   tileLabel: {
     ...theme.typography.caption,
     fontSize: 11,
