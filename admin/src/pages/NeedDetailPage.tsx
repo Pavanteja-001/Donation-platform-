@@ -185,7 +185,63 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
     }
   }
 
-  if (error && !need) return <p className="error">{error}</p>;
+  if (error && !need) {
+    return (
+      <div>
+        <button
+          type="button"
+          className="link"
+          onClick={onBack}
+          style={{ marginBottom: "16px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+        >
+          ‹ Back to needs
+        </button>
+        <div
+          className="card"
+          style={{
+            padding: "40px 24px",
+            textAlign: "center",
+            maxWidth: "520px",
+            margin: "32px auto",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ fontSize: "48px", marginBottom: "16px", lineHeight: 1 }}>🔍</div>
+          <h3 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: 600, color: "var(--color-text)" }}>
+            Need Not Found
+          </h3>
+          <p style={{ color: "var(--color-text-secondary)", fontSize: "14px", margin: "0 0 24px", lineHeight: "1.5" }}>
+            {error === "Need not found"
+              ? "The requested need could not be found. It may have been deleted, cancelled, or the link might be invalid."
+              : error}
+          </p>
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+            <button
+              type="button"
+              className="btn-action-secondary"
+              onClick={() => {
+                setError(null);
+                load();
+              }}
+              style={{ padding: "8px 16px", fontSize: "14px" }}
+            >
+              Try Again
+            </button>
+            <button
+              type="button"
+              className="btn-action-primary"
+              onClick={onBack}
+              style={{ padding: "8px 16px", fontSize: "14px" }}
+            >
+              Back to Needs List
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!need) return <PageSkeleton />;
 
   const money = need.type === "MONEY" && isMoneyPayload(need.payload) ? need.payload : null;
@@ -372,7 +428,21 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
         </div>
       )}
       {need.status === "REJECTED" && need.rejectionReason && <p className="error">Rejected: {need.rejectionReason}</p>}
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <div
+          style={{
+            padding: "12px 16px",
+            backgroundColor: "#fee2e2",
+            border: "1px solid #fca5a5",
+            color: "#991b1b",
+            borderRadius: "8px",
+            marginBottom: "16px",
+            fontSize: "14px",
+          }}
+        >
+          {error}
+        </div>
+      )}
 
       {NON_TERMINAL.includes(need.status) && (
         <div className="meta-row" style={{ marginBottom: 16 }}>
