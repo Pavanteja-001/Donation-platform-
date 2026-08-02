@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { postGoodsNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategoryParam } from "../lib/useCategoryParam";
 import { PhotoPicker } from "../components/PhotoPicker";
 
 // PRD §11.1/§11.2 — Admin posting a goods need on behalf of a beneficiary/partner org (D-018,
 // mirrors web-panel's CreateGoodsNeedPage / mobile's CreateGoodsNeedScreen).
 export function CreateGoodsNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token } = useAuth();
+  const category = useCategoryParam();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [item, setItem] = useState("");
@@ -25,7 +27,7 @@ export function CreateGoodsNeedPage({ onDone, onBack }: { onDone: () => void; on
     setIsSubmitting(true);
     try {
       const photos = photoFiles.length > 0 ? await uploadPhotos(token, photoFiles, "need-photos") : undefined;
-      await postGoodsNeed(token, { title, description, item, condition, photos });
+      await postGoodsNeed(token, { category, title, description, item, condition, photos });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post this need");

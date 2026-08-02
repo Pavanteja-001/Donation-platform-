@@ -1,3 +1,4 @@
+import type { NeedCategory } from "../lib/needCategory";
 import { useState } from "react";
 import { postSkillRequestNeed } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -5,7 +6,7 @@ import { CreateNeedScaffold } from "../components/CreateNeedScaffold";
 import { Input } from "../components/ui";
 
 // PRD §13 — post a SKILL_REQUEST need (scribe, mentor, event volunteer).
-export function CreateSkillRequestNeedScreen({ onDone }: { onDone: () => void }) {
+export function CreateSkillRequestNeedScreen({ onDone, category }: { onDone: () => void; category?: NeedCategory }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -31,6 +32,7 @@ export function CreateSkillRequestNeedScreen({ onDone }: { onDone: () => void })
     setIsSubmitting(true);
     try {
       await postSkillRequestNeed(token, {
+        category,
         title: title.trim(),
         description: description.trim(),
         role_needed: roleNeeded.trim(),

@@ -613,6 +613,10 @@ const listQuerySchema = z.object({
   // GOODS only — splits the "things people need" feed from the "things people are giving away"
   // feed. Ignored for every other type, which has no direction.
   direction: z.nativeEnum(GoodsDirection).optional(),
+  // Backs the category grid on the home screen. Filtered in the query rather than in memory —
+  // it's a real column with its own index, unlike `direction`, which lives inside the JSON
+  // payload and therefore still has to be filtered after the fetch (see below).
+  category: z.nativeEnum(NeedCategory).optional(),
 });
 
 // The public "browse live needs" feed (PRD §6.8): urgency (Emergency pinned) then recency.
@@ -634,8 +638,8 @@ router.get("/", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid query" });
   }
-  const { type, direction } = parsed.data;
-  const payload = await cached(CacheKey.needsFeed(type, direction), CacheTtl.needsFeed, async () => {
+  const { type, direction, category } = parsed.data;
+  const payload = await cached(CacheKey.needsFeed(type, direction, category), CacheTtl.needsFeed, async () => {
     const candidates = await prisma.need.findMany({
       where: {
         status: { in: [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED] },
@@ -643,7 +647,11 @@ router.get("/", async (req, res) => {
         // destination (the Goods screen, which asks for them by type), and mixing "someone needs
         // blood" with "someone is giving away a TV" in one stream flattens the urgency the feed
         // exists to convey. Asking for `?type=GOODS` still returns them.
-        ...(type ? { type } : { type: { not: NeedType.GOODS } }),
+        //
+        // Browsing a category is the exception: "Donate items" is a category whose only type IS
+        // GOODS, so excluding it there would render that tile permanently empty.
+        ...(type ? { type } : category ? {} : { type: { not: NeedType.GOODS } }),
+        ...(category ? { category } : {}),
       },
       orderBy: { createdAt: "desc" },
       include: { postedBy: { select: { id: true, name: true, role: true } } },

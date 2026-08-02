@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
-import { NeedStatus, NeedType, Role, KycStatus, InstitutionType } from "@prisma/client";
+import { NeedCategory, NeedStatus, NeedType, Role, KycStatus, InstitutionType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { assertTransition, InvalidTransitionError } from "../lib/needLifecycle";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 import { computeTrustTier } from "../lib/trustTier";
+import { validateCategoryForType } from "../lib/needCategory";
 import { cached, CacheKey, CacheTtl, invalidateLocationsCache, invalidateNeedCaches } from "../lib/cache";
 
 // Admin console RBAC (D-018):
@@ -198,6 +199,43 @@ router.post("/needs/:id/cancel", async (req, res) => {
     where: { id: need.id },
     data: { status: NeedStatus.CANCELLED },
   });
+  invalidateNeedCaches();
+  res.json({ need: updated });
+});
+
+const categorySchema = z.object({ category: z.nativeEnum(NeedCategory).nullable() });
+
+/**
+ * Set (or clear) the cause a need is filed under.
+ *
+ * Needed because the poster can only edit a need while it is still a DRAFT — once it's LIVE the
+ * story is what admin verified, so it's frozen. Category isn't part of that story: it's filing,
+ * not content. Without this route the needs that predate categories, plus every MONEY and KIT
+ * need whose cause can't be inferred, stay invisible to the category tiles forever with no way
+ * to fix them.
+ *
+ * Staff can do this too. It is a reversible, non-destructive correction — the kind of queue work
+ * staff exist for (D-018) — and gating it behind ADMIN would just mean it never gets done.
+ */
+router.patch("/needs/:id/category", async (req, res) => {
+  const parsed = categorySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid category" });
+  }
+  const need = await prisma.need.findUnique({ where: { id: req.params.id } });
+  if (!need) return res.status(404).json({ error: "Need not found" });
+
+  // Same coherence rule the create path enforces — an admin correcting the filing must not be
+  // able to produce a pair the poster would have been stopped from submitting.
+  const check = validateCategoryForType(parsed.data.category, need.type);
+  if (!check.ok) return res.status(400).json({ error: check.error });
+
+  const updated = await prisma.need.update({
+    where: { id: need.id },
+    data: { category: parsed.data.category },
+  });
+  // The category tiles are served from the feed cache, keyed by category — without this the
+  // need stays missing from its new tile until the TTL lapses.
   invalidateNeedCaches();
   res.json({ need: updated });
 });

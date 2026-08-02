@@ -1,3 +1,4 @@
+import type { NeedCategory } from "../lib/needCategory";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, ZoomIn } from "react-native-reanimated";
@@ -17,7 +18,7 @@ const MAX_DATES = 60;
 
 // PRD §10.1/§10.2 — post a MEAL_SLOT need. Each date becomes a separately bookable MealSlot
 // child entity, which is what makes this type (with BLOOD) one of the two custom modules.
-export function CreateMealSlotNeedScreen({ onDone }: { onDone: () => void }) {
+export function CreateMealSlotNeedScreen({ onDone, category }: { onDone: () => void; category?: NeedCategory }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -59,6 +60,7 @@ export function CreateMealSlotNeedScreen({ onDone }: { onDone: () => void }) {
     try {
       const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
       await postMealSlotNeed(token, {
+        category,
         title: title.trim(),
         description: description.trim(),
         mealType: mealType.trim(),

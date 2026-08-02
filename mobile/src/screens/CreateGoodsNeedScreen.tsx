@@ -1,3 +1,4 @@
+import type { NeedCategory } from "../lib/needCategory";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { postGoodsNeed, uploadPhotos, type GoodsDirection } from "../lib/api";
@@ -68,11 +69,9 @@ const COPY: Record<
 // or it isn't (§11.3).
 export function CreateGoodsNeedScreen({
   onDone,
-  direction = "REQUEST",
-}: {
+  direction = "REQUEST", category }: {
   onDone: () => void;
-  direction?: GoodsDirection;
-}) {
+  direction?: GoodsDirection; category?: NeedCategory }) {
   const { token } = useAuth();
   const copy = COPY[direction];
 
@@ -101,6 +100,7 @@ export function CreateGoodsNeedScreen({
     try {
       const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
       await postGoodsNeed(token, {
+        category,
         title: title.trim(),
         description: description.trim(),
         item: item.trim(),

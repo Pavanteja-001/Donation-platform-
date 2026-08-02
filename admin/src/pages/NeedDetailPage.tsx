@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { CATEGORIES, type NeedCategory } from "../lib/needCategory";
 import {
   confirmContribution,
   fetchContributions,
   fetchNeed,
   rejectContribution,
   rejectNeed,
+  setNeedCategory,
   setNeedUrgency,
   verifyNeed,
   type BloodPayload,
@@ -115,6 +117,21 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
     } finally {
       setBusy(false);
       load();
+    }
+  }
+
+  async function handleCategory(category: NeedCategory | null) {
+    if (!token) return;
+    setBusy(true);
+    try {
+      const { need: updated } = await setNeedCategory(token, needId, category);
+      // Merge rather than replace: this response carries the bare Need, without the `postedBy`
+      // relation the detail view renders — swapping the whole object would blank the poster.
+      setNeed((current) => (current ? { ...current, category: updated.category } : current));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set the category");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -384,6 +401,31 @@ export function NeedDetailPage({ needId, onBack }: { needId: string; onBack: () 
           </button>
         </div>
       )}
+
+      {/* Filing, not content — so unlike the rest of the need it stays editable after going live.
+          Only the categories this need's type can belong to are offered; the server enforces the
+          same rule, so a stale tab can't file a BLOOD need under Orphanages. */}
+      <div style={{ marginTop: 24 }}>
+        <h3 style={{ marginBottom: 4 }}>Category</h3>
+        <p className="hint" style={{ marginTop: 0 }}>
+          {need.category
+            ? "Which tile this need appears under in the app."
+            : "Not categorised — this need is invisible to every category tile in the app."}
+        </p>
+        <div className="row-actions" style={{ flexWrap: "wrap" }}>
+          {CATEGORIES.filter((c) => c.types.includes(need.type)).map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={need.category === c.id ? "btn" : "btn-outline"}
+              disabled={busy}
+              onClick={() => handleCategory(need.category === c.id ? null : c.id)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {contributions && contributions.length > 0 && (
         <div>

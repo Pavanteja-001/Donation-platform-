@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { postSkillRequestNeed } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategoryParam } from "../lib/useCategoryParam";
 
 // PRD §13 — post a SKILL_REQUEST need. Linked to this institution automatically (D-008) so it
 // can fast-track-verify itself afterward in NeedDetailPage, same as Blood/Meal-slot/Goods.
 export function CreateSkillRequestNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token, user } = useAuth();
+  const category = useCategoryParam();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [roleNeeded, setRoleNeeded] = useState("");
@@ -29,7 +31,7 @@ export function CreateSkillRequestNeedPage({ onDone, onBack }: { onDone: () => v
     setError(null);
     setIsSubmitting(true);
     try {
-      await postSkillRequestNeed(token, {
+      await postSkillRequestNeed(token, { category,
         title: title.trim(),
         description: description.trim(),
         role_needed: roleNeeded.trim(),

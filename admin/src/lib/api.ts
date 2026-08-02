@@ -1,3 +1,4 @@
+import type { NeedCategory } from "./needCategory";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
 export type Role = "USER" | "INSTITUTION" | "ADMIN" | "STAFF";
@@ -136,6 +137,8 @@ export interface SkillRequestPayload {
 export interface Need {
   id: string;
   type: NeedType;
+  /** Null on rows predating categories, and on MONEY/KIT needs never categorised. */
+  category: NeedCategory | null;
   title: string;
   description: string;
   status: NeedStatus;
@@ -296,13 +299,16 @@ export function fetchNeed(token: string, id: string) {
 // to Staff). Backend has no role restriction on POST /api/needs; this UI is what's scoped.
 export async function postMoneyNeed(
   token: string,
-  data: { title: string; description: string; targetAmount: number; upiId: string; photos?: string[] }
+  data: {
+    /** Cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory; title: string; description: string; targetAmount: number; upiId: string; photos?: string[] }
 ) {
   const { need } = await request<{ need: Need }>("/api/needs", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({
       type: "MONEY",
+      category: data.category,
       title: data.title,
       description: data.description,
       photos: data.photos,
@@ -318,6 +324,8 @@ export async function postMoneyNeed(
 export async function postKitNeed(
   token: string,
   data: {
+    /** Cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     contents: string;
@@ -333,6 +341,7 @@ export async function postKitNeed(
     headers: authHeaders(token),
     body: JSON.stringify({
       type: "KIT",
+      category: data.category,
       title: data.title,
       description: data.description,
       photos: data.photos,
@@ -357,6 +366,8 @@ export async function postKitNeed(
 export async function postBloodNeed(
   token: string,
   data: {
+    /** Cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     bloodGroup: BloodGroup;
@@ -373,6 +384,7 @@ export async function postBloodNeed(
     headers: authHeaders(token),
     body: JSON.stringify({
       type: "BLOOD",
+      category: data.category,
       title: data.title,
       description: data.description,
       city: data.city,
@@ -394,6 +406,8 @@ export async function postBloodNeed(
 export async function postMealSlotNeed(
   token: string,
   data: {
+    /** Cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     mealType: string;
@@ -409,6 +423,7 @@ export async function postMealSlotNeed(
     headers: authHeaders(token),
     body: JSON.stringify({
       type: "MEAL_SLOT",
+      category: data.category,
       title: data.title,
       description: data.description,
       photos: data.photos,
@@ -431,13 +446,16 @@ export async function postMealSlotNeed(
 // mirrors postBloodNeed/postMealSlotNeed).
 export async function postGoodsNeed(
   token: string,
-  data: { title: string; description: string; item: string; condition: string; photos?: string[] }
+  data: {
+    /** Cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory; title: string; description: string; item: string; condition: string; photos?: string[] }
 ) {
   const { need } = await request<{ need: Need }>("/api/needs", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({
       type: "GOODS",
+      category: data.category,
       title: data.title,
       description: data.description,
       photos: data.photos,
@@ -513,6 +531,22 @@ export function verifyNeed(token: string, id: string) {
   });
 }
 
+/**
+ * Files a need under a cause, or clears it (`null`).
+ *
+ * Separate from the poster's own edit endpoint, which only works while a need is a DRAFT. The
+ * category isn't part of the story admin verified — it's filing — so it stays correctable after
+ * a need goes live. Without this, needs created before categories existed, and every MONEY/KIT
+ * need whose cause can't be inferred, would never appear under any category tile.
+ */
+export function setNeedCategory(token: string, id: string, category: NeedCategory | null) {
+  return request<{ need: Need }>(`/api/admin/needs/${id}/category`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify({ category }),
+  });
+}
+
 export function rejectNeed(token: string, id: string, reason: string) {
   return request<{ need: Need }>(`/api/admin/needs/${id}/reject`, {
     method: "POST",
@@ -570,6 +604,8 @@ export function rejectContribution(token: string, contributionId: string) {
 export async function postSkillRequestNeed(
   token: string,
   data: {
+    /** Cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     role_needed: string;
@@ -585,6 +621,7 @@ export async function postSkillRequestNeed(
     headers: authHeaders(token),
     body: JSON.stringify({
       type: "SKILL_REQUEST",
+      category: data.category,
       title: data.title,
       description: data.description,
       city: data.city,

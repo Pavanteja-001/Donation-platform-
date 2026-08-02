@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
@@ -10,36 +10,18 @@ import { useAuth } from "../context/AuthContext";
 import { NeedCard } from "../components/NeedCard";
 import { ImpactAtAGlance } from "../components/ImpactAtAGlance";
 import { PresentCases } from "../components/PresentCases";
+import { ExploreCategories } from "../components/ExploreCategories";
 import { AppHeader } from "../components/AppHeader";
 import { SideDrawer } from "../components/SideDrawer";
-import { ExploreOrganisations } from "../components/ExploreOrganisations";
 import { EmergencySpotlight } from "../components/EmergencySpotlight";
 import { theme } from "../lib/theme";
-import { EmptyState, ErrorState, Skeleton, Chip } from "../components/ui";
-
-type FilterId = "ALL" | "URGENT" | "BLOOD" | "MONEY" | "KIT" | "MEAL_SLOT";
-
-// Declarative filter table — each entry owns its own predicate, so adding a filter never means
-// touching the render body or a growing switch.
-const FILTERS: { id: FilterId; label: string; icon?: keyof typeof Feather.glyphMap; match: (n: Need) => boolean }[] = [
-  { id: "ALL", label: "All", match: () => true },
-  // Urgent, not Emergency. Emergencies are pinned in the rail above and excluded from this list
-  // entirely (see `feedNeeds`), so a chip filtering for them would always come back empty —
-  // Urgent is the next tier down and the one this row can actually reveal.
-  { id: "URGENT", label: "Urgent", icon: "alert-triangle", match: (n) => n.urgency === "URGENT" },
-  { id: "BLOOD", label: "Blood", icon: "droplet", match: (n) => n.type === "BLOOD" },
-  { id: "MONEY", label: "Money", icon: "heart", match: (n) => n.type === "MONEY" },
-  { id: "KIT", label: "Kits", icon: "package", match: (n) => n.type === "KIT" },
-  { id: "MEAL_SLOT", label: "Meals", icon: "coffee", match: (n) => n.type === "MEAL_SLOT" },
-  // No GOODS chip: item listings live on the Goods screen and the server keeps them out of this
-  // feed entirely, so a chip here would only ever show an empty result.
-];
+import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 
 /** Skeleton that mirrors the real card's geometry, so content arriving doesn't shift the layout. */
 function FeedSkeleton() {
   return (
-    // No top padding: this renders directly under the filter chip row, which already ends with
-    // its own vertical padding. Both were being applied, leaving a gap twice the intended size.
+    // No top padding: the emergency rail directly above already ends with its own vertical
+    // padding, and applying both left a gap twice the intended size.
     <View style={styles.skeletonWrap}>
       {[0, 1, 2, 3].map((i) => (
         <View key={i} style={[styles.skeletonCard, theme.elevation.level1]}>
@@ -66,7 +48,6 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [filter, setFilter] = useState<FilterId>("ALL");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   /**
@@ -118,7 +99,7 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
   );
 
   /**
-   * What the list below the chips is allowed to show.
+   * What the feed below the header is allowed to show.
    *
    * Emergencies are deliberately absent: they're pinned in the rail directly above, and having
    * them in both places meant the same card appeared twice on one screen — once as a tile, then
@@ -126,26 +107,6 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
    * hidden by this; an emergency is always visible, just in one place instead of two.
    */
   const feedNeeds = useMemo(() => (needs ?? []).filter((n) => n.urgency !== "EMERGENCY"), [needs]);
-
-  // Counts come from that same source, so a chip never promises more than tapping it delivers.
-  const counts = useMemo(
-    () =>
-      FILTERS.reduce<Record<FilterId, number>>(
-        (acc, f) => {
-          acc[f.id] = feedNeeds.filter(f.match).length;
-          return acc;
-        },
-        {} as Record<FilterId, number>
-      ),
-    [feedNeeds]
-  );
-
-  const visibleNeeds = useMemo(() => {
-    if (!needs) return [];
-    const active = FILTERS.find((f) => f.id === filter);
-    if (!active || active.id === "ALL") return feedNeeds;
-    return feedNeeds.filter(active.match);
-  }, [needs, feedNeeds, filter]);
 
   async function handleRefresh() {
     setIsRefreshing(true);
@@ -186,14 +147,11 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
       <FeedListHeader
         needs={needs ?? []}
         stats={stats}
-        counts={counts}
-        filter={filter}
-        onFilterChange={setFilter}
         onSelectNeed={onSelectNeed}
         isLoading={needs === null}
       />
     ),
-    [needs, stats, counts, filter, onSelectNeed]
+    [needs, stats, onSelectNeed]
   );
 
   const drawer = <SideDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />;
@@ -230,7 +188,7 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
          * place. Keeping the same FlashList mounted throughout means only the list body changes —
          * skeletons give way to cards, and nothing above them moves. */}
         <FlashList
-          data={visibleNeeds}
+          data={feedNeeds}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           // Two columns, scrolling continuously — the grid from the design. The header, empty
@@ -244,9 +202,9 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
           masonry
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          // Hero + explore row + emergency rail + filters travel with the list. They used to be
-          // pinned above it, but a hero that never scrolls away would permanently eat a third of
-          // the screen — and the chips read as belonging to the header they sit under.
+          // The stat blocks, category grid and emergency rail travel with the list rather than
+          // being pinned above it — furniture that never scrolls away would permanently eat most
+          // of the screen on a phone.
           ListHeaderComponent={listHeader}
           refreshControl={
             <RefreshControl
@@ -256,14 +214,14 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
               colors={[theme.color.primary]}
             />
           }
-          // Every "nothing to show" case stays inside the list, so the hero and the chips remain
-          // on screen — rendering any of them as a separate branch hid the chips and left no way
-          // back.
+          // Every "nothing to show" case stays inside the list, so the stats and the category
+          // grid remain on screen — rendering one as a separate branch would hide the grid and
+          // leave no way to browse anywhere else.
           ListEmptyComponent={
             isLoading ? (
               <FeedSkeleton />
             ) : feedNeeds.length === 0 ? (
-              <View style={styles.filterEmpty}>
+              <View style={styles.emptyWrap}>
                 <EmptyState
                   icon="inbox"
                   title={needs!.length === 0 ? "No live needs right now" : "Nothing else right now"}
@@ -274,20 +232,12 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
                   }
                 />
               </View>
-            ) : (
-              <View style={styles.filterEmpty}>
-                <EmptyState
-                  icon="filter"
-                  title={`No ${FILTERS.find((f) => f.id === filter)?.label.toLowerCase()} needs`}
-                  subtitle="Nothing live in this category yet. Try another filter or pull to refresh."
-                />
-              </View>
-            )
+            ) : null
           }
           ListFooterComponent={
-            visibleNeeds.length === 0 ? null : (
+            feedNeeds.length === 0 ? null : (
               <Text style={styles.footerNote}>
-                {visibleNeeds.length} {visibleNeeds.length === 1 ? "need" : "needs"} shown
+                {feedNeeds.length} {feedNeeds.length === 1 ? "need" : "needs"} shown
               </Text>
             )
           }
@@ -299,26 +249,23 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
 }
 
 /**
- * Everything above the cards: the two stat blocks, pinned emergency rail, then the filter row.
+ * Everything above the cards: the two stat blocks, the category grid, then the emergency rail.
  *
- * Split out so FlashList can treat it as one header block, and so the filter state stays owned by
- * the screen rather than leaking into the hero.
+ * The type filter chips and the organisations row both used to live here and are gone — the
+ * category grid does each job better. The chips filtered by *mechanism* (Money, Kits, Meals),
+ * which is the platform's model rather than what a donor is looking for; the grid filters by
+ * cause. And Orphanages and NGOs are now tiles in that grid, so a separate row for them was the
+ * same two destinations offered twice on one screen.
  */
 function FeedListHeader({
   needs,
   stats,
-  counts,
-  filter,
-  onFilterChange,
   onSelectNeed,
   isLoading,
 }: {
   isLoading: boolean;
   needs: Need[];
   stats: PublicStats | null;
-  counts: Record<FilterId, number>;
-  filter: FilterId;
-  onFilterChange: (id: FilterId) => void;
   onSelectNeed: (need: Need) => void;
 }) {
   return (
@@ -327,33 +274,11 @@ function FeedListHeader({
           screen opened with the same claim twice. This version says more in the same space. */}
       <ImpactAtAGlance stats={stats} />
       <PresentCases stats={stats} />
-      {/* Explore sits above the emergency rail on purpose: it's fixed furniture, so it belongs
-          directly under the stats where it's always in the same place. The emergency rail comes
-          and goes with the data, and a section that appears above a fixed row shoves that row
-          down the page every time an emergency opens. */}
-      <ExploreOrganisations />
+      {/* Fixed furniture, so it sits directly under the stats where it's always in the same
+          place. The emergency rail below comes and goes with the data, and a section that
+          appears above a fixed row would shove it down the page every time an emergency opens. */}
+      <ExploreCategories />
       <EmergencySpotlight needs={needs} onSelectNeed={onSelectNeed} isLoading={isLoading} />
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-        keyboardShouldPersistTaps="handled"
-      >
-        {FILTERS.map((f) => (
-          <Chip
-            key={f.id}
-            label={f.label}
-            icon={f.icon}
-            active={filter === f.id}
-            tone={f.id === "URGENT" || f.id === "BLOOD" ? "blood" : "primary"}
-            // No count while the feed is still fetching. A count of 0 is a claim, not a
-            // placeholder — and a wrong one that flips to a real number a moment later.
-            count={f.id === "ALL" || isLoading ? undefined : counts[f.id]}
-            onPress={() => onFilterChange(f.id)}
-          />
-        ))}
-      </ScrollView>
     </View>
   );
 }
@@ -376,12 +301,7 @@ const styles = StyleSheet.create({
   // otherwise push every header section 8pt further in than the rest of the app. The sections
   // keep owning their own insets, so nothing inside here had to change.
   headerBlock: { marginBottom: theme.spacing.xs, marginHorizontal: -theme.spacing.sm },
-  filterEmpty: { paddingTop: theme.spacing.xxl },
-  filterRow: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
+  emptyWrap: { paddingTop: theme.spacing.xxl },
   footerNote: {
     ...theme.typography.caption,
     color: theme.color.textTertiary,

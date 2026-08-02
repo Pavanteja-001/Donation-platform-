@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View, TouchableOpacity } from "react-nati
 import { WebView } from "react-native-webview";
 import { Feather } from "@expo/vector-icons";
 import { fetchLocations, postBloodNeed, uploadPhotos, type BloodGroup, type DistrictLocation, type AreaLocation } from "../lib/api";
+import type { NeedCategory } from "../lib/needCategory";
 import { getCurrentGpsLocation } from "../lib/locationUtils";
 import { useAuth } from "../context/AuthContext";
 import { theme } from "../lib/theme";
@@ -82,7 +83,7 @@ const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   tirupati: { lat: 13.6288, lng: 79.4192 },
 };
 
-export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
+export function CreateBloodNeedScreen({ onDone, category }: { onDone: () => void; category?: NeedCategory }) {
   const { token, user } = useAuth();
   const webViewRef = useRef<any>(null);
   const [title, setTitle] = useState("");
@@ -286,6 +287,7 @@ export function CreateBloodNeedScreen({ onDone }: { onDone: () => void }) {
     try {
       const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
       await postBloodNeed(token, {
+        category,
         title: title.trim(),
         description: description.trim(),
         bloodGroup,

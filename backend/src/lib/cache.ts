@@ -148,7 +148,8 @@ export async function cached<T>(key: string, ttlSeconds: number, loader: () => P
 // silently means "never invalidated", which is the worst kind of cache bug.
 export const CacheKey = {
   locations: "locations:all",
-  needsFeed: (type?: string, direction?: string) => `needs:feed:${type ?? "all"}:${direction ?? "any"}`,
+  needsFeed: (type?: string, direction?: string, category?: string) =>
+    `needs:feed:${type ?? "all"}:${direction ?? "any"}:${category ?? "any"}`,
   needsFeedPrefix: "needs:feed:",
   analytics: "admin:analytics",
   /** Home-screen headline figures (routes/stats.ts) — aggregations over whole tables. */

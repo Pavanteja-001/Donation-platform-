@@ -1,4 +1,5 @@
 import { File, UploadType } from "expo-file-system";
+import type { NeedCategory } from "./needCategory";
 
 // EXPO_PUBLIC_API_URL is inlined at build time (Expo's built-in env support).
 // Defaults to the backend's local dev port (see backend/README.md).
@@ -137,6 +138,12 @@ export interface GoodsPayload {
 export interface Need {
   id: string;
   type: NeedType;
+  /**
+   * The cause this need serves. Null on rows created before categories existed, and on MONEY/KIT
+   * needs whose cause couldn't be inferred from the type — treat null as "uncategorised", never
+   * as a default category.
+   */
+  category: NeedCategory | null;
   title: string;
   description: string;
   status: NeedStatus;
@@ -317,8 +324,12 @@ export function fetchLocations() {
 
 // The "browse live needs" feed (PRD §6.8) — server already ranks Emergency > Urgent > Normal,
 // then recency.
-export function fetchNeeds(token: string) {
-  return request<{ needs: Need[] }>("/api/needs", {
+export function fetchNeeds(token: string, opts?: { category?: NeedCategory }) {
+  // Filtered server-side against the (category, status) index rather than fetched-then-filtered:
+  // a tile that pulls the whole feed to show three needs wastes the user's data on rows it is
+  // about to throw away.
+  const query = opts?.category ? `?category=${opts.category}` : "";
+  return request<{ needs: Need[] }>(`/api/needs${query}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
@@ -386,13 +397,22 @@ export function fetchNeed(token: string, id: string) {
 // "save as draft, edit later" UI for this milestone — the backend still supports it).
 export async function postMoneyNeed(
   token: string,
-  data: { title: string; description: string; targetAmount: number; upiId: string; photos?: string[] }
+  data: {
+    /** The cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
+    title: string;
+    description: string;
+    targetAmount: number;
+    upiId: string;
+    photos?: string[];
+  }
 ) {
   const { need } = await request<{ need: Need }>("/api/needs", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       type: "MONEY",
+      category: data.category,
       title: data.title,
       description: data.description,
       photos: data.photos,
@@ -409,6 +429,8 @@ export async function postMoneyNeed(
 export async function postKitNeed(
   token: string,
   data: {
+    /** The cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     contents: string;
@@ -424,6 +446,7 @@ export async function postKitNeed(
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       type: "KIT",
+      category: data.category,
       title: data.title,
       description: data.description,
       photos: data.photos,
@@ -450,6 +473,8 @@ export async function postKitNeed(
 export async function postBloodNeed(
   token: string,
   data: {
+    /** The cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     bloodGroup: BloodGroup;
@@ -467,6 +492,7 @@ export async function postBloodNeed(
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       type: "BLOOD",
+      category: data.category,
       title: data.title,
       description: data.description,
       city: data.city,
@@ -490,6 +516,8 @@ export async function postBloodNeed(
 export async function postMealSlotNeed(
   token: string,
   data: {
+    /** The cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     mealType: string;
@@ -506,6 +534,7 @@ export async function postMealSlotNeed(
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       type: "MEAL_SLOT",
+      category: data.category,
       title: data.title,
       description: data.description,
       photos: data.photos,
@@ -629,6 +658,8 @@ export function respondToBloodNeed(token: string, needId: string, units: number 
 export async function postGoodsNeed(
   token: string,
   data: {
+    /** The cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     item: string;
@@ -643,6 +674,7 @@ export async function postGoodsNeed(
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       type: "GOODS",
+      category: data.category,
       title: data.title,
       description: data.description,
       photos: data.photos,
@@ -673,6 +705,8 @@ export function claimGoods(token: string, needId: string, proofUrl?: string) {
 export async function postSkillRequestNeed(
   token: string,
   data: {
+    /** The cause this need serves (lib/needCategory.ts). Server validates it against the type. */
+    category?: NeedCategory;
     title: string;
     description: string;
     role_needed: string;
@@ -688,6 +722,7 @@ export async function postSkillRequestNeed(
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       type: "SKILL_REQUEST",
+      category: data.category,
       title: data.title,
       description: data.description,
       city: data.city,

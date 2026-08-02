@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { postGoodsNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategoryParam } from "../lib/useCategoryParam";
 import { PhotoPicker } from "../components/PhotoPicker";
 
 // PRD §11.1/§11.2 — post a GOODS need. Links to **this** institution automatically (D-008), same
@@ -8,6 +9,7 @@ import { PhotoPicker } from "../components/PhotoPicker";
 // it themselves afterward (NeedDetailPage), rather than waiting on admin.
 export function CreateGoodsNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token, user } = useAuth();
+  const category = useCategoryParam();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [item, setItem] = useState("");
@@ -26,7 +28,7 @@ export function CreateGoodsNeedPage({ onDone, onBack }: { onDone: () => void; on
     setIsSubmitting(true);
     try {
       const photos = photoFiles.length > 0 ? await uploadPhotos(token, photoFiles, "need-photos") : undefined;
-      await postGoodsNeed(token, { title, description, item, condition, linkedInstitutionId: user?.id, photos });
+      await postGoodsNeed(token, { category, title, description, item, condition, linkedInstitutionId: user?.id, photos });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post this need");

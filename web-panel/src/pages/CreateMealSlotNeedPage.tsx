@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { postMealSlotNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategoryParam } from "../lib/useCategoryParam";
 import { PhotoPicker } from "../components/PhotoPicker";
 
 type Mode = "MONEY" | "DELIVER";
@@ -10,6 +11,7 @@ type Mode = "MONEY" | "DELIVER";
 // fast-track-verify it themselves afterward (NeedDetailPage), rather than waiting on admin.
 export function CreateMealSlotNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token, user } = useAuth();
+  const category = useCategoryParam();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [mealType, setMealType] = useState("");
@@ -48,7 +50,7 @@ export function CreateMealSlotNeedPage({ onDone, onBack }: { onDone: () => void;
     setIsSubmitting(true);
     try {
       const photos = photoFiles.length > 0 ? await uploadPhotos(token, photoFiles, "need-photos") : undefined;
-      await postMealSlotNeed(token, {
+      await postMealSlotNeed(token, { category,
         title,
         description,
         mealType,

@@ -1,3 +1,4 @@
+import type { NeedCategory } from "../lib/needCategory";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -14,7 +15,7 @@ type Mode = "MONEY" | "DELIVER";
 
 // PRD §9.1/§9.2 — post a KIT need. D-004: both modes are supported — donors either fund a kit
 // or buy and deliver it themselves.
-export function CreateKitNeedScreen({ onDone }: { onDone: () => void }) {
+export function CreateKitNeedScreen({ onDone, category }: { onDone: () => void; category?: NeedCategory }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -42,6 +43,7 @@ export function CreateKitNeedScreen({ onDone }: { onDone: () => void }) {
     try {
       const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
       await postKitNeed(token, {
+        category,
         title: title.trim(),
         description: description.trim(),
         contents: contents.trim(),

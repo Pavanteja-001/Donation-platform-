@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { postSkillRequestNeed } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategoryParam } from "../lib/useCategoryParam";
 
 // PRD §13 — admin posts a SKILL_REQUEST volunteering need on behalf of a partner or beneficiary.
 // No linkedInstitutionId auto-link (same rule as admin Blood/Goods pages — self-verify fast-track
 // only applies when the poster IS the institution).
 export function CreateSkillRequestNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token } = useAuth();
+  const category = useCategoryParam();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [roleNeeded, setRoleNeeded] = useState("");
@@ -30,7 +32,7 @@ export function CreateSkillRequestNeedPage({ onDone, onBack }: { onDone: () => v
     setError(null);
     setIsSubmitting(true);
     try {
-      await postSkillRequestNeed(token, {
+      await postSkillRequestNeed(token, { category,
         title: title.trim(),
         description: description.trim(),
         role_needed: roleNeeded.trim(),

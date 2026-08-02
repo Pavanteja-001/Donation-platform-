@@ -8,6 +8,7 @@ import {
   type DistrictLocation,
 } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategoryParam } from "../lib/useCategoryParam";
 import { PhotoPicker } from "../components/PhotoPicker";
 
 const BLOOD_GROUPS: BloodGroup[] = [
@@ -42,6 +43,7 @@ function formatGroup(g: BloodGroup) {
 
 export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token, user } = useAuth();
+  const category = useCategoryParam();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [city, setCity] = useState(user?.city ?? "Visakhapatnam");
@@ -207,7 +209,7 @@ export function CreateBloodNeedPage({ onDone, onBack }: { onDone: () => void; on
     setIsSubmitting(true);
     try {
       const photos = photoFiles.length > 0 ? await uploadPhotos(token, photoFiles, "need-photos") : undefined;
-      await postBloodNeed(token, {
+      await postBloodNeed(token, { category,
         title,
         description,
         city: city.trim() || undefined,

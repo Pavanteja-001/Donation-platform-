@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { postKitNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategoryParam } from "../lib/useCategoryParam";
 import { PhotoPicker } from "../components/PhotoPicker";
 
 type Mode = "MONEY" | "DELIVER";
@@ -9,6 +10,7 @@ type Mode = "MONEY" | "DELIVER";
 // photos). Mirrors mobile's CreateKitNeedScreen.
 export function CreateKitNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token } = useAuth();
+  const category = useCategoryParam();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [contents, setContents] = useState("");
@@ -33,7 +35,7 @@ export function CreateKitNeedPage({ onDone, onBack }: { onDone: () => void; onBa
     setIsSubmitting(true);
     try {
       const photos = photoFiles.length > 0 ? await uploadPhotos(token, photoFiles, "need-photos") : undefined;
-      await postKitNeed(token, {
+      await postKitNeed(token, { category,
         title,
         description,
         contents,

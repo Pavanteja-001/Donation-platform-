@@ -7,6 +7,7 @@ import { CreateKitNeedScreen } from "../screens/CreateKitNeedScreen";
 import { CreateBloodNeedScreen } from "../screens/CreateBloodNeedScreen";
 import { CreateMealSlotNeedScreen } from "../screens/CreateMealSlotNeedScreen";
 import { CreateGoodsNeedScreen } from "../screens/CreateGoodsNeedScreen";
+import { CategoryNeedsScreen } from "../screens/CategoryNeedsScreen";
 import { CertificateScreen } from "../screens/CertificateScreen";
 import { BloodProfileScreen } from "../screens/BloodProfileScreen";
 import { RegisterScreen } from "../screens/RegisterScreen";
@@ -20,6 +21,7 @@ import { NgosScreen } from "../screens/NgosScreen";
 import { NgoDetailScreen } from "../screens/NgoDetailScreen";
 import { GoodsScreen } from "../screens/GoodsScreen";
 import { CreateSkillRequestNeedScreen } from "../screens/CreateSkillRequestNeedScreen";
+import { CATEGORY_LABELS } from "../lib/needCategory";
 import { theme } from "../lib/theme";
 import { useAuth } from "../context/AuthContext";
 import { isProfileComplete } from "../lib/profile";
@@ -70,20 +72,34 @@ function NotificationsRoute({ navigation }: Props<"Notifications">) {
 function NeedDetailRoute({ route }: Props<"NeedDetail">) {
   return <NeedDetailScreen needId={route.params.needId} initialNeed={route.params.initialNeed} />;
 }
-function CreateMoneyRoute({ navigation }: Props<"CreateMoney">) {
-  return <CreateMoneyNeedScreen onDone={() => navigation.goBack()} />;
+function CategoryNeedsRoute({ navigation, route }: Props<"CategoryNeeds">) {
+  return (
+    <CategoryNeedsScreen
+      category={route.params.category}
+      onSelectNeed={(need) => navigation.navigate("NeedDetail", { needId: need.id, initialNeed: need })}
+    />
+  );
 }
-function CreateKitRoute({ navigation }: Props<"CreateKit">) {
-  return <CreateKitNeedScreen onDone={() => navigation.goBack()} />;
+function CreateMoneyRoute({ navigation, route }: Props<"CreateMoney">) {
+  return <CreateMoneyNeedScreen category={route.params?.category} onDone={() => navigation.goBack()} />;
 }
-function CreateBloodRoute({ navigation }: Props<"CreateBlood">) {
-  return <CreateBloodNeedScreen onDone={() => navigation.goBack()} />;
+function CreateKitRoute({ navigation, route }: Props<"CreateKit">) {
+  return <CreateKitNeedScreen category={route.params?.category} onDone={() => navigation.goBack()} />;
 }
-function CreateMealSlotRoute({ navigation }: Props<"CreateMealSlot">) {
-  return <CreateMealSlotNeedScreen onDone={() => navigation.goBack()} />;
+function CreateBloodRoute({ navigation, route }: Props<"CreateBlood">) {
+  return <CreateBloodNeedScreen category={route.params?.category} onDone={() => navigation.goBack()} />;
+}
+function CreateMealSlotRoute({ navigation, route }: Props<"CreateMealSlot">) {
+  return <CreateMealSlotNeedScreen category={route.params?.category} onDone={() => navigation.goBack()} />;
 }
 function CreateGoodsRoute({ navigation, route }: Props<"CreateGoods">) {
-  return <CreateGoodsNeedScreen direction={route.params?.direction ?? "REQUEST"} onDone={() => navigation.goBack()} />;
+  return (
+    <CreateGoodsNeedScreen
+      direction={route.params?.direction ?? "REQUEST"}
+      category={route.params?.category}
+      onDone={() => navigation.goBack()}
+    />
+  );
 }
 function GoodsRoute({ navigation }: Props<"Goods">) {
   return (
@@ -110,8 +126,8 @@ function ForumRoute({ navigation }: Props<"Forum">) {
 function ForumQuestionRoute({ route }: Props<"ForumQuestion">) {
   return <ForumQuestionDetailScreen questionId={route.params.questionId} initialQuestion={route.params.initialQuestion} />;
 }
-function CreateSkillRequestRoute({ navigation }: Props<"CreateSkillRequest">) {
-  return <CreateSkillRequestNeedScreen onDone={() => navigation.goBack()} />;
+function CreateSkillRequestRoute({ navigation, route }: Props<"CreateSkillRequest">) {
+  return <CreateSkillRequestNeedScreen category={route.params?.category} onDone={() => navigation.goBack()} />;
 }
 
 // Chunk 2 & 3 (Milestone 9) — the root stack: conditional initialRouteName based on profile completeness,
@@ -128,6 +144,11 @@ export function RootNavigator() {
       <Stack.Screen name="Register" component={RegisterRoute} options={{ title: "Register Profile", headerShown: false }} />
       <Stack.Screen name="Tabs" component={TabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="NeedDetail" component={NeedDetailRoute} options={{ title: "Need" }} />
+      <Stack.Screen
+        name="CategoryNeeds"
+        component={CategoryNeedsRoute}
+        options={({ route }) => ({ title: CATEGORY_LABELS[route.params.category] })}
+      />
       <Stack.Screen name="Notifications" component={NotificationsRoute} options={{ title: "Notifications" }} />
       <Stack.Screen name="Orphanages" component={OrphanagesRoute} options={{ title: "Orphanages & Old Age Homes" }} />
       <Stack.Screen name="OrphanageDetail" component={OrphanageDetailRoute} options={{ title: "Home details" }} />

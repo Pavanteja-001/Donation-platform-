@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { postMoneyNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useCategoryParam } from "../lib/useCategoryParam";
 import { PhotoPicker } from "../components/PhotoPicker";
 
 // PRD §7.1/§7.2 — Admin posting a money need on behalf of a beneficiary/partner org without
 // their own account (D-018 — kept Admin-only, mirrors web-panel's CreateMoneyNeedPage).
 export function CreateMoneyNeedPage({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { token } = useAuth();
+  const category = useCategoryParam();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
@@ -25,7 +27,7 @@ export function CreateMoneyNeedPage({ onDone, onBack }: { onDone: () => void; on
     setIsSubmitting(true);
     try {
       const photos = photoFiles.length > 0 ? await uploadPhotos(token, photoFiles, "need-photos") : undefined;
-      await postMoneyNeed(token, { title, description, targetAmount: amount, upiId, photos });
+      await postMoneyNeed(token, { category, title, description, targetAmount: amount, upiId, photos });
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post this need");

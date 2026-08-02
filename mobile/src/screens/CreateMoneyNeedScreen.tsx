@@ -1,3 +1,4 @@
+import type { NeedCategory } from "../lib/needCategory";
 import { useState } from "react";
 import { postMoneyNeed, uploadPhotos } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -6,7 +7,7 @@ import { CreateNeedScaffold } from "../components/CreateNeedScaffold";
 import { Input } from "../components/ui";
 
 // PRD §7.1/§7.2 — post a MONEY need.
-export function CreateMoneyNeedScreen({ onDone }: { onDone: () => void }) {
+export function CreateMoneyNeedScreen({ onDone, category }: { onDone: () => void; category?: NeedCategory }) {
   const { token } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -28,6 +29,7 @@ export function CreateMoneyNeedScreen({ onDone }: { onDone: () => void }) {
     try {
       const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
       await postMoneyNeed(token, {
+        category,
         title: title.trim(),
         description: description.trim(),
         targetAmount: amount,
