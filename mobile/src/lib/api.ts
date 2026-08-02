@@ -323,6 +323,28 @@ export function fetchNeeds(token: string) {
   });
 }
 
+/**
+ * Home-screen headline figures. Every value is aggregated from the database server-side — the
+ * client never derives or estimates these, so what a donor reads is what the platform can prove.
+ */
+export interface PublicStats {
+  impact: {
+    /** Rupees from CONFIRMED contributions only. */
+    amountRaised: number;
+    /** Needs that reached FULFILLED. Not a beneficiary count — see the backend note. */
+    needsFulfilled: number;
+    verifiedInstitutions: number;
+    bloodDonors: number;
+  };
+  cases: { total: number; active: number; pending: number; completedThisMonth: number };
+}
+
+export function fetchPublicStats(token: string) {
+  return request<PublicStats>("/api/stats", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 /** Live GOODS needs in one direction — the two halves of the Goods screen. */
 export function fetchGoods(token: string, direction: GoodsDirection) {
   return request<{ needs: Need[] }>(`/api/needs?type=GOODS&direction=${direction}`, {

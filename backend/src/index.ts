@@ -21,6 +21,7 @@ import orphanageRoutes from "./routes/orphanages";
 import bookingRoutes from "./routes/bookings";
 import ngoRoutes from "./routes/ngos";
 import volunteerRoutes from "./routes/volunteers";
+import statsRoutes from "./routes/stats";
 import { startMaintenanceJobs } from "./lib/maintenance";
 
 const app = express();
@@ -74,6 +75,7 @@ app.use("/api/orphanages", apiLimiter, orphanageRoutes);
 app.use("/api/bookings", apiLimiter, bookingRoutes);
 app.use("/api/ngos", apiLimiter, ngoRoutes);
 app.use("/api/volunteers", apiLimiter, volunteerRoutes);
+app.use("/api/stats", apiLimiter, statsRoutes);
 
 // Last-resort handler — logs and responds 500 instead of letting the process crash. Route
 // handlers should still catch what they can (e.g. the P2002 UTR-uniqueness case), this is the

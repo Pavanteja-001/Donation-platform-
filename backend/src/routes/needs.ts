@@ -1,6 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
-import { ContributionKind, KycStatus, NeedStatus, NeedType, Prisma, Role, Urgency, ContributionStatus } from "@prisma/client";
+import {
+  ContributionKind,
+  KycStatus,
+  NeedCategory,
+  NeedStatus,
+  NeedType,
+  Prisma,
+  Role,
+  Urgency,
+  ContributionStatus,
+} from "@prisma/client";
 import type { Need } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
@@ -11,6 +21,7 @@ import { bloodPayloadInputSchema } from "../lib/bloodNeed";
 import { parseMealSlotPayload, dedupeDates } from "../lib/mealSlotNeed";
 import { goodsPayloadInputSchema, parseGoodsPayload, goodsDirectionOf, GoodsDirection } from "../lib/goodsNeed";
 import { expireIfPastDeadline, expireManyIfPastDeadline } from "../lib/needExpiry";
+import { validateCategoryForType, inferCategoryFromType } from "../lib/needCategory";
 import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 import { notifyPosterOfContribution } from "../lib/contributionAlerts";
 import { notifyVerificationQueue } from "../lib/notifications";
@@ -123,6 +134,10 @@ async function createMealSlotNeed(
   base: {
     title: string;
     description: string;
+    // Declared explicitly rather than arriving by spread. It was already flowing through at
+    // runtime but wasn't in this type, so nothing checked it — and it carried whatever the client
+    // sent instead of the value the route resolved.
+    category?: NeedCategory | null;
     city?: string;
     area?: string;
     latitude?: number | null;
@@ -154,6 +169,10 @@ async function createMealSlotNeed(
 
 const createSchema = z.object({
   type: z.nativeEnum(NeedType),
+  // The cause this need serves — see lib/needCategory.ts. Optional at the API boundary so an
+  // older client (or the type-specific panel endpoints) can still post; coherence with `type` is
+  // enforced below, and a single-cause type has its category filled in server-side.
+  category: z.nativeEnum(NeedCategory).optional(),
   title: z.string().min(1),
   description: z.string().min(1),
   city: z.string().min(1).optional(),
@@ -192,6 +211,18 @@ router.post("/", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
   }
+
+  // Reject an incoherent cause/mechanism pair before anything is written — a need filed under
+  // "Orphanages" but typed BLOOD would surface in the wrong tile with no way for the poster to
+  // fix it.
+  const categoryCheck = validateCategoryForType(parsed.data.category, parsed.data.type);
+  if (!categoryCheck.ok) {
+    return res.status(400).json({ error: categoryCheck.error });
+  }
+  // A type that only one cause can produce doesn't need the client to say so. Filling it in here
+  // means an older build, which knows nothing about categories, still lands in the right tile.
+  const category = parsed.data.category ?? inferCategoryFromType(parsed.data.type);
+
   if (parsed.data.linkedInstitutionId) {
     const institution = await prisma.user.findUnique({ where: { id: parsed.data.linkedInstitutionId } });
     if (!institution || institution.role !== Role.INSTITUTION) {
@@ -206,7 +237,9 @@ router.post("/", async (req, res) => {
     const { type: _type, payload, ...base } = parsed.data;
     const need = await createMealSlotNeed(
       req.user!.sub,
-      { ...base, latitude: coordinates.latitude, longitude: coordinates.longitude },
+      // `category` last so the resolved value (always ORPHANAGES for a meal slot) wins over
+      // whatever the client happened to send in the spread.
+      { ...base, latitude: coordinates.latitude, longitude: coordinates.longitude, category },
       payload
     );
     return res.status(201).json({ need });
@@ -214,6 +247,8 @@ router.post("/", async (req, res) => {
   const need = await prisma.need.create({
     data: {
       ...parsed.data,
+      // After the spread, so the server-inferred value wins when the client sent nothing.
+      category,
       latitude: coordinates.latitude,
       longitude: coordinates.longitude,
       payload: normalizePayload(parsed.data.type, parsed.data.payload) as Prisma.InputJsonValue | undefined,
@@ -245,6 +280,17 @@ router.patch("/:id", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request" });
   }
+
+  // Either field may be edited alone, so validate the resulting pair — not just what was sent.
+  // Changing only the type on an EDUCATION need to BLOOD has to fail even though `category`
+  // isn't in the request body.
+  const nextType = parsed.data.type ?? need.type;
+  const nextCategory = parsed.data.category !== undefined ? parsed.data.category : need.category;
+  const editCheck = validateCategoryForType(nextCategory, nextType);
+  if (!editCheck.ok) {
+    return res.status(400).json({ error: editCheck.error });
+  }
+
   if (parsed.data.linkedInstitutionId) {
     const institution = await prisma.user.findUnique({ where: { id: parsed.data.linkedInstitutionId } });
     if (!institution || institution.role !== Role.INSTITUTION) {

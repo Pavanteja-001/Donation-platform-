@@ -4,11 +4,14 @@ import { useFocusEffect } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import { fetchNeeds, type Need } from "../lib/api";
+import { fetchNeeds, fetchPublicStats, type Need, type PublicStats } from "../lib/api";
 import { needsFeedCache, isStale } from "../lib/listCache";
 import { useAuth } from "../context/AuthContext";
 import { NeedCard } from "../components/NeedCard";
-import { FeedHero } from "../components/FeedHero";
+import { ImpactAtAGlance } from "../components/ImpactAtAGlance";
+import { PresentCases } from "../components/PresentCases";
+import { AppHeader } from "../components/AppHeader";
+import { SideDrawer } from "../components/SideDrawer";
 import { ExploreOrganisations } from "../components/ExploreOrganisations";
 import { EmergencySpotlight } from "../components/EmergencySpotlight";
 import { theme } from "../lib/theme";
@@ -60,13 +63,33 @@ function FeedSkeleton() {
 export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
   const { token } = useAuth();
   const [needs, setNeeds] = useState<Need[] | null>(needsFeedCache.data);
+  const [stats, setStats] = useState<PublicStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterId>("ALL");
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  /**
+   * Headline figures, fetched alongside the feed but failing independently.
+   *
+   * A stats outage must never blank the feed — the needs are the product, the numbers are
+   * decoration. On failure `stats` simply stays null and those two blocks keep showing their
+   * skeletons, which is the honest rendering of "we don't know yet".
+   */
+  const loadStats = useCallback(async () => {
+    if (!token) return;
+    try {
+      setStats(await fetchPublicStats(token));
+    } catch {
+      // Intentionally silent — see above.
+    }
+  }, [token]);
 
   const load = useCallback(
     async (opts: { silent?: boolean; force?: boolean } = {}) => {
       if (!token) return;
+
+      void loadStats();
 
       if (needsFeedCache.data !== null && !isStale(needsFeedCache) && !opts.force) {
         return;
@@ -85,7 +108,7 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
         }
       }
     },
-    [token]
+    [token, loadStats]
   );
 
   useFocusEffect(
@@ -142,7 +165,7 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
 
       const card = (
         <View style={styles.cardWrap}>
-          <NeedCard need={item} onPress={() => onSelectNeed(item)} />
+          <NeedCard need={item} compact onPress={() => onSelectNeed(item)} />
         </View>
       );
       if (!isFirstSight) return card;
@@ -162,6 +185,7 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
     () => (
       <FeedListHeader
         needs={needs ?? []}
+        stats={stats}
         counts={counts}
         filter={filter}
         onFilterChange={setFilter}
@@ -169,13 +193,23 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
         isLoading={needs === null}
       />
     ),
-    [needs, counts, filter, onSelectNeed]
+    [needs, stats, counts, filter, onSelectNeed]
   );
 
+  const drawer = <SideDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />;
+  const header = <AppHeader onOpenDrawer={() => setIsDrawerOpen(true)} />;
+
   if (error) {
+    // The header stays even when the feed fails. It carries the notification bell and the menu,
+    // and a network error is exactly when someone might want to reach either — losing the whole
+    // chrome because one request failed would strand them on a dead screen.
     return (
-      <View style={[styles.screen, styles.centered]}>
-        <ErrorState message={error} onRetry={load} />
+      <View style={styles.screen}>
+        {header}
+        <View style={[styles.listWrap, styles.centered]}>
+          <ErrorState message={error} onRetry={load} />
+        </View>
+        {drawer}
       </View>
     );
   }
@@ -184,6 +218,9 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
 
   return (
     <View style={styles.screen}>
+      {/* Pinned, outside the list: the bell and the menu must stay reachable at any scroll
+          position. Putting them in the list header would scroll them away. */}
+      {header}
       <View style={styles.listWrap}>
         {/* One tree for every state — loading, empty and populated.
          *
@@ -196,6 +233,15 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
           data={visibleNeeds}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          // Two columns, scrolling continuously — the grid from the design. The header, empty
+          // state and footer still span the full width; FlashList only columnises `data`.
+          numColumns={2}
+          // Masonry, not a plain grid. With `numColumns` alone every row is as tall as its
+          // tallest card, so a blood card next to a short kit card left a visible hole under the
+          // short one — and need cards vary a lot in height (photo or none, progress bar or
+          // badges). Masonry packs each column independently, so cards flow up into the space
+          // instead of leaving it blank.
+          masonry
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           // Hero + explore row + emergency rail + filters travel with the list. They used to be
@@ -247,18 +293,20 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
           }
         />
       </View>
+      {drawer}
     </View>
   );
 }
 
 /**
- * Everything above the cards: crimson hero, pinned emergency rail, then the filter row.
+ * Everything above the cards: the two stat blocks, pinned emergency rail, then the filter row.
  *
  * Split out so FlashList can treat it as one header block, and so the filter state stays owned by
  * the screen rather than leaking into the hero.
  */
 function FeedListHeader({
   needs,
+  stats,
   counts,
   filter,
   onFilterChange,
@@ -267,6 +315,7 @@ function FeedListHeader({
 }: {
   isLoading: boolean;
   needs: Need[];
+  stats: PublicStats | null;
   counts: Record<FilterId, number>;
   filter: FilterId;
   onFilterChange: (id: FilterId) => void;
@@ -274,9 +323,12 @@ function FeedListHeader({
 }) {
   return (
     <View style={styles.headerBlock}>
-      <FeedHero needs={needs} />
+      {/* The crimson FeedHero is gone — it and this block both led with "money raised", so the
+          screen opened with the same claim twice. This version says more in the same space. */}
+      <ImpactAtAGlance stats={stats} />
+      <PresentCases stats={stats} />
       {/* Explore sits above the emergency rail on purpose: it's fixed furniture, so it belongs
-          directly under the hero where it's always in the same place. The emergency rail comes
+          directly under the stats where it's always in the same place. The emergency rail comes
           and goes with the data, and a section that appears above a fixed row shoves that row
           down the page every time an emergency opens. */}
       <ExploreOrganisations />
@@ -310,10 +362,20 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.background },
   listWrap: { flex: 1 },
   // No horizontal padding here — the hero is full-bleed. Cards get their inset from `cardWrap`.
-  listContent: { paddingBottom: theme.spacing.xxl },
-  cardWrap: { paddingHorizontal: theme.spacing.lg },
+  listContent: { paddingBottom: theme.spacing.xxl, paddingHorizontal: theme.spacing.sm },
+  /**
+   * Cell padding is half the gutter, on both sides of every cell.
+   *
+   * With only this, the screen edges get 8 while the middle gets 8+8=16 — which is what made the
+   * first pass look lopsided. The matching 8 on `listContent` above brings the edges to 16 too,
+   * so margins and gutter finally agree without the cell needing to know which column it's in.
+   */
+  cardWrap: { paddingHorizontal: theme.spacing.sm, flex: 1 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
-  headerBlock: { marginBottom: theme.spacing.xs },
+  // Cancels `listContent`'s horizontal padding, which exists for the card grid but would
+  // otherwise push every header section 8pt further in than the rest of the app. The sections
+  // keep owning their own insets, so nothing inside here had to change.
+  headerBlock: { marginBottom: theme.spacing.xs, marginHorizontal: -theme.spacing.sm },
   filterEmpty: { paddingTop: theme.spacing.xxl },
   filterRow: {
     paddingHorizontal: theme.spacing.lg,

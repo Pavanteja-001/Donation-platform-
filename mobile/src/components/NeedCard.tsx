@@ -39,11 +39,22 @@ function NeedCardComponent({
   userLat,
   userLng,
   onPress,
+  compact = false,
 }: {
   need: Need;
   userLat?: number | null;
   userLng?: number | null;
   onPress?: () => void;
+  /**
+   * Half-width rendering for the two-column grid.
+   *
+   * Not just a smaller card — at ~170dp several things stop fitting at all: the "₹25,000 / of
+   * ₹85,000" row can't sit side by side, the type illustration plus its label plus an urgency
+   * badge overflow one line, and a two-line description leaves no room for the progress bar that
+   * actually drives donations. Each change below drops the least load-bearing element rather
+   * than scaling everything down uniformly, which would just make it all illegible.
+   */
+  compact?: boolean;
 }) {
   const urgency = URGENCY[need.urgency];
   const isEmergency = need.urgency === "EMERGENCY";
@@ -81,14 +92,16 @@ function NeedCardComponent({
       {isEmergency && (
         <Gradient colors={["#EF4444", "#B91C1C", "#7A1010"]} direction="horizontal" style={styles.emergencyStrip}>
           <Feather name="alert-triangle" size={12} color={theme.color.onBlood} />
-          <Text style={styles.emergencyStripText}>Emergency · needs donors now</Text>
+          <Text style={styles.emergencyStripText} numberOfLines={1}>
+            {compact ? "Emergency" : "Emergency · needs donors now"}
+          </Text>
         </Gradient>
       )}
 
       {cover && (
         <Image
           source={{ uri: cover }}
-          style={styles.cover}
+          style={[styles.cover, compact && styles.coverCompact]}
           contentFit="cover"
           cachePolicy="memory-disk"
           transition={220}
@@ -107,7 +120,7 @@ function NeedCardComponent({
         pointerEvents="none"
       />
 
-      <View style={styles.body}>
+      <View style={[styles.body, compact && styles.bodyCompact]}>
         <View style={styles.headerRow}>
           <View style={styles.typeGroup}>
             {/* The three types a donor scans for get a full illustration; everything else keeps
@@ -119,17 +132,19 @@ function NeedCardComponent({
                 rather than being decoration. */}
             {blood ? (
               <BloodBagIllustration
-                size={38}
+                size={compact ? 30 : 38}
                 fillLevel={blood.units_needed > 0 ? blood.units_fulfilled / blood.units_needed : 0}
               />
             ) : need.type === "KIT" || need.type === "GOODS" ? (
-              <KitBoxIllustration size={38} />
+              <KitBoxIllustration size={compact ? 30 : 38} />
             ) : need.type === "MONEY" ? (
-              <RupeeStackIllustration size={38} />
+              <RupeeStackIllustration size={compact ? 30 : 38} />
             ) : (
               <IconPlate icon={meta.icon} size="sm" tone="custom" colors={litRamp(meta.color)} />
             )}
-            <Text style={[styles.typeLabel, { color: meta.color }]}>{meta.label}</Text>
+            {/* The word "BLOOD" next to a blood bag is redundant at any width; at half width it's
+                also what pushes the urgency badge off the row. The illustration carries the type. */}
+            {!compact && <Text style={[styles.typeLabel, { color: meta.color }]}>{meta.label}</Text>}
           </View>
 
           <View style={styles.headerRight}>
@@ -145,16 +160,20 @@ function NeedCardComponent({
           </View>
         </View>
 
-        <Text style={styles.title} numberOfLines={2}>
+        <Text style={[styles.title, compact && styles.titleCompact]} numberOfLines={2}>
           {need.title}
         </Text>
-        <Text style={styles.description} numberOfLines={2}>
-          {need.description}
-        </Text>
+        {/* Dropped in compact: the progress bar is what converts a browse into a donation, and
+            with both present neither fits above the fold of a half-width card. */}
+        {!compact && (
+          <Text style={styles.description} numberOfLines={2}>
+            {need.description}
+          </Text>
+        )}
 
         {money && (
           <View style={styles.stats}>
-            <View style={styles.amountRow}>
+            <View style={[styles.amountRow, compact && styles.amountRowCompact]}>
               <Text style={styles.amount}>{formatAmount(money.raised_amount)}</Text>
               <Text style={styles.amountTarget}>of {formatAmount(money.target_amount)}</Text>
             </View>
@@ -164,7 +183,7 @@ function NeedCardComponent({
 
         {blood && (
           <View style={styles.stats}>
-            <View style={styles.amountRow}>
+            <View style={[styles.amountRow, compact && styles.amountRowCompact]}>
               {/* Pulses only on EMERGENCY (D-012), so the effect stays rare enough to mean
                   something in a scrolling feed. */}
               <EmergencyPulse active={isEmergency}>
@@ -225,7 +244,7 @@ function NeedCardComponent({
             ) : (
               <View />
             )}
-            {posted && <Text style={styles.footerText}>{posted}</Text>}
+            {posted && !compact && <Text style={styles.footerText}>{posted}</Text>}
           </View>
         )}
       </View>
@@ -266,16 +285,24 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: theme.color.surfaceMuted,
   },
+  // Roughly square at half width, rather than the wide banner a full-width card gets. Keeping 164
+  // here would make the photo taller than it is wide and push everything else off screen.
+  coverCompact: { height: 112 },
   body: { padding: theme.spacing.lg, gap: theme.spacing.sm },
+  bodyCompact: { padding: theme.spacing.md, gap: 6 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: theme.spacing.sm },
   typeGroup: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, flexShrink: 1 },
   typeIcon: { width: 26, height: 26, borderRadius: theme.radii.xs, alignItems: "center", justifyContent: "center" },
   typeLabel: { ...theme.typography.overline, textTransform: "uppercase" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
   title: { ...theme.typography.h3, color: theme.color.textPrimary },
+  titleCompact: { fontSize: 15, lineHeight: 20 },
   description: { ...theme.typography.bodySmall, color: theme.color.textSecondary },
   stats: { marginTop: theme.spacing.xs, gap: theme.spacing.sm },
   amountRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: theme.spacing.sm },
+  // Stacked, not side by side. "₹25,000" and "of ₹85,000" together need ~150dp; the card's inner
+  // width at half screen is about 145dp, so on a narrow phone the target silently truncated.
+  amountRowCompact: { flexDirection: "column", alignItems: "flex-start", gap: 0 },
   amount: { ...theme.typography.numeric, color: theme.color.textPrimary },
   amountTarget: { ...theme.typography.caption, color: theme.color.textSecondary },
   bloodGroup: {

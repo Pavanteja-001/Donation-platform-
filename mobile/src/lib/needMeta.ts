@@ -103,6 +103,32 @@ export function formatAmount(n: number | null | undefined) {
   return `₹${num(n).toLocaleString("en-IN")}`;
 }
 
+/**
+ * Compact rupees in Indian units — ₹4.2L, ₹40.1Cr — for places where the full grouped number
+ * cannot fit, like the four side-by-side stat tiles on the home screen.
+ *
+ * Crore and lakh, not million and billion: an Indian donor reads "₹1.2Cr" instantly and has to
+ * stop and convert "₹12M". Use `formatAmount` anywhere the exact figure matters (a donation
+ * amount, a target, a receipt) — this one deliberately loses precision.
+ */
+export function formatCompactAmount(n: number | null | undefined) {
+  const v = num(n);
+  const compact = (value: number, unit: string) => {
+    const scaled = value.toFixed(1);
+    // Drop a trailing ".0" so it reads ₹5Cr, not ₹5.0Cr.
+    return `₹${scaled.endsWith(".0") ? scaled.slice(0, -2) : scaled}${unit}`;
+  };
+  if (v >= 1e7) return compact(v / 1e7, "Cr");
+  if (v >= 1e5) return compact(v / 1e5, "L");
+  if (v >= 1e3) return compact(v / 1e3, "K");
+  return `₹${v.toLocaleString("en-IN")}`;
+}
+
+/** Indian-grouped whole numbers — 12,684 — for counts that aren't money. */
+export function formatCount(n: number | null | undefined) {
+  return num(n).toLocaleString("en-IN");
+}
+
 export function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }

@@ -151,6 +151,8 @@ export const CacheKey = {
   needsFeed: (type?: string, direction?: string) => `needs:feed:${type ?? "all"}:${direction ?? "any"}`,
   needsFeedPrefix: "needs:feed:",
   analytics: "admin:analytics",
+  /** Home-screen headline figures (routes/stats.ts) — aggregations over whole tables. */
+  publicStats: "stats:public",
 } as const;
 
 /**
@@ -164,6 +166,10 @@ export const CacheKey = {
 export function invalidateNeedCaches(): void {
   void cacheInvalidate(CacheKey.needsFeedPrefix);
   void cacheInvalidate(CacheKey.analytics);
+  // The home screen's headline counts move with the same writes the feed does — a verified need
+  // changes both "active cases" and what the feed shows. Missing this would leave the two views
+  // disagreeing on screen at the same moment.
+  void cacheInvalidate(CacheKey.publicStats);
 }
 
 /**
@@ -184,4 +190,6 @@ export const CacheTtl = {
   needsFeed: 30,
   /** Aggregations over the whole table — expensive, and nobody needs them to the second. */
   analytics: 60,
+  /** Same shape of work as `analytics`, but on the busiest screen in the app. */
+  publicStats: 60,
 } as const;

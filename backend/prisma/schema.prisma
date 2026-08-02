@@ -164,6 +164,31 @@ enum NeedType {
   QUESTION
 }
 
+/// What CAUSE a need serves — a separate axis from `NeedType`, which says how someone donates.
+///
+/// These are not interchangeable and neither can be derived from the other: an EDUCATION need can
+/// be MONEY (school fees) or KIT (books and uniforms); a MONEY need can be MEDICAL, EDUCATION,
+/// ANIMALS or DISASTER_RELIEF. Collapsing them into one field is what forces a donor browsing
+/// "Education" to instead scan a list of "Money" and guess.
+///
+/// `lib/needCategory.ts` owns which types each category may take, and is authoritative — clients
+/// carry a copy for their dropdowns, but the server rejects anything that doesn't match.
+///
+/// NGOs is deliberately absent: that tile in the app opens the organisation directory, it is not
+/// a kind of need.
+enum NeedCategory {
+  MEDICAL
+  BLOOD
+  EDUCATION
+  DONATE_ITEMS
+  WOMEN_EMPOWERMENT
+  ANIMALS
+  DISASTER_RELIEF
+  INTERNSHIP
+  SCRIBES
+  ORPHANAGES
+}
+
 // PRD §6.8 / D-012 — admin/institution-verified, never self-declared.
 enum Urgency {
   NORMAL
@@ -370,6 +395,17 @@ model Need {
   title       String
   description String
 
+  /// The cause this need serves — see the NeedCategory enum for why this is separate from `type`.
+  ///
+  /// Nullable, and answered by the poster for needs created after this field existed. Rows
+  /// predating it were backfilled only where exactly one cause can produce that type — BLOOD and
+  /// MEAL_SLOT, plus GOODS which historically only ever came from the donate-items screen.
+  ///
+  /// MONEY, KIT and SKILL_REQUEST were deliberately left null. Each spans several causes (money
+  /// funds medical, education, animals and disaster relief alike), so filing them by the
+  /// commonest one would put a wrong claim in front of donors. Null is honestly "not categorised".
+  category NeedCategory?
+
   postedById String
   postedBy   User   @relation("NeedsPosted", fields: [postedById], references: [id])
 
@@ -422,6 +458,10 @@ model Need {
 
   @@index([status, urgency])
   @@index([status, type])
+  /// Category browsing ("show me every live Education need"). Leads with `category` because that
+  /// is the selective column — every other index here leads with `status`, which only has a
+  /// handful of distinct values and so can't narrow a category lookup on its own.
+  @@index([category, status])
   @@index([status, city])
   @@index([postedById])
   @@index([linkedInstitutionId])
