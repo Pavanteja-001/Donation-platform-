@@ -84,6 +84,7 @@ model User {
 
   // Set once the app registers for push (D-016) — used for the eligible-donor match (§8.4).
   expoPushToken String?
+  fcmToken      String?
 
   // KYC details (Chunk 4) — NGO / hospital / blood bank / orphanage onboarding.
   institutionType    InstitutionType?
@@ -150,6 +151,7 @@ model User {
 
   @@index([role, kycStatus])
   @@index([bloodGroup, city, availableToDonate])
+  @@index([fcmToken])
 }
 
 // PRD §6.1 — Need types. Only BLOOD and MEAL_SLOT need custom modules (CLAUDE.md §3);

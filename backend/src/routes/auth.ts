@@ -113,6 +113,7 @@ const updateMeSchema = z.object({
   gender: z.nativeEnum(Gender).optional(),
   availableToDonate: z.boolean().optional(),
   expoPushToken: z.string().min(1).optional(),
+  fcmToken: z.string().min(1).optional(),
 
   // KYC fields (Chunk 4)
   institutionType: z.nativeEnum(InstitutionType).optional(),

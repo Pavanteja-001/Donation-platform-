@@ -7,16 +7,12 @@ import { updateMe } from "./api";
 // Configure foreground notification behavior (D-016)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
     shouldShowBanner: true,
     shouldShowList: true,
   }),
 });
-
-// (A hand-rolled base64/JWT decoder lived here purely to build the fake dev push token from the
-// auth token's phone claim. The fake token is gone, and so is the decoder.)
 
 // Schedules an instant local push notification alert (used in dev mode / USB debugging)
 export async function scheduleLocalNotification(title: string, body: string, data?: Record<string, unknown>) {
@@ -39,21 +35,6 @@ export async function scheduleLocalNotification(title: string, body: string, dat
 export async function registerForPushNotificationsAsync(token: string): Promise<void> {
   try {
     if (Platform.OS === "android") {
-      // On Android 8+ the **channel** decides sound, vibration and heads-up — the `sound` field
-      // on the push message itself is an iOS concept and is ignored here. Both of these were
-      // created without an explicit `sound`, which is why notifications arrived silently.
-      //
-      // Channels are IMMUTABLE once created: editing this block does nothing on a device where
-      // the app is already installed. Either bump the channel id or uninstall/reinstall.
-      // `name` is what the user sees in Android's notification settings, so it must read like a
-      // category, not a slug.
-      // Bundled sounds rather than "default". The device default resolves to the user's chosen
-      // system tone — and if they never set one (Android ships some devices with it as "None"),
-      // every alert arrives silently. A blood emergency that vibrates but makes no sound is a
-      // failure of the one notification that matters most, so the app carries its own.
-      //
-      // The filename is the resource name; the plugin copies these into res/raw at build time
-      // (see app.json → expo-notifications → sounds).
       await Notifications.setNotificationChannelAsync("default", {
         name: "General updates",
         importance: Notifications.AndroidImportance.HIGH,
@@ -62,9 +43,6 @@ export async function registerForPushNotificationsAsync(token: string): Promise<
         vibrationPattern: [0, 250, 250, 250],
         lightColor: "#B91C1C",
       });
-      // High-priority channel for Emergency blood requests (D-016) — heads-up + sound.
-      // Its sound is a double-pulse heartbeat, so an emergency is recognisable from the tone
-      // alone without reading the screen.
       await Notifications.setNotificationChannelAsync("emergency", {
         name: "Emergency blood requests",
         importance: Notifications.AndroidImportance.MAX,
@@ -75,47 +53,52 @@ export async function registerForPushNotificationsAsync(token: string): Promise<
       });
     }
 
-    let expoPushToken: string;
+    if (!Device.isDevice && !__DEV__) return; // simulators/emulators don't have real push tokens
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== "granted" && !__DEV__) return;
+
+    let fcmToken: string | undefined;
+    let expoPushToken: string | undefined;
+
+    // 1. Fetch raw FCM Device Push Token directly from Firebase Cloud Messaging
     try {
-      if (!Device.isDevice && !__DEV__) return; // simulators/emulators don't have real push tokens
-
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== "granted") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+      const deviceTokenObj = await Notifications.getDevicePushTokenAsync();
+      if (deviceTokenObj?.data) {
+        fcmToken = deviceTokenObj.data;
+        console.log(`[push] Native FCM Token obtained (${deviceTokenObj.type}):`, fcmToken?.substring(0, 15) + "...");
       }
-      if (finalStatus !== "granted" && !__DEV__) return;
-
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-      if (!projectId) {
-        // Expo can't mint a token without knowing which EAS project it belongs to. Say so
-        // loudly — this is a setup gap, and it used to be papered over with a mock token.
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[push] No EAS projectId (app.json → expo.extra.eas.projectId). Push notifications " +
-            "cannot be delivered to this build. Run `eas init`, upload the FCM key with " +
-            "`eas credentials`, then rebuild."
-        );
-        return;
-      }
-      const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
-      expoPushToken = data;
     } catch (e) {
-      // Deliberately NOT falling back to a fake `ExponentPushToken[mock-…]` any more.
-      //
-      // That fallback stored an unusable token on the user's record, so the backend's blood
-      // matching counted them as reachable and "sent" pushes that Expo rejected outright
-      // (DeviceNotRegistered) — a request that looked fully successful end to end while no
-      // device could ever receive it. No token is far more honest than a fake one.
-      // eslint-disable-next-line no-console
-      console.warn("[push] Could not obtain an Expo push token — this device will not receive pushes:", e);
+      console.warn("[push] Could not obtain native FCM token, trying Expo push token fallback:", e);
+    }
+
+    // 2. Fetch Expo Push Token as fallback if projectId is set
+    try {
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      if (projectId) {
+        const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+        expoPushToken = data;
+      }
+    } catch (e) {
+      console.warn("[push] Could not obtain Expo push token:", e);
+    }
+
+    if (!fcmToken && !expoPushToken) {
+      console.warn("[push] No push token obtained — this device will not receive push notifications.");
       return;
     }
 
-    await updateMe(token, { expoPushToken });
+    // Register token(s) with backend
+    await updateMe(token, {
+      ...(fcmToken ? { fcmToken } : {}),
+      ...(expoPushToken ? { expoPushToken } : {}),
+    });
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[push] Could not register for push notifications:", err);
   }
 }

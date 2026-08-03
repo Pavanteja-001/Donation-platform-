@@ -8,6 +8,10 @@ import type { AppNavigationProp } from "../navigation/types";
 import { theme } from "../lib/theme";
 import { PressableScale, Button } from "./ui";
 
+import { Image } from "expo-image";
+
+const COMMUNITY_ICON = require("../../assets/icons/community.webp");
+
 /**
  * The right-edge drawer.
  *
@@ -18,7 +22,8 @@ import { PressableScale, Button } from "./ui";
 const WIDTH_FRACTION = 0.75;
 
 interface DrawerLink {
-  icon: keyof typeof Feather.glyphMap;
+  icon?: keyof typeof Feather.glyphMap;
+  imageIcon?: number;
   label: string;
   hint?: string;
   onPress: () => void;
@@ -71,7 +76,12 @@ export function SideDrawer({ visible, onClose }: { visible: boolean; onClose: ()
     },
     { icon: "briefcase", label: "NGOs", hint: "Verified organisations", onPress: go(() => navigation.navigate("Ngos")) },
     { icon: "package", label: "Donate items", hint: "Give or request goods", onPress: go(() => navigation.navigate("Goods")) },
-    { icon: "message-circle", label: "Community", hint: "Ask and answer", onPress: go(() => navigation.navigate("Forum")) },
+    {
+      imageIcon: COMMUNITY_ICON,
+      label: "Community",
+      hint: "Ask and answer",
+      onPress: go(() => navigation.navigate("Forum")),
+    },
   ];
 
   return (
@@ -112,7 +122,11 @@ export function SideDrawer({ visible, onClose }: { visible: boolean; onClose: ()
             {links.map((l) => (
               <PressableScale key={l.label} onPress={l.onPress} scaleTo={0.98} style={styles.row}>
                 <View style={styles.rowIcon}>
-                  <Feather name={l.icon} size={17} color={theme.color.primary} />
+                  {l.imageIcon ? (
+                    <Image source={l.imageIcon} style={{ width: 34, height: 34 }} contentFit="contain" />
+                  ) : l.icon ? (
+                    <Feather name={l.icon} size={17} color={theme.color.primary} />
+                  ) : null}
                 </View>
                 <View style={styles.rowText}>
                   <Text style={styles.rowLabel}>{l.label}</Text>

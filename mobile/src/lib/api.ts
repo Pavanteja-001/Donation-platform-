@@ -35,6 +35,7 @@ export interface AuthUser {
   lastDonationDate: string | null;
   availableToDonate: boolean;
   expoPushToken: string | null;
+  fcmToken: string | null;
 }
 
 // PRD §8.2 — computed fresh server-side on every /api/auth/me read, never stored.
@@ -290,6 +291,7 @@ export function updateMe(
     gender: Gender;
     availableToDonate: boolean;
     expoPushToken: string;
+    fcmToken: string;
   }>
 ) {
   return request<{ user: AuthUser }>("/api/auth/me", {

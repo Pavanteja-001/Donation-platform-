@@ -2,17 +2,6 @@ import { NotificationType, Role } from "@prisma/client";
 import { prisma } from "./prisma";
 import { sendPushNotifications, type PushMessage } from "./pushNotifications";
 
-/**
- * The single way this platform notifies anyone.
- *
- * Persist first, push second — and push is best-effort. Every delivery failure this project has
- * already hit (dead token, channel silenced, system tone set to None, phone offline) leaves the
- * stored row untouched, so the user still finds the alert in their inbox. Push is the tap on the
- * shoulder; the row is the message.
- *
- * Recipients without a push token still get a row. That's the point: an institution using only
- * the web panel has no token at all, and would otherwise be told nothing.
- */
 export interface NotifyInput {
   recipientIds: string[];
   type: NotificationType;
@@ -30,7 +19,7 @@ export async function notify(input: NotifyInput): Promise<{ stored: number; push
 
   const recipients = await prisma.user.findMany({
     where: { id: { in: recipientIds } },
-    select: { id: true, expoPushToken: true },
+    select: { id: true, fcmToken: true, expoPushToken: true },
   });
   if (recipients.length === 0) return { stored: 0, pushed: 0 };
 
@@ -46,18 +35,28 @@ export async function notify(input: NotifyInput): Promise<{ stored: number; push
   });
 
   const messages: PushMessage[] = recipients
-    .filter((r) => !!r.expoPushToken)
-    .map((r) => ({
-      to: r.expoPushToken!,
-      title: input.title,
-      body: input.body,
-      priority: input.urgent ? "high" : "default",
-      channelId: input.urgent ? "emergency" : "default",
-      data: { needId: input.needId, forumId: input.forumId },
-    }));
+    .map((r): PushMessage | null => {
+      const token = r.fcmToken ?? r.expoPushToken;
+      if (!token) return null;
+      return {
+        to: token,
+        title: input.title,
+        body: input.body,
+        priority: input.urgent ? "high" : "default",
+        channelId: input.urgent ? "emergency" : "default",
+        data: { needId: input.needId, forumId: input.forumId },
+      };
+    })
+    .filter((m): m is PushMessage => m !== null);
 
-  // Deliberately not awaited by callers' critical paths — see each call site.
-  await sendPushNotifications(messages);
+  // Non-blocking async dispatch for maximum performance
+  if (messages.length > 0) {
+    setImmediate(() => {
+      sendPushNotifications(messages).catch((err) => {
+        console.error("[notify] Error dispatching push notifications:", err);
+      });
+    });
+  }
 
   return { stored: stored.count, pushed: messages.length };
 }

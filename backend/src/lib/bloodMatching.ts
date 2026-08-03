@@ -18,10 +18,17 @@ export async function notifyEligibleBloodDonors(need: Need): Promise<{ notified:
       role: Role.USER,
       bloodGroup: blood.blood_group,
       availableToDonate: true,
-      expoPushToken: { not: null },
       OR: [
-        { city: { in: locationTerms, mode: "insensitive" } },
-        { area: { in: locationTerms, mode: "insensitive" } },
+        { fcmToken: { not: null } },
+        { expoPushToken: { not: null } },
+      ],
+      AND: [
+        {
+          OR: [
+            { city: { in: locationTerms, mode: "insensitive" } },
+            { area: { in: locationTerms, mode: "insensitive" } },
+          ],
+        },
       ],
     },
   });

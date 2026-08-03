@@ -14,6 +14,7 @@ import type { AppNavigationProp } from "../navigation/types";
  * rows of 4/4/3, which reads as a deliberate grid rather than a leftover.
  */
 
+const COMMUNITY_ICON = require("../../assets/icons/community.webp");
 const NGOS_ICON = require("../../assets/icons/ngos.webp");
 
 /**
@@ -65,6 +66,21 @@ export function ExploreCategories() {
           </PressableScale>
         ))}
 
+        {/* Community Q&A forum tile */}
+        <PressableScale
+          onPress={() => navigation.navigate("Forum")}
+          scaleTo={0.94}
+          accessibilityLabel="Community: Ask and answer"
+          style={styles.tile}
+        >
+          <View style={styles.iconWrap}>
+            <Image source={COMMUNITY_ICON} style={styles.communityIcon} contentFit="contain" transition={120} />
+          </View>
+          <Text style={styles.label} numberOfLines={2}>
+            Community
+          </Text>
+        </PressableScale>
+
         {/* NGOs isn't a category — no need is ever filed under it. It's here because the design
             puts it in this grid and because it's where a donor looks for organisations, so it
             navigates to the directory instead of filtering the feed. */}
@@ -109,7 +125,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  icon: { width: 30, height: 30 },
+  icon: { width: 32, height: 32 },
+  communityIcon: { width: 48, height: 48 },
   label: {
     ...theme.typography.caption,
     fontSize: 11,

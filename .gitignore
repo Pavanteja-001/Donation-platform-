@@ -23,9 +23,11 @@ mobile/*.mobileprovision
 # (mobile/android and mobile/ios are already ignored by mobile/.gitignore — generated output.)
 # Firebase/Google service-account private keys (FCM V1 push credential). A live secret:
 # anyone holding it can send push notifications as this app.
-mobile/*service-account*.json
-mobile/*serviceaccount*.json
-mobile/*-firebase-adminsdk-*.json
+*service-account*.json
+*serviceaccount*.json
+*-firebase-adminsdk-*.json
+FIREBASE_SERVICE_ACCOUNT*.json
+
 
 # web builds
 web-panel/dist/
