@@ -91,6 +91,23 @@ admin list 403 ✓ / no token 401 ✓. Test staff + donor accounts deleted after
    and self-publish via `/institution-verify` without admin review. Either write that into D-008
    as intended behaviour or close it — right now it reads like an oversight.
 
+4. **Nothing had ever deleted a file from the bucket (D-031).** Not one call site in the whole
+   codebase. Deleting a need left its photos and UPI QR; deleting a story or event left its
+   cover, gallery and banner; and every image *replacement* — profile photo, story cover, draft
+   photo — stranded the old file forever. A storage bill that could only go up, made entirely of
+   files nothing could display. Now wired into every delete and every replace, plus
+   `npm run storage:sweep` (`prisma/sweepOrphanedUploads.ts`) as the backstop for the two cases
+   no request path can catch: everything uploaded before this change, and uploads whose form was
+   never saved. Dry-run by default, `--delete` to act, and it will not touch anything younger
+   than 7 days — "unreferenced" and "the form is still open" look identical from the bucket.
+
+   Verified: `keyFromPublicUrl` 7/7 (accepts our two folder shapes, rejects a foreign host, a
+   different bucket, an unknown folder, a plain link, junk) · upload → attach to story → delete
+   story → object gone from the bucket listing ✓ · replace a story cover → old file gone, new one
+   kept ✓ · admin-delete a need → its photo gone ✓. First sweep: 49 objects / 22.1 MB, 37
+   referenced, 12 orphaned (5 too recent), **7 removable / 175.8 KB** — left in place, run the
+   sweep with `--delete` when you want them gone.
+
 **Next:** rebuild the native app before running it (unchanged from Session 35 — the depth-pass
 packages still need `npx expo run:ios|android`). Open data-repair question: the five historical
 admin contributions still back their needs' own progress counters (all five needs are FULFILLED)
