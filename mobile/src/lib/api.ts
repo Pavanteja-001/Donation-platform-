@@ -1094,3 +1094,129 @@ export function fetchMemberships(token: string) {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+
+// =================================================================================================
+// Community panel — the menu drawer's content (backend: routes/community.ts)
+// =================================================================================================
+
+export interface Helpline {
+  id: string;
+  name: string;
+  /** Free text: short codes (100, 108, 1098) as well as 10-digit numbers. */
+  number: string;
+  /** Admin-uploaded icon; when null, `iconKey` selects a built-in one (lib/helplineIcons.ts). */
+  iconUrl: string | null;
+  iconKey: string | null;
+  category: string | null;
+  sortOrder: number;
+}
+
+/** What the carousel card and the list row need — no `body`, which can be pages long. */
+export interface SuccessStoryCard {
+  id: string;
+  title: string;
+  summary: string;
+  coverImageUrl: string | null;
+  beneficiaryName: string | null;
+  publishedAt: string;
+}
+
+export interface SuccessStory extends SuccessStoryCard {
+  body: string;
+  images: string[];
+  relatedNeedId: string | null;
+  isPublished: boolean;
+  sortOrder: number;
+}
+
+export type EventMode = "OFFLINE" | "ONLINE";
+
+export interface PlatformEventCard {
+  id: string;
+  title: string;
+  eventType: string | null;
+  mode: EventMode;
+  location: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  iconUrl: string | null;
+  bannerUrl: string | null;
+}
+
+export interface PlatformEvent extends PlatformEventCard {
+  description: string;
+  address: string | null;
+  registrationUrl: string | null;
+  contactPhone: string | null;
+  isPublished: boolean;
+}
+
+/**
+ * A row on the supporters leaderboard. Deliberately narrow: rank, who, how much, and — only for
+ * donors already presenting as available blood donors — their group. Nothing else about a donor
+ * is exposed here (CLAUDE.md §7).
+ */
+export interface TopSupporter {
+  id: string;
+  rank: number;
+  name: string;
+  profilePhotoUrl: string | null;
+  bloodGroup: BloodGroup | null;
+  totalAmount: number;
+  isInstitution: boolean;
+}
+
+export interface CommunityMenu {
+  helplines: Helpline[];
+  /** How many helplines to show before the "View all" link. Server-owned, so the design can change without an app release. */
+  helplinePreviewCount: number;
+  stories: SuccessStoryCard[];
+  supporters: TopSupporter[];
+  events: PlatformEventCard[];
+}
+
+/**
+ * Everything the drawer renders, in one request.
+ *
+ * The menu slides over the current screen with no loading state of its own, so four separate
+ * calls would show four blocks popping in one after another on a slow connection.
+ */
+export function fetchCommunityMenu(token: string) {
+  return request<CommunityMenu>("/api/community/menu", { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function fetchHelplines(token: string) {
+  return request<{ helplines: Helpline[] }>("/api/community/helplines", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchSuccessStories(token: string, limit = 20) {
+  return request<{ stories: SuccessStoryCard[] }>(`/api/community/success-stories?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchSuccessStory(token: string, id: string) {
+  return request<{ story: SuccessStory }>(`/api/community/success-stories/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchTopSupporters(token: string, limit = 20) {
+  return request<{ supporters: TopSupporter[] }>(`/api/community/top-supporters?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchEvents(token: string, scope: "upcoming" | "past" = "upcoming", limit = 20) {
+  return request<{ events: PlatformEventCard[] }>(`/api/community/events?scope=${scope}&limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchEvent(token: string, id: string) {
+  return request<{ event: PlatformEvent }>(`/api/community/events/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

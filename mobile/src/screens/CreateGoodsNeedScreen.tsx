@@ -94,11 +94,14 @@ export function CreateGoodsNeedScreen({
     if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 999) {
       return setError("Quantity must be a whole number between 1 and 999");
     }
+    // Especially true here: a donor deciding whether to claim a second-hand item is judging it
+    // almost entirely on the photo.
+    if (photos.length === 0) return setError("Add at least one photo — it's what lets an admin verify your request");
 
     setError(null);
     setIsSubmitting(true);
     try {
-      const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
+      const photoUrls = await uploadPhotos(token, photos, "need-photos");
       await postGoodsNeed(token, {
         category,
         title: title.trim(),

@@ -46,7 +46,16 @@ router.get("/", async (_req, res) => {
     ] = await Promise.all([
       // `amount` is null for BLOOD/GOODS contributions (nothing monetary changed hands), and SUM
       // ignores nulls — so this is the money total without needing a `kind` filter.
-      prisma.contribution.aggregate({ _sum: { amount: true }, where: { status: "CONFIRMED" } }),
+      //
+      // Console roles are excluded for the same reason they can no longer donate at all (see
+      // `blockedAsConsoleRole` in routes/needs.ts): an admin can confirm their own contribution,
+      // so admin money is money nobody independent verified. It is not a hypothetical — four
+      // admin test rows worth ₹40,08,72,431 were 99.97% of this headline figure, which is exactly
+      // the "impressive placeholder" this file's own comment warns against.
+      prisma.contribution.aggregate({
+        _sum: { amount: true },
+        where: { status: "CONFIRMED", donor: { role: { notIn: [Role.ADMIN, Role.STAFF] } } },
+      }),
       prisma.need.count({ where: { status: NeedStatus.FULFILLED } }),
       prisma.user.count({ where: { role: Role.INSTITUTION, kycStatus: KycStatus.APPROVED } }),
       // Anyone who has filled in a blood group — that opt-in IS the donor profile (PRD §8.1).

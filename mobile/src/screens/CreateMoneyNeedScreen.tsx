@@ -23,11 +23,14 @@ export function CreateMoneyNeedScreen({ onDone, category }: { onDone: () => void
     if (!title.trim() || !description.trim()) return setError("Title and description are required");
     if (!amount || amount <= 0) return setError("Enter a valid target amount");
     if (!upiId.trim()) return setError("Enter your UPI ID");
+    // Backed by the same rule server-side (POST /needs/:id/submit) — checked here so the poster
+    // finds out before the form is uploaded, not after.
+    if (photos.length === 0) return setError("Add at least one photo — it's what lets an admin verify your request");
 
     setError(null);
     setIsSubmitting(true);
     try {
-      const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
+      const photoUrls = await uploadPhotos(token, photos, "need-photos");
       await postMoneyNeed(token, {
         category,
         title: title.trim(),

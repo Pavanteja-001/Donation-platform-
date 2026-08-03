@@ -54,11 +54,12 @@ export function CreateMealSlotNeedScreen({ onDone, category }: { onDone: () => v
     if (!cost || cost <= 0) return setError("Enter a valid cost per slot");
     if (mode === "MONEY" && !upiId.trim()) return setError("Enter your UPI ID — donors pay per slot through it");
     if (dates.length === 0) return setError("Add at least one date");
+    if (photos.length === 0) return setError("Add at least one photo — it's what lets an admin verify your request");
 
     setError(null);
     setIsSubmitting(true);
     try {
-      const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
+      const photoUrls = await uploadPhotos(token, photos, "need-photos");
       await postMealSlotNeed(token, {
         category,
         title: title.trim(),

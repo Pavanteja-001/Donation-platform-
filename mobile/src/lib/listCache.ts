@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 
-import type { Contribution, Need } from "./api";
+import type { Contribution, Need, PublicStats } from "./api";
 
 /**
  * In-memory caches for the three list screens, so returning to a tab shows content instantly
@@ -23,6 +23,7 @@ function createListCache<T>(): ListCache<T> {
 }
 
 export const needsFeedCache = createListCache<Need[]>();
+export const publicStatsCache = createListCache<PublicStats>();
 
 const EMERGENCY_COUNT_KEY = "lastEmergencyCount";
 
@@ -74,6 +75,10 @@ export function clearNeedsFeedCache() {
   rememberEmergencyCount(0);
 }
 
+export function clearPublicStatsCache() {
+  reset(publicStatsCache);
+}
+
 export function clearMyNeedsCache() {
   reset(myNeedsCache);
 }
@@ -85,6 +90,7 @@ export function clearContributionsCache() {
 /** Called on sign-out — one user's cached lists must never be visible to the next. */
 export function clearAllListCaches() {
   clearNeedsFeedCache();
+  clearPublicStatsCache();
   clearMyNeedsCache();
   clearContributionsCache();
 }

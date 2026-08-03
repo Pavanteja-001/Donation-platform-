@@ -450,10 +450,13 @@ model Need {
   // here so the shared engine doesn't need a schema change per type.
   payload Json?
 
-  contributions Contribution[]
+  contributions  Contribution[]
   // MEAL_SLOT only (§10.2) — the bookable calendar dates under this need. Empty for every other
   // type.
-  mealSlots     MealSlot[]
+  mealSlots      MealSlot[]
+  // Admin-written success stories that credit this need. Back-relation only; a need never needs
+  // to know about them, but Prisma requires the other side of SuccessStory.relatedNeed.
+  successStories SuccessStory[] @relation("StoriesFromNeed")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -634,4 +637,119 @@ model Area {
 
   @@unique([districtId, name])
   @@index([districtId])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Community panel (the mobile menu drawer) — three admin-curated content types.
+//
+// All three are *editorial*, not transactional: nothing here participates in the Need lifecycle,
+// nothing here moves money, and none of it is user-generated. That is why each carries its own
+// `isActive`/`isPublished` + `sortOrder` instead of a status enum — an admin is arranging a page,
+// not moving a request through verification.
+//
+// The fourth block on that menu, Top Supporters, has no model on purpose: it is derived from
+// confirmed Contributions (see routes/community.ts). A stored leaderboard would be a second
+// source of truth for money that is already recorded, and could drift from it.
+// ---------------------------------------------------------------------------------------------
+
+/// One row in "Safety & Emergency Support". Admin-managed because these numbers change (state
+/// helplines get renumbered) and shipping them hardcoded in the app would mean an app-store
+/// release to correct a number someone may be dialling in a crisis.
+model Helpline {
+  id     String @id @default(cuid())
+  name   String
+  /// Free text, not validated as a phone number: real helplines are short codes (100, 108,
+  /// 1098) as well as 10-digit mobiles, and some are published with extensions.
+  number String
+
+  /// Admin-uploaded icon (webp/png in the bucket). Falls back to `iconKey` when absent.
+  iconUrl String?
+  /// Name of a built-in icon to draw instead of an upload — keeps a helpline usable the moment
+  /// it is created, before anyone has made artwork for it.
+  iconKey String?
+
+  /// Optional grouping label shown under the name ("Mental health", "Women & children").
+  category String?
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+/// A published "Success Story" — the card carousel in the menu and its own detail page.
+model SuccessStory {
+  id      String @id @default(cuid())
+  title   String
+  /// The one or two lines that fit on the carousel card ("Thanks to your support, Kavya is back
+  /// to school…"). Kept separate from `body` so the card never renders a truncated paragraph.
+  summary String
+  /// Full write-up shown behind "Read more".
+  body    String
+
+  /// The card image. `images` are the additional photos on the detail page.
+  coverImageUrl String?
+  images        String[] @default([])
+
+  /// Who the story is about, if the person consented to being named. Optional — a story can be
+  /// told without identifying a beneficiary.
+  beneficiaryName String?
+  /// Optional link back to the need this story came out of, for provenance.
+  relatedNeedId   String?
+  relatedNeed     Need?   @relation("StoriesFromNeed", fields: [relatedNeedId], references: [id])
+
+  isPublished Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  publishedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isPublished, sortOrder, publishedAt])
+}
+
+enum EventMode {
+  OFFLINE
+  ONLINE
+}
+
+/// An admin-posted "Upcoming Event" — health camps, workshops, donation drives.
+///
+/// Named `PlatformEvent` rather than `Event` because `Event` is a global DOM/Node type name and
+/// the generated Prisma client type is imported into three TypeScript frontends.
+model PlatformEvent {
+  id          String @id @default(cuid())
+  title       String
+  description String
+
+  /// Free-text tag shown on the card ("Health camp", "Workshop", "Blood drive"). Deliberately
+  /// not an enum: an admin adding a new kind of event must not need a migration.
+  eventType String?
+
+  mode     EventMode @default(OFFLINE)
+  /// City / venue name shown on the card. For ONLINE events the app shows "Online" instead.
+  location String?
+  /// Full address, only shown on the detail page.
+  address  String?
+
+  startsAt DateTime
+  endsAt   DateTime?
+
+  /// Wide banner for the detail page; `iconUrl` is the small square on the list card.
+  bannerUrl String?
+  iconUrl   String?
+
+  /// Where to sign up (a form, a WhatsApp link) and who to call. Both optional.
+  registrationUrl String?
+  contactPhone    String?
+
+  isPublished Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isPublished, startsAt])
 }

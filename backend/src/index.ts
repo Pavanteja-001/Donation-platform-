@@ -23,6 +23,7 @@ import bookingRoutes from "./routes/bookings";
 import ngoRoutes from "./routes/ngos";
 import volunteerRoutes from "./routes/volunteers";
 import statsRoutes from "./routes/stats";
+import { publicRouter as communityPublicRoutes, adminRouter as communityAdminRoutes } from "./routes/community";
 import { startMaintenanceJobs } from "./lib/maintenance";
 
 const app = express();
@@ -156,6 +157,10 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/ngos", ngoRoutes);
 app.use("/api/volunteers", volunteerRoutes);
 app.use("/api/stats", statsRoutes);
+// The mobile menu drawer's content. Reads are public-to-logged-in-users; the writes live under
+// /api/admin so the admin console's existing auth story covers them unchanged.
+app.use("/api/community", communityPublicRoutes);
+app.use("/api/admin/community", communityAdminRoutes);
 
 // Last-resort handler — logs and responds 500 instead of letting the process crash. Route
 // handlers should still catch what they can (e.g. the P2002 UTR-uniqueness case), this is the

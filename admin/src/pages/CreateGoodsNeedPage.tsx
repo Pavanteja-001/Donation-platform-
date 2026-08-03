@@ -26,7 +26,13 @@ export function CreateGoodsNeedPage({ onDone, onBack }: { onDone: () => void; on
     setError(null);
     setIsSubmitting(true);
     try {
-      const photos = photoFiles.length > 0 ? await uploadPhotos(token, photoFiles, "need-photos") : undefined;
+      // Mirrors the server rule on POST /needs/:id/submit — a need going out for verification
+      // has to carry something an admin can actually look at.
+      if (photoFiles.length === 0) {
+        setError("Add at least one photo — it's what lets an admin verify this request");
+        return;
+      }
+      const photos = await uploadPhotos(token, photoFiles, "need-photos");
       await postGoodsNeed(token, { category, title, description, item, condition, photos });
       onDone();
     } catch (err) {

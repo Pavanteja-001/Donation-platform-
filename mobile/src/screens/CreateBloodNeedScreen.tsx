@@ -272,6 +272,11 @@ export function CreateBloodNeedScreen({ onDone, category }: { onDone: () => void
     if (!title.trim() || !description.trim()) return setError("Title and description are required");
     if (!bloodGroup) return setError("Select a blood group");
     if (!units || units <= 0) return setError("Enter how many units are needed");
+    // A blood request is the most time-critical thing on the platform, so this is the one place
+    // the photo rule costs the poster something. It still applies: a hospital slip or admission
+    // note is exactly what lets an admin fast-track the verification rather than sit on it.
+    if (photos.length === 0)
+      return setError("Add at least one photo (hospital slip, prescription) so this can be verified quickly");
 
     // The pinned coordinate is the exact hospital/pickup point and is what the needs map
     // plots. If the boxes hold something unparseable, send nothing at all rather than a
@@ -285,7 +290,7 @@ export function CreateBloodNeedScreen({ onDone, category }: { onDone: () => void
     setError(null);
     setIsSubmitting(true);
     try {
-      const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
+      const photoUrls = await uploadPhotos(token, photos, "need-photos");
       await postBloodNeed(token, {
         category,
         title: title.trim(),

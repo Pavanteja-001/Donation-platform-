@@ -479,7 +479,11 @@ export function setNeedUrgency(token: string, needId: string, urgency: Urgency) 
 }
 
 // Object storage (CLAUDE.md §6 / D-021) — same pattern as web-panel/mobile.
-export function signUpload(token: string, contentType: string, folder: "contribution-proofs" | "need-photos" | "need-qr") {
+export function signUpload(
+  token: string,
+  contentType: string,
+  folder: "contribution-proofs" | "need-photos" | "need-qr" | "community"
+) {
   return request<{ uploadUrl: string; publicUrl: string; key: string }>("/api/uploads/sign", {
     method: "POST",
     headers: authHeaders(token),
@@ -834,4 +838,204 @@ export function deleteNotification(token: string, id: string) {
 
 export function clearAllNotifications(token: string) {
   return request<{ deleted: number }>("/api/notifications", { method: "DELETE", headers: authHeaders(token) });
+}
+
+// =================================================================================================
+// Community panel — what the mobile menu drawer shows (backend: routes/community.ts)
+//
+// Reads here return EVERYTHING, including unpublished/inactive rows: this is the editing surface,
+// so a story an admin has switched off must still be visible to switch back on. The public
+// endpoints the app reads filter those out.
+// =================================================================================================
+
+export interface Helpline {
+  id: string;
+  name: string;
+  number: string;
+  iconUrl: string | null;
+  iconKey: string | null;
+  category: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type HelplineInput = {
+  name: string;
+  number: string;
+  iconUrl?: string | null;
+  iconKey?: string | null;
+  category?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+};
+
+export interface SuccessStory {
+  id: string;
+  title: string;
+  summary: string;
+  body: string;
+  coverImageUrl: string | null;
+  images: string[];
+  beneficiaryName: string | null;
+  relatedNeedId: string | null;
+  isPublished: boolean;
+  sortOrder: number;
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SuccessStoryInput = {
+  title: string;
+  summary: string;
+  body: string;
+  coverImageUrl?: string | null;
+  images?: string[];
+  beneficiaryName?: string | null;
+  relatedNeedId?: string | null;
+  isPublished?: boolean;
+  sortOrder?: number;
+};
+
+export type EventMode = "OFFLINE" | "ONLINE";
+
+export interface PlatformEvent {
+  id: string;
+  title: string;
+  description: string;
+  eventType: string | null;
+  mode: EventMode;
+  location: string | null;
+  address: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  bannerUrl: string | null;
+  iconUrl: string | null;
+  registrationUrl: string | null;
+  contactPhone: string | null;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PlatformEventInput = {
+  title: string;
+  description: string;
+  eventType?: string | null;
+  mode?: EventMode;
+  location?: string | null;
+  address?: string | null;
+  /** ISO-8601 with offset — the backend rejects a bare local datetime. */
+  startsAt: string;
+  endsAt?: string | null;
+  bannerUrl?: string | null;
+  iconUrl?: string | null;
+  registrationUrl?: string | null;
+  contactPhone?: string | null;
+  isPublished?: boolean;
+};
+
+/** Uploads an already-cropped image blob and returns its public URL. */
+export async function uploadCommunityImage(token: string, blob: Blob): Promise<string> {
+  const signed = await signUpload(token, blob.type, "community");
+  const res = await fetch(signed.uploadUrl, { method: "PUT", headers: { "Content-Type": blob.type }, body: blob });
+  if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+  return signed.publicUrl;
+}
+
+// --- Helplines -----------------------------------------------------------------------------------
+
+export function fetchAdminHelplines(token: string) {
+  return request<{ helplines: Helpline[] }>("/api/admin/community/helplines", { headers: authHeaders(token) });
+}
+
+export function createHelpline(token: string, data: HelplineInput) {
+  return request<{ helpline: Helpline }>("/api/admin/community/helplines", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateHelpline(token: string, id: string, data: Partial<HelplineInput>) {
+  return request<{ helpline: Helpline }>(`/api/admin/community/helplines/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteHelpline(token: string, id: string) {
+  return fetch(`${API_URL}/api/admin/community/helplines/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then((res) => {
+    if (!res.ok && res.status !== 204) throw new Error(`Request failed (${res.status})`);
+  });
+}
+
+// --- Success stories -----------------------------------------------------------------------------
+
+export function fetchAdminSuccessStories(token: string) {
+  return request<{ stories: SuccessStory[] }>("/api/admin/community/success-stories", {
+    headers: authHeaders(token),
+  });
+}
+
+export function createSuccessStory(token: string, data: SuccessStoryInput) {
+  return request<{ story: SuccessStory }>("/api/admin/community/success-stories", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateSuccessStory(token: string, id: string, data: Partial<SuccessStoryInput>) {
+  return request<{ story: SuccessStory }>(`/api/admin/community/success-stories/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteSuccessStory(token: string, id: string) {
+  return fetch(`${API_URL}/api/admin/community/success-stories/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then((res) => {
+    if (!res.ok && res.status !== 204) throw new Error(`Request failed (${res.status})`);
+  });
+}
+
+// --- Events ---------------------------------------------------------------------------------------
+
+export function fetchAdminEvents(token: string) {
+  return request<{ events: PlatformEvent[] }>("/api/admin/community/events", { headers: authHeaders(token) });
+}
+
+export function createEvent(token: string, data: PlatformEventInput) {
+  return request<{ event: PlatformEvent }>("/api/admin/community/events", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateEvent(token: string, id: string, data: Partial<PlatformEventInput>) {
+  return request<{ event: PlatformEvent }>(`/api/admin/community/events/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteEvent(token: string, id: string) {
+  return fetch(`${API_URL}/api/admin/community/events/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then((res) => {
+    if (!res.ok && res.status !== 204) throw new Error(`Request failed (${res.status})`);
+  });
 }

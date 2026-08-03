@@ -4,7 +4,15 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 // bottom tabs live in their own navigator; every "pushed" screen (detail, create, certificate,
 // blood profile) lives in the root stack that wraps the tabs, so it gets a real header + native
 // back button regardless of which tab it was opened from.
-import type { Need, ForumQuestion, Orphanage, Ngo, GoodsDirection } from "../lib/api";
+import type {
+  Need,
+  ForumQuestion,
+  Orphanage,
+  Ngo,
+  GoodsDirection,
+  SuccessStoryCard,
+  PlatformEventCard,
+} from "../lib/api";
 import type { NeedCategory } from "../lib/needCategory";
 
 export type TabParamList = {
@@ -43,6 +51,16 @@ export type RootStackParamList = {
   Forum: undefined;
   ForumQuestion: { questionId: string; initialQuestion?: ForumQuestion };
   CreateSkillRequest: { category?: NeedCategory } | undefined;
+
+  // The menu drawer's "View all" destinations (routes/community.ts). Each detail route takes an
+  // optional `initial` so tapping a card renders its title and image immediately and fills in the
+  // rest when the fetch lands, rather than showing a spinner over content the app already has.
+  Helplines: undefined;
+  SuccessStories: undefined;
+  SuccessStory: { storyId: string; initial?: SuccessStoryCard };
+  TopSupporters: undefined;
+  Events: undefined;
+  EventDetail: { eventId: string; initial?: PlatformEventCard };
 };
 
 // Tab screens need to push root-stack screens (e.g. Home -> NeedDetail) — NeedDetail isn't a tab

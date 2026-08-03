@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import {
   ContributionKind,
@@ -26,6 +27,7 @@ import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 import { notifyPosterOfContribution } from "../lib/contributionAlerts";
 import { notifyVerificationQueue } from "../lib/notifications";
 import { cached, CacheKey, CacheTtl, invalidateNeedCaches } from "../lib/cache";
+import { deleteReplacedObjects } from "../lib/storage";
 
 const router = Router();
 router.use(requireAuth);
@@ -337,6 +339,7 @@ router.patch("/:id", async (req, res) => {
       }
       return u;
     });
+    cleanUpReplacedNeedImages(need, updated);
     return res.json({ need: updated });
   }
   const updated = await prisma.need.update({
@@ -347,8 +350,28 @@ router.patch("/:id", async (req, res) => {
       ...(payload !== undefined ? { payload: normalizePayload(type, payload) as Prisma.InputJsonValue } : {}),
     },
   });
+  cleanUpReplacedNeedImages(need, updated);
   res.json({ need: updated });
 });
+
+/**
+ * Editing a DRAFT replaces `photos` wholesale and can swap the UPI QR, so any image dropped by
+ * the edit is instantly unreachable. Without this, every "actually, use this photo instead"
+ * while drafting left the previous one in the bucket for good.
+ */
+function cleanUpReplacedNeedImages(before: Need, after: Need): void {
+  deleteReplacedObjects(
+    [...before.photos, upiQrFromPayload(before.payload)],
+    [...after.photos, upiQrFromPayload(after.payload)]
+  );
+}
+
+/** A MONEY/KIT need's UPI QR lives inside the JSON payload, not in a column. */
+function upiQrFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const qr = (payload as Record<string, unknown>).upi_qr;
+  return typeof qr === "string" ? qr : null;
+}
 
 const locationSchema = z
   .object({
@@ -423,6 +446,27 @@ router.post("/:id/submit", async (req, res) => {
   } catch (err) {
     if (err instanceof InvalidTransitionError) return res.status(409).json({ error: err.message });
     throw err;
+  }
+
+  /**
+   * Every need going out for verification carries at least one photo.
+   *
+   * An admin verifying a request has the poster's own words and nothing else to go on; a photo of
+   * the prescription, the school letter, the damaged roof, the items being given away is the one
+   * piece of evidence that makes verification more than a vibe check. It is also what a donor
+   * scrolls past in the feed — a photoless card reads as an empty listing.
+   *
+   * Checked at submit, not at create, so writing a draft over several sittings still works: the
+   * requirement is on the thing you are asking strangers to fund, not on a half-finished form.
+   *
+   * SKILL_REQUEST is exempt: asking for a scribe or a career mentor has nothing to photograph,
+   * and forcing one would only produce filler images. QUESTION likewise — it is a forum post.
+   */
+  const PHOTO_EXEMPT: NeedType[] = [NeedType.SKILL_REQUEST, NeedType.QUESTION];
+  if (!PHOTO_EXEMPT.includes(need.type) && need.photos.length === 0) {
+    return res.status(400).json({
+      error: "Add at least one photo before submitting — it's what lets an admin verify your request.",
+    });
   }
   if (need.type === NeedType.MONEY) {
     const moneyCheck = moneyPayloadInputSchema.safeParse(need.payload);
@@ -751,10 +795,24 @@ const utrSchema = z
       .regex(/^\d{12}$/, "Enter the 12-digit UTR / reference number from your payment app")
   );
 
+/**
+ * Payment proof is REQUIRED for every contribution where money actually moved.
+ *
+ * With no gateway (D-001) the platform never sees the payment, so a money record rests on exactly
+ * two things: a UTR and a screenshot. The UTR is only format-checked — 12 digits, unique — so a
+ * fabricated one passes. That leaves the screenshot as the sole piece of evidence a beneficiary
+ * can actually look at before confirming. Optional proof meant a contribution could be created,
+ * confirmed, and counted toward the public total with nothing to inspect at all.
+ */
+const PROOF_REQUIRED = "Attach a screenshot of your payment";
+// `required_error` as well as the `.url()` message: a missing key and a malformed one are two
+// different zod failures, and without both the client sees a bare "Required".
+const proofUrlSchema = z.string({ required_error: PROOF_REQUIRED }).url(PROOF_REQUIRED);
+
 const moneyDonateSchema = z.object({
   amount: z.number().int().positive(),
   utr: utrSchema,
-  proofUrl: z.string().url().optional(),
+  proofUrl: proofUrlSchema,
 });
 
 // KIT donations (§9.2): `utr` is required for mode=MONEY (a real payment happened) and must be
@@ -809,11 +867,64 @@ async function createContribution(
   }
 }
 
+/**
+ * Console roles cannot donate. Only USER and INSTITUTION can (PRD §4).
+ *
+ * ADMIN and STAFF operate the platform: they verify needs and confirm other people's donations.
+ * Letting an ADMIN also contribute puts the same person on both sides of a money record — an
+ * admin can confirm any need's contributions (`canDecide` in routes/contributions.ts), so an
+ * admin donation is a donation nobody independent ever checked. That is precisely the audit
+ * property D-002 exists to protect.
+ *
+ * This was previously ungated, and it shows in the data: the seeded admin account carries four
+ * confirmed contributions worth ₹40,08,72,431 (UTRs "Gyg", "Gug", "Endj") — manual testing that
+ * then dominated both the supporters leaderboard and the home screen's "amount raised".
+ *
+ * Returns true when it has already sent a 403 and the caller must stop.
+ */
+function blockedAsConsoleRole(req: Request, res: Response): boolean {
+  const role = req.user!.role;
+  if (role === Role.ADMIN || role === Role.STAFF) {
+    res.status(403).json({
+      error: "Admin and staff accounts verify and confirm donations — they cannot donate themselves.",
+    });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * You cannot donate to your own need.
+ *
+ * The generalisation of the admin rule above, and the more dangerous one because it needs no
+ * special account. The beneficiary confirms their own need's contributions (D-002), so without
+ * this a single ordinary user could: post a need, "donate" the full target to it with a
+ * fabricated 12-digit UTR, confirm their own payment, and walk away with a FULFILLED need, a
+ * raised total, a higher trust tier and a certificate — money that never moved, verified by
+ * nobody. Reproduced end-to-end before this guard existed.
+ *
+ * Enforced here rather than only at confirm time so the fake record is never created at all:
+ * a pending contribution against your own need is already misleading to anyone reading the page.
+ *
+ * Returns true when it has already sent a 403 and the caller must stop.
+ */
+function blockedAsOwnNeed(need: Pick<Need, "postedById">, req: Request, res: Response): boolean {
+  if (need.postedById === req.user!.sub) {
+    res.status(403).json({
+      error: "You can't donate to a need you posted yourself.",
+    });
+    return true;
+  }
+  return false;
+}
+
 // PRD §7.2/§9.2 — the donate step. No payment gateway (D-001): for MONEY needs, and for KIT
 // needs in mode=MONEY, the donor pays the beneficiary's UPI ID directly and submits proof here;
 // KIT needs in mode=DELIVER skip payment entirely — the pledge itself is the contribution.
 // Starts PENDING_CONFIRMATION (§6.5).
 router.post("/:id/contributions", async (req, res) => {
+  if (blockedAsConsoleRole(req, res)) return;
+
   const needId = req.params.id;
   const userId = req.user!.sub;
 
@@ -829,6 +940,7 @@ router.post("/:id/contributions", async (req, res) => {
   ]);
 
   if (!needRaw) return res.status(404).json({ error: "Need not found" });
+  if (blockedAsOwnNeed(needRaw, req, res)) return;
   let need = await expireIfPastDeadline(needRaw);
 
   if (existingPending) {
@@ -870,6 +982,11 @@ router.post("/:id/contributions", async (req, res) => {
     }
     if (kit.mode === "MONEY" && !parsed.data.utr) {
       return res.status(400).json({ error: "utr is required for a money-mode kit contribution" });
+    }
+    // Same rule as MONEY: if a payment happened, there has to be something to look at. A
+    // DELIVER pledge is exempt — no money moved, and the handover photo comes later.
+    if (kit.mode === "MONEY" && !parsed.data.proofUrl) {
+      return res.status(400).json({ error: "Attach a screenshot of your payment" });
     }
     if (kit.mode === "DELIVER" && parsed.data.utr) {
       return res.status(400).json({ error: "A deliver-mode kit contribution has no payment — don't send a utr" });
@@ -940,6 +1057,10 @@ const mealSlotBookSchema = z.object({
 // POST /:id/contributions, because it needs a specific slotId and the locking transaction below
 // — genuinely different shape from "donate an amount/kits/units against the need as a whole."
 router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
+  // Booking a slot creates a Contribution too — the same rule has to hold on both entry points,
+  // or the guard above is just a detour.
+  if (blockedAsConsoleRole(req, res)) return;
+
   const needId = req.params.id;
   const slotId = req.params.slotId;
 
@@ -949,6 +1070,8 @@ router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
   ]);
 
   if (!needRaw || needRaw.type !== NeedType.MEAL_SLOT) return res.status(404).json({ error: "Need not found" });
+  // A home sponsoring its own meal slots would book out its own calendar and bank the "donation".
+  if (blockedAsOwnNeed(needRaw, req, res)) return;
   let need = await expireIfPastDeadline(needRaw);
 
   const fundable: NeedStatus[] = [NeedStatus.LIVE, NeedStatus.PARTIALLY_FULFILLED];
@@ -966,6 +1089,9 @@ router.post("/:id/meal-slots/:slotId/book", async (req, res) => {
   }
   if (mealSlot.mode === "MONEY" && !parsed.data.utr) {
     return res.status(400).json({ error: "utr is required for a money-mode meal-slot booking" });
+  }
+  if (mealSlot.mode === "MONEY" && !parsed.data.proofUrl) {
+    return res.status(400).json({ error: "Attach a screenshot of your payment" });
   }
   if (mealSlot.mode === "DELIVER" && parsed.data.utr) {
     return res.status(400).json({ error: "A deliver-mode meal-slot booking has no payment — don't send a utr" });

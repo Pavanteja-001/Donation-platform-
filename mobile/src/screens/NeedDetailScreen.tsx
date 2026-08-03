@@ -175,6 +175,7 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
 
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [mealSlotUtr, setMealSlotUtr] = useState("");
+  const [mealSlotProofImage, setMealSlotProofImage] = useState<{ uri: string; mimeType: string } | null>(null);
   const [isBookingSlot, setIsBookingSlot] = useState(false);
 
   const [isClaiming, setIsClaiming] = useState(false);
@@ -253,16 +254,27 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
     }
   }
 
-  async function handlePickProofImage() {
+  /** Shared by all three payment flows — returns null if permission was denied or the user backed out. */
+  async function pickProofImage(): Promise<{ uri: string; mimeType: string } | null> {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert("Permission needed", "Allow photo access to attach a payment screenshot.");
-      return;
+      return null;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
-    if (result.canceled || !result.assets[0]) return;
+    if (result.canceled || !result.assets[0]) return null;
     const asset = result.assets[0];
-    setProofImage({ uri: asset.uri, mimeType: asset.mimeType ?? "image/jpeg" });
+    return { uri: asset.uri, mimeType: asset.mimeType ?? "image/jpeg" };
+  }
+
+  async function handlePickProofImage() {
+    const picked = await pickProofImage();
+    if (picked) setProofImage(picked);
+  }
+
+  async function handlePickMealSlotProofImage() {
+    const picked = await pickProofImage();
+    if (picked) setMealSlotProofImage(picked);
   }
 
   async function handleSubmitProof() {
@@ -276,16 +288,19 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
       setError("Enter the 12-digit UTR / reference number shown in your payment app");
       return;
     }
+    // The screenshot is the only evidence the beneficiary can actually look at — a UTR is just
+    // twelve digits that happen to be the right shape. Checked here as well as server-side so the
+    // donor is told before the upload round-trip, not after.
+    if (!proofImage) {
+      setError("Attach a screenshot of your payment so the beneficiary can confirm it");
+      return;
+    }
     setError(null);
     setIsSubmitting(true);
     try {
-      let proofUrl: string | undefined;
-      if (proofImage) {
-        const signed = await signUpload(token, proofImage.mimeType, "contribution-proofs");
-        await uploadToSignedUrl(signed.uploadUrl, proofImage.uri, proofImage.mimeType);
-        proofUrl = signed.publicUrl;
-      }
-      await donate(token, needId, { amount: parsedAmount, utr: normaliseUtr(utr), proofUrl });
+      const signed = await signUpload(token, proofImage.mimeType, "contribution-proofs");
+      await uploadToSignedUrl(signed.uploadUrl, proofImage.uri, proofImage.mimeType);
+      await donate(token, needId, { amount: parsedAmount, utr: normaliseUtr(utr), proofUrl: signed.publicUrl });
       setAmount("");
       setUtr("");
       setProofImage(null);
@@ -343,6 +358,11 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
     }
     if (kit.mode === "MONEY" && !kitUtr.trim()) {
       setError("Enter the UTR from your payment");
+      return;
+    }
+    // Required for a real payment, not for a delivery pledge — nothing has been paid yet there.
+    if (kit.mode === "MONEY" && !kitProofImage) {
+      setError("Attach a screenshot of your payment so the beneficiary can confirm it");
       return;
     }
     setError(null);
@@ -430,14 +450,26 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
       setError("Enter the UTR from your payment");
       return;
     }
+    if (mealSlot.mode === "MONEY" && !mealSlotProofImage) {
+      setError("Attach a screenshot of your payment so the home can confirm it");
+      return;
+    }
     setError(null);
     setIsBookingSlot(true);
     try {
+      let proofUrl: string | undefined;
+      if (mealSlotProofImage) {
+        const signed = await signUpload(token, mealSlotProofImage.mimeType, "contribution-proofs");
+        await uploadToSignedUrl(signed.uploadUrl, mealSlotProofImage.uri, mealSlotProofImage.mimeType);
+        proofUrl = signed.publicUrl;
+      }
       await bookMealSlot(token, needId, selectedSlotId, {
         utr: mealSlot.mode === "MONEY" ? normaliseUtr(mealSlotUtr) : undefined,
+        proofUrl,
       });
       setSelectedSlotId(null);
       setMealSlotUtr("");
+      setMealSlotProofImage(null);
       setCelebration({
         title: "Date booked",
         message: "Your booking is pending the institution's confirmation.",
@@ -953,6 +985,33 @@ export function NeedDetailScreen({ needId, initialNeed }: { needId: string; init
                         value={mealSlotUtr}
                         onChangeText={setMealSlotUtr}
                       />
+
+                      {mealSlotProofImage ? (
+                        <View style={styles.proofPreviewRow}>
+                          <ExpoImage
+                            source={{ uri: mealSlotProofImage.uri }}
+                            style={styles.proofPreview}
+                            contentFit="cover"
+                          />
+                          <Button
+                            label="Remove"
+                            variant="danger"
+                            size="sm"
+                            icon="trash-2"
+                            compact
+                            onPress={() => setMealSlotProofImage(null)}
+                          />
+                        </View>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon="paperclip"
+                          label="Attach payment screenshot"
+                          compact
+                          onPress={handlePickMealSlotProofImage}
+                        />
+                      )}
                     </>
                   )}
                   {error && <InlineError message={error} />}

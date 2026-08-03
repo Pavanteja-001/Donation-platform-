@@ -37,11 +37,12 @@ export function CreateKitNeedScreen({ onDone, category }: { onDone: () => void; 
     if (!cost || cost <= 0) return setError("Enter a valid cost per kit");
     if (!kits || kits <= 0) return setError("Enter how many kits are needed");
     if (mode === "MONEY" && !upiId.trim()) return setError("Enter your UPI ID — donors pay per kit through it");
+    if (photos.length === 0) return setError("Add at least one photo — it's what lets an admin verify your request");
 
     setError(null);
     setIsSubmitting(true);
     try {
-      const photoUrls = photos.length > 0 ? await uploadPhotos(token, photos, "need-photos") : undefined;
+      const photoUrls = await uploadPhotos(token, photos, "need-photos");
       await postKitNeed(token, {
         category,
         title: title.trim(),

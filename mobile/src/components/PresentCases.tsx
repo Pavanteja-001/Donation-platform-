@@ -1,12 +1,11 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { theme } from "../lib/theme";
-import { formatCount } from "../lib/needMeta";
 import { Skeleton } from "./ui";
+import { AnimatedCounter } from "./AnimatedCounter";
 import type { PublicStats } from "../lib/api";
 
 const ICON_CASES_TOTAL = require("../../assets/icons/stats/cases-total.webp");
-const ICON_CASES_ACTIVE = require("../../assets/icons/stats/cases-active.webp");
 const ICON_CASES_PENDING = require("../../assets/icons/stats/cases-pending.webp");
 const ICON_VERIFIED_NGOS = require("../../assets/icons/stats/verified-ngos.webp");
 const ICON_CASES_COMPLETED = require("../../assets/icons/stats/cases-completed.webp");
@@ -79,14 +78,10 @@ export function PresentCases({ stats }: { stats: PublicStats | null }) {
                   <View style={styles.tileIcon}>
                     <Image source={t.icon} style={styles.iconImage} contentFit="contain" />
                   </View>
-                  <Text
+                  <AnimatedCounter
+                    value={t.value}
                     style={[styles.tileValue, { color: t.tint }]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.7}
-                  >
-                    {formatCount(t.value)}
-                  </Text>
+                  />
                 </View>
                 <Text style={styles.tileLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                   {t.label}

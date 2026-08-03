@@ -87,6 +87,28 @@ export function ConsoleLayout() {
             Locations
           </NavLink>
 
+          {/* The three admin-curated blocks in the mobile app's menu drawer. Grouped together
+              because they are one job — "what the app's menu shows" — even though they are three
+              separate pages. */}
+          <NavLink
+            to="/helplines"
+            className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+          >
+            Helplines
+          </NavLink>
+          <NavLink
+            to="/stories"
+            className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+          >
+            Success Stories
+          </NavLink>
+          <NavLink
+            to="/events"
+            className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}
+          >
+            Events
+          </NavLink>
+
           <NavLink
             to="/notifications"
             className={({ isActive }) => (isActive ? "sidebar-nav-link active" : "sidebar-nav-link")}

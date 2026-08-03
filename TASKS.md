@@ -163,6 +163,27 @@ dev behavior (D-015) untouched; `.env` stays untracked.
   (skeletons, empty/error states, professional cards, accessible tap targets, motion) — mobile
   first, one surface at a time, updating PROGRESS.md between surfaces.
 
+## Milestone 10 — Community panel in the app menu  *(D-028)*
+Client-requested, driven by a reference design of the mobile menu drawer.
+- [x] Backend: `Helpline`, `SuccessStory`, `PlatformEvent` models + `EventMode` enum (migration
+  `20260803190000_add_community_content`); `routes/community.ts` with authenticated public reads
+  (`/menu`, `/helplines`, `/success-stories[/:id]`, `/top-supporters`, `/events[/:id]`) and
+  ADMIN-only CRUD under `/api/admin/community` (STAFF read-only, D-018); `community` upload
+  folder; `community:` cache namespace; `prisma/seedCommunity.ts` seeds the six design helplines.
+- [x] Top Supporters — derived from CONFIRMED contributions with an `amount`, never stored.
+  Exposes rank/name/photo/total, plus blood group only for donors who are publicly available to
+  donate (CLAUDE.md §7).
+- [x] Mobile: `SideDrawer` rebuilt to the reference design (Safety & Emergency, Trust &
+  Transparency, Success Stories carousel with dots, Top Supporters, Upcoming Events, Make an
+  Impact CTA); shared `components/CommunityBlocks.tsx`; six new screens — Helplines, Success
+  Stories + detail, Top Supporters, Events (upcoming/past) + detail.
+- [x] Mobile: "Create a Need" is a real, responsive control wired to the create-need chooser;
+  only the heart is artwork (`assets/impact-heart.webp`, cropped from the supplied PNG).
+- [x] Admin: Helplines, Success Stories and Events pages + `ImageCropper` (drag/zoom crop to the
+  app's exact aspect ratios, exported as fixed-size WebP) + sidebar entries.
+- [ ] Optional follow-up: a dedicated "show my blood group publicly" consent flag, if the
+  `availableToDonate` proxy isn't the consent model wanted long-term (D-028).
+
 ## Cross-cutting (revisit throughout)
 - [x] Institution web panel (PRD §16) — Complete: post/track MONEY, KIT, BLOOD, MEAL_SLOT, GOODS, and SKILL_REQUEST needs + confirm contributions + photo upload + KYC onboarding (D-007) + self-verification fast-track (D-008).
 - [x] Admin console (PRD §15) — Complete: Needs verification queue + status browser + contribution override + urgency control + Admin-only Post a Need + Users list with trust tiers + Staff management + Forum moderation queue + KYC approvals queue + Analytics & metrics dashboard (`AnalyticsPage.tsx`).

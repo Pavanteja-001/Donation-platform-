@@ -167,6 +167,20 @@ router.post("/:id/confirm", async (req, res) => {
   if (!canDecide(contribution.need, req.user!.sub, req.user!.role)) {
     return res.status(403).json({ error: "Not allowed to confirm this contribution" });
   }
+  /**
+   * Nobody confirms their own money.
+   *
+   * Donating to your own need is already blocked at the source (`blockedAsOwnNeed` in
+   * routes/needs.ts), so in a clean database this can only fire on rows that predate that guard.
+   * It stays anyway: confirmation is the step that moves a contribution into the public totals
+   * and the donor's trust tier, so "the person who benefits is not the person who signs it off"
+   * is the invariant worth stating twice. Rejecting your own contribution is deliberately still
+   * allowed — withdrawing a pledge takes money *out* of the totals, and is the only way to undo
+   * a mistaken one.
+   */
+  if (contribution.donorId === req.user!.sub) {
+    return res.status(403).json({ error: "You can't confirm a donation you made yourself." });
+  }
   if (contribution.status !== "PENDING_CONFIRMATION") {
     return res.status(409).json({ error: `Contribution is already ${contribution.status}` });
   }

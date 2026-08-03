@@ -5,6 +5,101 @@
 
 ---
 
+### Session 36 — Community panel in the app menu, admin-managed end to end (D-028)
+
+**What was asked:** a reference design of the mobile menu drawer — Safety & Emergency Support,
+Trust & Transparency, Success Stories, Top Supporters, Upcoming Events, and a "Make an Impact
+Today" card — with helplines, stories and events managed by an admin, supporters computed from
+what people actually donated, and the CTA's button made real.
+
+**Backend** (`routes/community.ts`, migration `20260803190000_add_community_content`):
+- New models `Helpline`, `SuccessStory`, `PlatformEvent` + `EventMode` enum. Purely additive —
+  no existing table changed.
+- Authenticated reads at `/api/community`: `GET /menu` (the whole drawer in one payload),
+  `/helplines`, `/success-stories[/:id]`, `/top-supporters`, `/events[/:id]` (`?scope=upcoming|past`).
+- ADMIN-only CRUD at `/api/admin/community/{helplines,success-stories,events}`; STAFF read-only
+  (D-018). New `community` upload folder; `community:` cache namespace dropped wholesale on any
+  admin write, with a short TTL on the supporters key (confirming a donation moves the
+  leaderboard and never hits the admin invalidation path).
+- **Top Supporters is derived, not stored** — `groupBy(donorId)` over CONFIRMED contributions with
+  an `amount`, so it ranks on money only. Exposes rank/name/photo/total plus blood group *only*
+  for donors who are publicly available to donate (CLAUDE.md §7). See D-028 if a dedicated
+  consent flag is wanted instead.
+- `prisma/seedCommunity.ts` seeds the six helplines from the design, idempotent on `number`.
+
+**Mobile:** `SideDrawer` rebuilt to the design (widened 0.75 → 0.86 so the CTA text column stops
+wrapping); shared `components/CommunityBlocks.tsx`; new `lib/community.ts` (dial, ₹ and date
+formatting, `B_POSITIVE` → `B+`) and `lib/helplineIcons.ts`. Six new screens: Helplines (grouped
+by category, tap to dial), Success Stories + detail, Top Supporters, Events (upcoming/past) +
+detail. The impact card is real text + a real button wired to the create-need chooser — only the
+heart is artwork (`assets/impact-heart.webp`, 8KB, cropped from the supplied PNG).
+
+**Admin:** three new pages (Helplines, Success Stories, Events) with publish/hide toggles, plus
+`components/ImageCropper.tsx` — drag/zoom crop to the app's exact aspect ratios (4:3 cover, 16:9
+banner, 1:1 icon), exported as fixed-size WebP so the bucket holds what the app actually needs.
+Sidebar entries added; every write gated on `isAdmin` to match the backend.
+
+**Verified:** `tsc --noEmit` clean on backend + mobile, `tsc -b && vite build` clean on admin and
+web-panel, `expo export` succeeds and bundles the new WebP. Live API: create/patch/delete on all
+three types ✓ / validation 400s (missing number, `endsAt` before `startsAt`) ✓ / 404 on unknown id
+✓ / unpublished story vanishes from the public list and its detail 404s, then returns on
+republish (cache invalidation) ✓ / staff GET 200 but POST-PATCH-DELETE 403 ✓ / donor GET menu 200,
+admin list 403 ✓ / no token 401 ✓. Test staff + donor accounts deleted afterwards.
+
+**Two fixes after client review, same session:**
+
+1. **Saves failed with "Expected string, received null" (D-028).** The console sends `null` for a
+   cleared optional field (`value.trim() || null`); the zod schemas only accepted
+   `string | undefined`. Every optional text/URL field on all three types is now `.nullish()`, so
+   absent = leave alone, `null`/`""` = clear, text = trimmed text. Re-verified with the exact
+   payloads the console sends; validation (bad URL, empty title, over-length) still bites.
+
+2. **The admin was rank 1 on Top Supporters — and the donate endpoint had no role check at all
+   (D-029).** `POST /needs/:id/contributions` and the meal-slot booking route accepted any
+   authenticated account, and `canDecide` lets an ADMIN confirm any need's contributions — so an
+   admin could donate *and* confirm it themselves. The seeded admin had five such confirmed rows
+   from July testing (UTRs `Gyg`, `Gug`, `Endj`), including ₹39,99,80,000 on a KIT need. Both
+   routes now 403 for ADMIN/STAFF, and both the leaderboard and `amountRaised` exclude console
+   roles. **Public "amount raised" went from ₹40,10,12,110 to ₹1,39,679** — the home screen had
+   been advertising ₹40 crore of test money. Verified: admin donate 403 ✓, admin slot-book 403 ✓,
+   normal USER donate still 201 ✓ (test row and account deleted after), leaderboard now shows
+   only real donors ✓.
+
+3. **Audited the same class of gap everywhere else, and found a worse one (D-030).** Nothing
+   stopped a user donating to their **own** need, and D-002 makes the poster the confirmer — so
+   one ordinary account could post a ₹40,000 need, "donate" the full amount with a fabricated
+   12-digit UTR, confirm its own payment, and end up with a FULFILLED need, a SILVER trust tier
+   and a certificate, with no money moved and nobody independent involved. Reproduced end to end,
+   then reverted. The mobile app never offered it (`!isOwner` gates every donate button) — it was
+   an API-only hole. Fixed, plus two rules the client asked for on top:
+   - donating to your own need → 403; confirming your own contribution → 403 (rejecting your own
+     is still allowed — withdrawing takes money *out* of the totals),
+   - `proofUrl` now **required** for MONEY and money-mode KIT/MEAL_SLOT (it was optional, which
+     meant a contribution could be confirmed with nothing to look at); the meal-slot booking UI
+     gained the proof picker it never had,
+   - **every need needs at least one photo** before it can be submitted for verification —
+     enforced at `/submit` (so drafts still work) and in all 15 create forms. SKILL_REQUEST and
+     QUESTION are exempt; there is nothing to photograph.
+
+   Verified: own-need donate 403 ✓ · donate with no proof 400 "Attach a screenshot of your
+   payment" ✓ · donate with proof 201 ✓ · donor confirming own contribution 403 ✓ · beneficiary
+   confirming it 200 ✓ · submit with no photos 400, 200 after adding one ✓ · SKILL_REQUEST submits
+   with no photos ✓. All test rows, needs and accounts deleted; the need used for the exploit was
+   restored to LIVE / raised 0.
+
+   **Left open on purpose:** an approved institution can still set `linkedInstitutionId` to itself
+   and self-publish via `/institution-verify` without admin review. Either write that into D-008
+   as intended behaviour or close it — right now it reads like an oversight.
+
+**Next:** rebuild the native app before running it (unchanged from Session 35 — the depth-pass
+packages still need `npx expo run:ios|android`). Open data-repair question: the five historical
+admin contributions still back their needs' own progress counters (all five needs are FULFILLED)
+— removing them means recomputing `raised_amount`/`kits_funded` and revisiting that status. Then
+either the D-028 follow-up (explicit blood-group consent flag) or the pre-launch blocker:
+replacing the static OTP (D-015).
+
+---
+
 ### Session 35 — Map locations audit: needs now render where they actually are (D-026)
 
 **The bug:** needs showed up in the wrong place on the mobile needs map. Three independent causes,

@@ -1,25 +1,58 @@
-import { useEffect } from "react";
-import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  BackHandler,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from "react-native-reanimated";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import type { AppNavigationProp } from "../navigation/types";
 import { theme } from "../lib/theme";
-import { PressableScale, Button } from "./ui";
-
-import { Image } from "expo-image";
-
-const COMMUNITY_ICON = require("../../assets/icons/community.webp");
+import { PressableScale, Skeleton } from "./ui";
+import { useAuth } from "../context/AuthContext";
+import { fetchCommunityMenu, type CommunityMenu } from "../lib/api";
+import { dial } from "../lib/community";
+import {
+  Dots,
+  EventRow,
+  HelplineRow,
+  ImpactCta,
+  SectionCard,
+  StoryCard,
+  SupporterRow,
+  TrustPoints,
+} from "./CommunityBlocks";
 
 /**
  * The right-edge drawer.
  *
- * Covers 75% of the width, never the full screen: the strip of home screen still visible on the
- * left is what tells you this is a panel over the page rather than a new page you navigated to —
- * so tapping outside to dismiss is discoverable instead of something you have to guess.
+ * Never the full screen: the strip of home screen still visible on the left is what tells you
+ * this is a panel over the page rather than a new page you navigated to — so tapping outside to
+ * dismiss is discoverable instead of something you have to guess.
+ *
+ * Widened from 0.75 when the community panel moved in. At 75% the "Make an impact" card had
+ * roughly 130dp for its text column next to the artwork, which forced "Create a Need" onto two
+ * lines on a 360dp phone.
  */
-const WIDTH_FRACTION = 0.75;
+const WIDTH_FRACTION = 0.86;
+
+/**
+ * How long a loaded menu payload stays good.
+ *
+ * The drawer is opened and dismissed constantly, and this content changes when an admin edits
+ * it — perhaps weekly. Refetching on every open would cost a request per tap for content that is
+ * already correct; never refetching would pin a stale helpline number for the whole session.
+ */
+const MENU_TTL_MS = 5 * 60 * 1000;
 
 interface DrawerLink {
   icon?: keyof typeof Feather.glyphMap;
@@ -33,9 +66,17 @@ export function SideDrawer({ visible, onClose }: { visible: boolean; onClose: ()
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<AppNavigationProp>();
+  const { token } = useAuth();
   const panelWidth = width * WIDTH_FRACTION;
+  /** The story carousel pages one card at a time, so a page is the panel minus its padding. */
+  const storyWidth = panelWidth - theme.spacing.lg * 2 - theme.spacing.md * 2;
 
   const progress = useSharedValue(0);
+
+  const [menu, setMenu] = useState<CommunityMenu | null>(null);
+  const [menuError, setMenuError] = useState<string | null>(null);
+  const [storyPage, setStoryPage] = useState(0);
+  const loadedAt = useRef(0);
 
   useEffect(() => {
     progress.value = withTiming(visible ? 1 : 0, {
@@ -45,6 +86,26 @@ export function SideDrawer({ visible, onClose }: { visible: boolean; onClose: ()
       easing: Easing.out(Easing.cubic),
     });
   }, [visible, progress]);
+
+  const loadMenu = useCallback(async () => {
+    if (!token) return;
+    try {
+      const payload = await fetchCommunityMenu(token);
+      setMenu(payload);
+      setMenuError(null);
+      loadedAt.current = Date.now();
+    } catch (err) {
+      setMenuError(err instanceof Error ? err.message : "Couldn't load this menu");
+    }
+  }, [token]);
+
+  // Fetch on open, not on mount: the drawer is rendered (collapsed) on every screen that hosts
+  // it, so loading at mount would fire this request on app start for a panel nobody has opened.
+  useEffect(() => {
+    if (!visible) return;
+    if (menu && Date.now() - loadedAt.current < MENU_TTL_MS) return;
+    void loadMenu();
+  }, [visible, menu, loadMenu]);
 
   const panelStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (1 - progress.value) * panelWidth }],
@@ -67,25 +128,15 @@ export function SideDrawer({ visible, onClose }: { visible: boolean; onClose: ()
     action();
   };
 
-  const links: DrawerLink[] = [
-    {
-      icon: "home",
-      label: "Orphanages & homes",
-      hint: "Sponsor a meal slot",
-      onPress: go(() => navigation.navigate("Orphanages")),
-    },
-    { icon: "briefcase", label: "NGOs", hint: "Verified organisations", onPress: go(() => navigation.navigate("Ngos")) },
-    { icon: "package", label: "Donate items", hint: "Give or request goods", onPress: go(() => navigation.navigate("Goods")) },
-    {
-      imageIcon: COMMUNITY_ICON,
-      label: "Community",
-      hint: "Ask and answer",
-      onPress: go(() => navigation.navigate("Forum")),
-    },
-  ];
+  function handleStoryScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const page = Math.round(e.nativeEvent.contentOffset.x / Math.max(1, storyWidth + theme.spacing.md));
+    if (page !== storyPage) setStoryPage(page);
+  }
+
+  const helplinePreview = menu ? menu.helplines.slice(0, 3) : [];
 
   return (
-    // `transparent` so the home screen stays visible behind the 25% gutter. Modal (rather than an
+    // `transparent` so the home screen stays visible behind the gutter. Modal (rather than an
     // absolutely-positioned View) so the drawer sits above the tab bar — otherwise the bottom nav
     // floats on top of the panel and stays tappable while the drawer is open.
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
@@ -102,43 +153,165 @@ export function SideDrawer({ visible, onClose }: { visible: boolean; onClose: ()
           ]}
         >
           <View style={styles.head}>
-            <Text style={styles.headTitle}>Menu</Text>
             <PressableScale onPress={onClose} scaleTo={0.9} hitSlop={10} accessibilityLabel="Close menu" style={styles.closeBtn}>
               <Feather name="x" size={18} color={theme.color.textSecondary} />
             </PressableScale>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
-            {/* Posting a need is the drawer's reason to exist for a beneficiary, so it leads —
-                above the browse links, which are what a donor came for. */}
-            <Button
-              label="Post a need"
-              icon="plus"
-              onPress={go(() => navigation.navigate("CreateNeedChooser"))}
-              style={styles.cta}
-            />
 
-            <Text style={styles.sectionLabel}>EXPLORE</Text>
-            {links.map((l) => (
-              <PressableScale key={l.label} onPress={l.onPress} scaleTo={0.98} style={styles.row}>
-                <View style={styles.rowIcon}>
-                  {l.imageIcon ? (
-                    <Image source={l.imageIcon} style={{ width: 34, height: 34 }} contentFit="contain" />
-                  ) : l.icon ? (
-                    <Feather name={l.icon} size={17} color={theme.color.primary} />
-                  ) : null}
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={styles.rowLabel}>{l.label}</Text>
-                  {l.hint ? <Text style={styles.rowHint}>{l.hint}</Text> : null}
-                </View>
-                <Feather name="chevron-right" size={17} color={theme.color.textTertiary} />
-              </PressableScale>
-            ))}
+            {/* ---- Success stories -------------------------------------------------------- */}
+            {(!menu || menu.stories.length > 0) && (
+              <SectionCard
+                title="SUCCESS STORIES"
+                style={[styles.block, { marginTop: 0 }]}
+                onViewAll={menu ? go(() => navigation.navigate("SuccessStories")) : undefined}
+              >
+                {!menu ? (
+                  <BlockSkeleton rows={1} tall error={menuError} onRetry={loadMenu} />
+                ) : (
+                  <>
+                    <ScrollView
+                      horizontal
+                      pagingEnabled={false}
+                      snapToInterval={storyWidth + theme.spacing.md}
+                      decelerationRate="fast"
+                      showsHorizontalScrollIndicator={false}
+                      onScroll={handleStoryScroll}
+                      scrollEventThrottle={32}
+                      contentContainerStyle={{ gap: theme.spacing.md }}
+                    >
+                      {menu.stories.map((story) => (
+                        <StoryCard
+                          key={story.id}
+                          story={story}
+                          width={storyWidth}
+                          onPress={go(() => navigation.navigate("SuccessStory", { storyId: story.id, initial: story }))}
+                        />
+                      ))}
+                    </ScrollView>
+                    <Dots count={menu.stories.length} active={storyPage} />
+                  </>
+                )}
+              </SectionCard>
+            )}
+
+            {/* ---- Top supporters --------------------------------------------------------- */}
+            {(!menu || menu.supporters.length > 0) && (
+              <SectionCard
+                title="TOP SUPPORTERS"
+                style={styles.block}
+                onViewAll={menu ? go(() => navigation.navigate("TopSupporters")) : undefined}
+              >
+                {!menu ? (
+                  <BlockSkeleton rows={3} error={menuError} onRetry={loadMenu} />
+                ) : (
+                  menu.supporters.map((s) => <SupporterRow key={s.id} supporter={s} />)
+                )}
+              </SectionCard>
+            )}
+
+            {/* ---- Upcoming events -------------------------------------------------------- */}
+            {(!menu || menu.events.length > 0) && (
+              <SectionCard
+                title="UPCOMING EVENTS"
+                style={styles.block}
+                onViewAll={menu ? go(() => navigation.navigate("Events")) : undefined}
+              >
+                {!menu ? (
+                  <BlockSkeleton rows={2} error={menuError} onRetry={loadMenu} />
+                ) : (
+                  menu.events.map((e) => (
+                    <EventRow
+                      key={e.id}
+                      event={e}
+                      onPress={go(() => navigation.navigate("EventDetail", { eventId: e.id, initial: e }))}
+                    />
+                  ))
+                )}
+              </SectionCard>
+            )}
+
+            {/* ---- Safety & emergency support -------------------------------------------- */}
+            <SectionCard
+              title="SAFETY & EMERGENCY SUPPORT"
+              style={styles.block}
+              onViewAll={menu && menu.helplines.length > helplinePreview.length ? go(() => navigation.navigate("Helplines")) : undefined}
+              viewAllLabel="View all"
+            >
+              {!menu ? (
+                <BlockSkeleton rows={3} error={menuError} onRetry={loadMenu} />
+              ) : helplinePreview.length === 0 ? (
+                <Text style={styles.emptyText}>No helplines have been published yet.</Text>
+              ) : (
+                <>
+                  {helplinePreview.map((h) => (
+                    <HelplineRow key={h.id} helpline={h} onPress={() => void dial(h.number)} />
+                  ))}
+                  <PressableScale
+                    onPress={go(() => navigation.navigate("Helplines"))}
+                    scaleTo={0.98}
+                    style={styles.blockButton}
+                  >
+                    <Text style={styles.blockButtonText}>View all helplines</Text>
+                    <Feather name="arrow-right" size={15} color={theme.color.primary} />
+                  </PressableScale>
+                </>
+              )}
+            </SectionCard>
+
+            {/* ---- Trust & transparency (static by design) -------------------------------- */}
+            <SectionCard title="TRUST & TRANSPARENCY" style={styles.block}>
+              <TrustPoints />
+            </SectionCard>
+
+            {/* ---- Make an impact today --------------------------------------------------- */}
+            <ImpactCta onPress={go(() => navigation.navigate("CreateNeedChooser"))} />
           </ScrollView>
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+/**
+ * Placeholder rows while the menu loads — or the retry, if it failed.
+ *
+ * One component for both states because they occupy the same slot: showing a skeleton forever
+ * after a failed request is the worst outcome, and it is exactly what happens when the error
+ * path is left to a separate branch someone forgets to render.
+ */
+function BlockSkeleton({
+  rows,
+  tall,
+  error,
+  onRetry,
+}: {
+  rows: number;
+  tall?: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (error) {
+    return (
+      <PressableScale onPress={onRetry} scaleTo={0.98} style={styles.retry}>
+        <Feather name="refresh-cw" size={14} color={theme.color.primary} />
+        <Text style={styles.retryText}>{error} — tap to retry</Text>
+      </PressableScale>
+    );
+  }
+  return (
+    <View style={{ gap: theme.spacing.md, paddingVertical: theme.spacing.sm }}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: theme.spacing.md }}>
+          <Skeleton width={tall ? 84 : 34} height={tall ? 96 : 34} radius={tall ? theme.radii.md : 17} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <Skeleton width="70%" height={13} />
+            <Skeleton width="45%" height={11} />
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -154,7 +327,7 @@ const styles = StyleSheet.create({
   },
   panel: {
     height: "100%",
-    backgroundColor: theme.color.surface,
+    backgroundColor: theme.color.background,
     borderTopLeftRadius: theme.radii.xxl,
     borderBottomLeftRadius: theme.radii.xxl,
     overflow: "hidden",
@@ -162,11 +335,10 @@ const styles = StyleSheet.create({
   head: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.md,
+    paddingBottom: theme.spacing.xs,
   },
-  headTitle: { ...theme.typography.h2, color: theme.color.textPrimary },
   closeBtn: {
     width: 32,
     height: 32,
@@ -175,30 +347,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  body: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.xl, gap: theme.spacing.xs },
-  cta: { marginBottom: theme.spacing.lg },
-  sectionLabel: {
-    ...theme.typography.caption,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    color: theme.color.textTertiary,
-    marginBottom: theme.spacing.xs,
-  },
-  row: {
+  body: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.xxl, gap: theme.spacing.xs },
+
+  block: { marginTop: theme.spacing.md },
+  blockButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.md,
+    justifyContent: "center",
+    gap: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.color.primarySoft,
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+  },
+  blockButtonText: { ...theme.typography.bodySmall, fontWeight: "700", color: theme.color.primary },
+  emptyText: {
+    ...theme.typography.caption,
+    color: theme.color.textSecondary,
     paddingVertical: theme.spacing.md,
   },
-  rowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.radii.md,
-    backgroundColor: theme.color.primarySoft,
+  retry: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
   },
-  rowText: { flex: 1 },
-  rowLabel: { ...theme.typography.bodyMedium, color: theme.color.textPrimary },
-  rowHint: { ...theme.typography.caption, color: theme.color.textSecondary },
+  retryText: { ...theme.typography.caption, color: theme.color.primary, flex: 1 },
 });

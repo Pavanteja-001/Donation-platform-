@@ -1170,3 +1170,240 @@ form input[type="radio"] {
   margin-top: 3px;
   flex: none;
 }
+
+/* --- Community panel: image cropper (components/ImageCropper.tsx) ---------------------------
+   These images render at fixed shapes in the app, so the console crops to those shapes before
+   upload rather than letting the app cover-fit an arbitrary photo. */
+
+.crop-field {
+  margin-bottom: 16px;
+}
+
+.crop-field-hint {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  margin: 0 0 8px;
+}
+
+.crop-field-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.crop-preview {
+  background: var(--color-primary-light);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  flex: none;
+}
+
+.crop-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Preview boxes mirror the export aspect, so what an admin sees here is what the app renders. */
+.crop-preview-cover { width: 120px; height: 90px; }
+.crop-preview-banner { width: 160px; height: 90px; }
+.crop-preview-square { width: 72px; height: 72px; border-radius: 50%; }
+
+.crop-field-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.crop-field-shape {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.cropper-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(24, 10, 12, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.cropper-panel {
+  background: var(--color-surface);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--elevation-3);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.cropper-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.cropper-head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.cropper-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* `touch-action: none` so a drag on a touchscreen moves the crop instead of scrolling the page. */
+.cropper-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #1c1416;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.cropper-frame:active {
+  cursor: grabbing;
+}
+
+.cropper-frame img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.cropper-zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.cropper-zoom input {
+  flex: 1;
+  accent-color: var(--color-primary);
+}
+
+.cropper-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* --- Community panel: list + editor layout ------------------------------------------------- */
+
+.community-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .community-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.community-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  margin-bottom: 10px;
+}
+
+.community-row.is-selected {
+  border-color: var(--color-primary);
+  box-shadow: var(--elevation-1);
+}
+
+.community-row.is-hidden {
+  opacity: 0.55;
+}
+
+.community-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.community-row-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.community-row-meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 2px 0 0;
+}
+
+.community-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--color-primary-light);
+  flex: none;
+}
+
+.community-thumb-round {
+  border-radius: 50%;
+}
+
+.community-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--color-primary);
+}
+
+.community-gallery {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.community-gallery-item {
+  position: relative;
+}
+
+.community-gallery-item img {
+  width: 72px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}

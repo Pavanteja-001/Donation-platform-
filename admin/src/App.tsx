@@ -17,6 +17,9 @@ import { CreateSkillRequestNeedPage } from "./pages/CreateSkillRequestNeedPage";
 import { ForumModerationPage } from "./pages/ForumModerationPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { LocationsPage } from "./pages/LocationsPage";
+import { HelplinesPage } from "./pages/HelplinesPage";
+import { SuccessStoriesPage } from "./pages/SuccessStoriesPage";
+import { EventsPage } from "./pages/EventsPage";
 import { ConsoleLayout } from "./components/ConsoleLayout";
 import { ToastProvider } from "./components/ui";
 
@@ -83,6 +86,13 @@ function Root() {
         <Route path="/post/skill-request" element={<AdminRoute><CreateSkillRequestWrapper /></AdminRoute>} />
         <Route path="/staff" element={<AdminRoute><StaffPage /></AdminRoute>} />
         <Route path="/locations" element={<LocationsPage />} />
+
+        {/* Community panel — the mobile menu's content. Staff can open these to answer support
+            questions about what the app is showing; the pages themselves gate every write on
+            `isAdmin`, matching the backend's admin-only mutations (D-018). */}
+        <Route path="/helplines" element={<HelplinesPage />} />
+        <Route path="/stories" element={<SuccessStoriesPage />} />
+        <Route path="/events" element={<EventsPage />} />
         <Route path="/forum" element={<ForumModerationPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
       </Route>

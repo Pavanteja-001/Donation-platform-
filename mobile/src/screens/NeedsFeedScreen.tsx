@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import { AppState, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import * as Notifications from "expo-notifications";
 import { fetchNeeds, fetchPublicStats, type Need, type PublicStats } from "../lib/api";
-import { needsFeedCache, isStale } from "../lib/listCache";
+import { needsFeedCache, publicStatsCache, isStale } from "../lib/listCache";
 import { useAuth } from "../context/AuthContext";
 import { NeedCard } from "../components/NeedCard";
 import { ImpactAtAGlance } from "../components/ImpactAtAGlance";
@@ -45,7 +46,7 @@ function FeedSkeleton() {
 export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) => void }) {
   const { token } = useAuth();
   const [needs, setNeeds] = useState<Need[] | null>(needsFeedCache.data);
-  const [stats, setStats] = useState<PublicStats | null>(null);
+  const [stats, setStats] = useState<PublicStats | null>(publicStatsCache.data);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -60,7 +61,10 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
   const loadStats = useCallback(async () => {
     if (!token) return;
     try {
-      setStats(await fetchPublicStats(token));
+      const freshStats = await fetchPublicStats(token);
+      publicStatsCache.data = freshStats;
+      publicStatsCache.fetchedAt = Date.now();
+      setStats(freshStats);
     } catch {
       // Intentionally silent — see above.
     }
@@ -95,7 +99,26 @@ export function NeedsFeedScreen({ onSelectNeed }: { onSelectNeed: (need: Need) =
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+
+      // Silent 20s interval auto-refresh while the home screen is active
+      const timer = setInterval(() => {
+        void loadStats();
+      }, 20000);
+
+      // Auto-refresh stats instantly when push notification lands or app returns to foreground
+      const subAppState = AppState.addEventListener("change", (state) => {
+        if (state === "active") void loadStats();
+      });
+      const subNotif = Notifications.addNotificationReceivedListener(() => {
+        void loadStats();
+      });
+
+      return () => {
+        clearInterval(timer);
+        subAppState.remove();
+        subNotif.remove();
+      };
+    }, [load, loadStats])
   );
 
   /**

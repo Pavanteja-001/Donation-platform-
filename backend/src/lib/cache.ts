@@ -154,6 +154,16 @@ export const CacheKey = {
   analytics: "admin:analytics",
   /** Home-screen headline figures (routes/stats.ts) — aggregations over whole tables. */
   publicStats: "stats:public",
+
+  // --- Community panel (the mobile menu drawer, routes/community.ts) --------------------------
+  /** Everything the drawer needs in one payload — the only key the app reads on open. */
+  communityMenu: "community:menu",
+  communityHelplines: "community:helplines",
+  communityStories: (limit: number) => `community:stories:${limit}`,
+  communitySupporters: (limit: number) => `community:supporters:${limit}`,
+  communityEvents: (scope: string, limit: number) => `community:events:${scope}:${limit}`,
+  /** One prefix over all of the above — every community write drops the whole namespace. */
+  communityPrefix: "community:",
 } as const;
 
 /**
@@ -181,6 +191,18 @@ export function invalidateLocationsCache(): void {
   void cacheInvalidate(CacheKey.locations);
 }
 
+/**
+ * Call after any helpline / success-story / event write.
+ *
+ * Drops the whole `community:` namespace rather than the one key that changed: the drawer's
+ * `communityMenu` payload embeds all three lists, so editing a helpline invalidates a key whose
+ * name says "stories" too. Selective invalidation here would be a bug waiting to happen — and
+ * these are tiny, rarely-written keys, so rebuilding all of them costs nothing.
+ */
+export function invalidateCommunityCaches(): void {
+  void cacheInvalidate(CacheKey.communityPrefix);
+}
+
 // TTLs. Deliberately short for anything a donor acts on: a stale blood need is worse than a slow
 // one, and every write path below also invalidates explicitly — the TTL is just the safety net
 // for an invalidation that failed or a write path someone forgets to wire up.
@@ -193,4 +215,15 @@ export const CacheTtl = {
   analytics: 60,
   /** Same shape of work as `analytics`, but on the busiest screen in the app. */
   publicStats: 60,
+  /**
+   * Admin-curated content: only changes when an admin saves, and every save invalidates. Five
+   * minutes is the safety net, not the refresh interval.
+   */
+  community: 5 * 60,
+  /**
+   * The leaderboard is derived from confirmed contributions, so it moves whenever a donation is
+   * confirmed — a path that does NOT call invalidateCommunityCaches (it's a donor action, not an
+   * admin one). A short TTL is what keeps it honest instead.
+   */
+  communitySupporters: 60,
 } as const;

@@ -11,7 +11,17 @@ const signSchema = z.object({
   // Keeps the bucket organized and leaves room for different rules per folder later
   // (e.g. contribution proofs stay public; KYC docs will eventually need to be private).
   // "need-photos" is Need.photos (any type); "need-qr" is a MONEY/KIT need's UPI QR image.
-  folder: z.enum(["contribution-proofs", "need-photos", "need-qr", "kyc-docs", "profile-photos"]),
+  // "community" holds the admin-curated menu content: helpline icons, success-story photos and
+  // event banners. One folder rather than three — they share exactly the same rules (public,
+  // admin-written, image-only) and splitting them would only make the bucket harder to read.
+  folder: z.enum([
+    "contribution-proofs",
+    "need-photos",
+    "need-qr",
+    "kyc-docs",
+    "profile-photos",
+    "community",
+  ]),
 });
 
 // Returns a short-lived signed PUT URL (§ storage.ts) — the client uploads the file bytes

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { StyleSheet, TextInput, type TextStyle, type StyleProp } from "react-native";
 import Animated, {
   useSharedValue,
@@ -13,9 +13,7 @@ const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 
 /**
  * Indian digit grouping (last 3, then pairs): 4500000 → "45,00,000".
- *
- * Hand-rolled as a worklet because this runs on the UI thread on every animation frame, and
- * Hermes' `toLocaleString("en-IN")` isn't dependable inside a worklet.
+ * Hand-rolled as a worklet because this runs on the UI thread on every animation frame.
  */
 function groupIndian(value: number): string {
   "worklet";
@@ -40,61 +38,93 @@ function groupIndian(value: number): string {
   return negative ? `-${grouped}` : grouped;
 }
 
-/**
- * A number that counts up to its value instead of snapping to it.
- *
- * Uses `useAnimatedProps` to drive the text on the UI thread — re-rendering React ~60 times a
- * second to animate a label would be far more expensive than the effect is worth.
- *
- * Deliberately NOT used in the feed: FlashList recycles rows, so a counter would replay its
- * count-up every time a card scrolled back into view.
- */
+/** Compact Indian formatting (Crore/Lakh/K) for currency and stats. */
+function formatCompactWorklet(value: number): string {
+  "worklet";
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1e7) {
+    const val = abs / 1e7;
+    const rounded = Math.round(val * 10) / 10;
+    const str = String(rounded);
+    const formatted = str.endsWith(".0") ? str.slice(0, -2) : str;
+    return `${sign}${formatted}Cr`;
+  }
+  if (abs >= 1e5) {
+    const val = abs / 1e5;
+    const rounded = Math.round(val * 10) / 10;
+    const str = String(rounded);
+    const formatted = str.endsWith(".0") ? str.slice(0, -2) : str;
+    return `${sign}${formatted}L`;
+  }
+  if (abs >= 1e3) {
+    const val = abs / 1e3;
+    const rounded = Math.round(val * 10) / 10;
+    const str = String(rounded);
+    const formatted = str.endsWith(".0") ? str.slice(0, -2) : str;
+    return `${sign}${formatted}K`;
+  }
+  return groupIndian(value);
+}
+
 export function AnimatedCounter({
   value,
+  fromValue,
   prefix = "",
   suffix = "",
-  duration = 900,
+  duration = 600,
+  compact = false,
   style,
-  /** Skip the animation and render the final value (e.g. when a screen re-renders on refresh). */
-  animate = true,
+  animateOnMount = false,
 }: {
   value: number;
+  fromValue?: number;
   prefix?: string;
   suffix?: string;
   duration?: number;
+  compact?: boolean;
   style?: StyleProp<TextStyle>;
-  animate?: boolean;
+  animateOnMount?: boolean;
 }) {
-  // A missing or NaN payload field would otherwise render "NaN" and stall the timing animation.
   const safeValue = typeof value === "number" && Number.isFinite(value) ? value : 0;
-  const progress = useSharedValue(animate ? 0 : safeValue);
+  const initialValue = typeof fromValue === "number" && Number.isFinite(fromValue) 
+    ? fromValue 
+    : (animateOnMount ? 0 : safeValue);
+
+  const progress = useSharedValue(initialValue);
+  const isMounted = useRef(false);
 
   useEffect(() => {
-    if (!animate) {
-      progress.value = safeValue;
-      return;
+    if (!isMounted.current) {
+      isMounted.current = true;
+      // On initial mount, if we didn't animateOnMount and no explicit fromValue, stay at initialValue
+      if (!animateOnMount && fromValue === undefined) {
+        progress.value = safeValue;
+        return;
+      }
     }
     progress.value = withTiming(safeValue, { duration, easing: Easing.out(Easing.cubic) });
     return () => cancelAnimation(progress);
-  }, [safeValue, duration, animate, progress]);
+  }, [safeValue, duration, animateOnMount, fromValue, progress]);
 
   const animatedProps = useAnimatedProps(() => {
+    const formatted = compact ? formatCompactWorklet(progress.value) : groupIndian(progress.value);
+    const displayText = `${prefix}${formatted}${suffix}`;
     return {
-      text: `${prefix}${groupIndian(progress.value)}${suffix}`,
-      // `value` is required alongside `text` for the native side to accept the update.
-      defaultValue: `${prefix}${groupIndian(progress.value)}${suffix}`,
+      text: displayText,
+      defaultValue: displayText,
     } as never;
   });
+
+  const initialFormatted = compact ? formatCompactWorklet(initialValue) : groupIndian(initialValue);
 
   return (
     <AnimatedTextInput
       editable={false}
-      // A TextInput is the only RN primitive whose content can be set from a worklet, so this is
-      // styled to be indistinguishable from a Text node.
       underlineColorAndroid="transparent"
       style={[styles.text, style]}
       animatedProps={animatedProps}
-      defaultValue={`${prefix}${groupIndian(animate ? 0 : safeValue)}${suffix}`}
+      defaultValue={`${prefix}${initialFormatted}${suffix}`}
       accessibilityLabel={`${prefix}${safeValue}${suffix}`}
       pointerEvents="none"
       scrollEnabled={false}
@@ -104,7 +134,6 @@ export function AnimatedCounter({
 
 const styles = StyleSheet.create({
   text: {
-    // Strip every default TextInput affordance so it reads as plain text.
     padding: 0,
     margin: 0,
     borderWidth: 0,

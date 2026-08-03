@@ -21,6 +21,12 @@ import { NgosScreen } from "../screens/NgosScreen";
 import { NgoDetailScreen } from "../screens/NgoDetailScreen";
 import { GoodsScreen } from "../screens/GoodsScreen";
 import { CreateSkillRequestNeedScreen } from "../screens/CreateSkillRequestNeedScreen";
+import { HelplinesScreen } from "../screens/HelplinesScreen";
+import { SuccessStoriesScreen } from "../screens/SuccessStoriesScreen";
+import { SuccessStoryDetailScreen } from "../screens/SuccessStoryDetailScreen";
+import { TopSupportersScreen } from "../screens/TopSupportersScreen";
+import { EventsScreen } from "../screens/EventsScreen";
+import { EventDetailScreen } from "../screens/EventDetailScreen";
 import { CATEGORY_LABELS } from "../lib/needCategory";
 import { theme } from "../lib/theme";
 import { useAuth } from "../context/AuthContext";
@@ -130,6 +136,24 @@ function CreateSkillRequestRoute({ navigation, route }: Props<"CreateSkillReques
   return <CreateSkillRequestNeedScreen category={route.params?.category} onDone={() => navigation.goBack()} />;
 }
 
+// --- Community panel (the menu drawer's "View all" destinations) -----------------------------
+function SuccessStoriesRoute({ navigation }: Props<"SuccessStories">) {
+  return (
+    <SuccessStoriesScreen
+      onSelect={(story) => navigation.navigate("SuccessStory", { storyId: story.id, initial: story })}
+    />
+  );
+}
+function SuccessStoryRoute({ route }: Props<"SuccessStory">) {
+  return <SuccessStoryDetailScreen storyId={route.params.storyId} initial={route.params.initial} />;
+}
+function EventsRoute({ navigation }: Props<"Events">) {
+  return <EventsScreen onSelect={(event) => navigation.navigate("EventDetail", { eventId: event.id, initial: event })} />;
+}
+function EventDetailRoute({ route }: Props<"EventDetail">) {
+  return <EventDetailScreen eventId={route.params.eventId} initial={route.params.initial} />;
+}
+
 // Chunk 2 & 3 (Milestone 9) — the root stack: conditional initialRouteName based on profile completeness,
 // containing the TabNavigator, detail/create/certificate/blood-profile/Register screens.
 export function RootNavigator() {
@@ -175,6 +199,15 @@ export function RootNavigator() {
       <Stack.Screen name="Forum" component={ForumRoute} options={{ title: "Community Forum" }} />
       <Stack.Screen name="ForumQuestion" component={ForumQuestionRoute} options={{ title: "Question" }} />
       <Stack.Screen name="CreateSkillRequest" component={CreateSkillRequestRoute} options={{ title: "Volunteering need" }} />
+
+      <Stack.Screen name="Helplines" component={HelplinesScreen} options={{ title: "Safety & emergency" }} />
+      <Stack.Screen name="SuccessStories" component={SuccessStoriesRoute} options={{ title: "Success stories" }} />
+      {/* Header title left generic: the story's own headline is the first thing on the page, and
+          repeating it (truncated) in the nav bar just competes with it. */}
+      <Stack.Screen name="SuccessStory" component={SuccessStoryRoute} options={{ title: "Story" }} />
+      <Stack.Screen name="TopSupporters" component={TopSupportersScreen} options={{ title: "Top supporters" }} />
+      <Stack.Screen name="Events" component={EventsRoute} options={{ title: "Events" }} />
+      <Stack.Screen name="EventDetail" component={EventDetailRoute} options={{ title: "Event" }} />
     </Stack.Navigator>
   );
 }

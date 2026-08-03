@@ -7,6 +7,7 @@ import { signAuthToken } from "../lib/jwt";
 import { requireAuth } from "../middleware/auth";
 import { computeEligibility } from "../lib/bloodEligibility";
 import { computeTrustTierProgress } from "../lib/trustTier";
+import { deleteReplacedObjects } from "../lib/storage";
 
 const router = Router();
 
@@ -190,7 +191,27 @@ router.patch("/me", requireAuth, async (req, res) => {
     updateData.role = Role.INSTITUTION;
   }
 
+  // Snapshot the image fields first: this endpoint is how a profile photo, an orphanage cover and
+  // the public gallery all get replaced, and every replacement used to strand the old file in the
+  // bucket forever. Changing your profile picture is the single most repeated write on the
+  // platform, so this is where the storage bill actually grows.
+  const before = await prisma.user.findUnique({
+    where: { id: req.user!.sub },
+    select: { profilePhotoUrl: true, coverPhotoUrl: true, galleryPhotos: true },
+  });
+
   const user = await prisma.user.update({ where: { id: req.user!.sub }, data: updateData });
+
+  if (before) {
+    deleteReplacedObjects(
+      [before.profilePhotoUrl, before.coverPhotoUrl, ...before.galleryPhotos],
+      [user.profilePhotoUrl, user.coverPhotoUrl, ...user.galleryPhotos]
+    );
+  }
+  // KYC documents are deliberately NOT cleaned up here. They are the evidence behind an approval
+  // decision (D-007) and an admin may need to look at what was actually submitted long after a
+  // re-upload — an audit trail is worth more than the few kilobytes it costs.
+
   res.json({ user });
 });
 

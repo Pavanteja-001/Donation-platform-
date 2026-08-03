@@ -8,6 +8,18 @@ import { notifyEligibleBloodDonors } from "../lib/bloodMatching";
 import { computeTrustTier } from "../lib/trustTier";
 import { validateCategoryForType } from "../lib/needCategory";
 import { cached, CacheKey, CacheTtl, invalidateLocationsCache, invalidateNeedCaches } from "../lib/cache";
+import { deleteObjects } from "../lib/storage";
+
+/**
+ * A MONEY/KIT need's UPI QR lives inside the JSON payload rather than in a column, so it is the
+ * one image on a need that a plain `photos` read misses — and the one most likely to be forgotten
+ * when the row is deleted.
+ */
+function upiQrFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const qr = (payload as Record<string, unknown>).upi_qr;
+  return typeof qr === "string" ? qr : null;
+}
 
 // Admin console RBAC (D-018):
 //   ADMIN — full access, including creating/removing STAFF and editing users.
@@ -315,6 +327,12 @@ router.delete("/needs/:id", adminOnly, async (req, res) => {
     prisma.mealSlot.deleteMany({ where: { needId: need.id } }),
     prisma.need.delete({ where: { id: need.id } }),
   ]);
+
+  // The row is gone, so nothing can ever display these again — but object storage bills for what
+  // is stored, not for what is reachable. Deliberately after the transaction, not inside it: a
+  // failed bucket call must not roll back a delete the admin has already been told succeeded.
+  void deleteObjects([...need.photos, upiQrFromPayload(need.payload)]);
+
   invalidateNeedCaches();
   res.status(204).send();
 });
